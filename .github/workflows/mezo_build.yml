@@ -1,0 +1,120 @@
+name: MEZO ROM Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: "OTA/Fastboot ROM URL"
+        required: true
+        type: string
+      asset_key:
+        description: "MEZO_APP asset set"
+        required: true
+        default: "OS3_A16"
+        type: choice
+        options:
+          - OS3_A16
+          - OS3_A15
+          - OS2_A15
+          - OS2_A14
+          - OS1_A14
+      build_name:
+        description: "Output build name"
+        required: true
+        default: "DeadZone_test"
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            openjdk-17-jre \
+            zip unzip p7zip-full \
+            zstd brotli lz4 \
+            file python3-tk
+
+      - name: Prepare MEZO tools
+        working-directory: third_party/mezo_core
+        run: |
+          find bin -type f -exec chmod +x {} \; || true
+          python -m py_compile MEZOBuildRom.py
+          python -m py_compile tools_scripts/download_mezo_assets.py
+
+      - name: Download MEZO_APP assets
+        working-directory: third_party/mezo_core
+        run: |
+          python tools_scripts/download_mezo_assets.py "${{ inputs.asset_key }}"
+
+      - name: Download ROM
+        working-directory: third_party/mezo_core
+        run: |
+          mkdir -p _input_roms
+          python - <<'PY'
+          import urllib.request
+          import urllib.parse
+          from pathlib import Path
+
+          url = "${{ inputs.rom_url }}"
+          name = Path(urllib.parse.urlparse(url).path).name or "input_rom.zip"
+          out = Path("_input_roms") / name
+
+          print(f"[ROM] Downloading: {url}")
+          print(f"[ROM] Saving to: {out}")
+
+          req = urllib.request.Request(url, headers={"User-Agent": "DeadZoneFactory/1.0"})
+          with urllib.request.urlopen(req, timeout=1800) as r, out.open("wb") as f:
+              while True:
+                  chunk = r.read(1024 * 1024)
+                  if not chunk:
+                      break
+                  f.write(chunk)
+
+          print(f"[ROM] Done: {out} size={out.stat().st_size}")
+          PY
+
+      - name: Build ROM
+        working-directory: third_party/mezo_core
+        run: |
+          ROM_FILE="$(find _input_roms -type f | head -n 1)"
+          echo "Using ROM: $ROM_FILE"
+          python MEZOBuildRom.py "$ROM_FILE"
+
+      - name: Collect outputs
+        if: always()
+        run: |
+          mkdir -p _outputs
+
+          find third_party/mezo_core -type f -name "*.zip" \
+            -not -path "*/_input_roms/*" \
+            -not -path "*/_asset_downloads/*" \
+            -not -path "*/MEZO_APP/*" \
+            -exec cp -v {} _outputs/ \; || true
+
+          find third_party/mezo_core -type f \( -name "*.txt" -o -name "*.log" \) \
+            -not -path "*/MEZO_APP/*" \
+            -exec cp -v {} _outputs/ \; || true
+
+          ls -lah _outputs || true
+
+      - name: Upload artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.build_name }}-${{ github.run_number }}
+          path: _outputs/*
+          if-no-files-found: warn
+          retention-days: 7
