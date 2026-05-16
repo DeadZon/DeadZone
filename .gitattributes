@@ -16,3 +16,4 @@
 *.apk binary
 *.bin binary
 *.img binary
+*.pem text eol=lf
