@@ -1,0 +1,18 @@
+﻿* text=auto
+
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.conf text eol=lf
+*.txt text eol=lf
+*.bat text eol=crlf
+
+*.exe binary
+*.dll binary
+*.jar binary
+*.apk binary
+*.bin binary
+*.img binary
