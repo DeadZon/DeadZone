@@ -1,0 +1,42 @@
+{
+  "thermallevel_to_fps": {
+    "page_url": "https://pixeldrain.com/u/T2Ken8Bs",
+    "direct_url": "https://pixeldrain.com/api/file/T2Ken8Bs",
+    "extract_to": "MEZO_APP"
+  },
+  "system": {
+    "page_url": "https://pixeldrain.com/u/j1vMcghM",
+    "direct_url": "https://pixeldrain.com/api/file/j1vMcghM",
+    "extract_to": "MEZO_APP/system"
+  },
+  "product": {
+    "page_url": "https://pixeldrain.com/u/PHsFjcsX",
+    "direct_url": "https://pixeldrain.com/api/file/PHsFjcsX",
+    "extract_to": "MEZO_APP/product"
+  },
+  "OS3_A16": {
+    "page_url": "https://pixeldrain.com/u/qxuQywis",
+    "direct_url": "https://pixeldrain.com/api/file/qxuQywis",
+    "extract_to": "MEZO_APP/OS3_A16"
+  },
+  "OS3_A15": {
+    "page_url": "https://pixeldrain.com/u/3z3BCrLN",
+    "direct_url": "https://pixeldrain.com/api/file/3z3BCrLN",
+    "extract_to": "MEZO_APP/OS3_A15"
+  },
+  "OS2_A15": {
+    "page_url": "https://pixeldrain.com/u/cW5aTGAn",
+    "direct_url": "https://pixeldrain.com/api/file/cW5aTGAn",
+    "extract_to": "MEZO_APP/OS2_A15"
+  },
+  "OS2_A14": {
+    "page_url": "https://pixeldrain.com/u/Cx7BZmfJ",
+    "direct_url": "https://pixeldrain.com/api/file/Cx7BZmfJ",
+    "extract_to": "MEZO_APP/OS2_A14"
+  },
+  "OS1_A14": {
+    "page_url": "https://pixeldrain.com/u/1TK94fZW",
+    "direct_url": "https://pixeldrain.com/api/file/1TK94fZW",
+    "extract_to": "MEZO_APP/OS1_A14"
+  }
+}

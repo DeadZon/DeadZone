@@ -40,7 +40,7 @@ PROVISION_APK_NAME = "Provision.apk"
 PROVISION_APK_SRC_DIR_NAME = "Provision_apk_src"
 APK_EDITOR_JAR_NAME = "APKEditor.jar"
 APK_EDITOR_FRAMEWORK_VERSION = 35
-USAGI_UI_DIR_NAME = "USAGI_UI"
+MEZO_UI_DIR_NAME = "MEZO_UI"
 BUILD_PROP_KEYS = [
     "ro.product.odm.brand",
     "ro.product.odm.device",
@@ -59,7 +59,7 @@ def _android_major(android_release: str | None) -> int | None:
     return int(match.group()) if match else None
 
 
-def usagi_android_major(android_release: str | None) -> int | None:
+def mezo_android_major(android_release: str | None) -> int | None:
     return _android_major(android_release)
 
 
@@ -480,11 +480,11 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
     if android_release:
         log(f"    Phiên bản Android: {android_release}")
 
-    # Ghi thong tin vao file HyperUR_firmware.txt trong thu muc output
+    # Ghi thong tin vao file DeadZone_firmware.txt trong thu muc output
     try:
         output_dir = build_repack_output_dir(project_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        firmware_info_path = output_dir / "HyperUR_firmware.txt"
+        firmware_info_path = output_dir / "DeadZone_firmware.txt"
         with firmware_info_path.open("w", encoding="utf-8") as f:
             f.write(f"Codename={device or ''}\n")
             f.write(f"Device name={marketname or ''}\n")
@@ -492,11 +492,11 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
             f.write(f"Android release={android_release or ''}\n")
         log(f"    Da ghi thong tin firmware: {firmware_info_path}")
     except Exception as exc:
-        log(f"    Loi khi ghi HyperUR_firmware.txt: {exc}")
+        log(f"    Loi khi ghi DeadZone_firmware.txt: {exc}")
     
     #chuyển file từ rom/payload_extracted vào images
     payload_extracted_dir = project_dir / "rom" / "payload_extracted"
-    payload_images_dir = project_dir / f"HyperUR_{device}_{mi_incremental}_{android_release}" / "images"
+    payload_images_dir = project_dir / f"DeadZone_{device}_{mi_incremental}_{android_release}" / "images"
     if payload_extracted_dir.is_dir():
         payload_images_dir.mkdir(parents=True, exist_ok=True)
         moved_count = 0
@@ -523,7 +523,7 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
     # vo hieu hoa vbmeta ben trong thu muc images_dir
     images_dir: Path | None = None
     if device and mi_incremental and android_release:
-        images_dir = project_dir / f"HyperUR_{device}_{mi_incremental}_{android_release}" / "images"
+        images_dir = project_dir / f"DeadZone_{device}_{mi_incremental}_{android_release}" / "images"
 
     if images_dir is None or not images_dir.is_dir():
         candidates = sorted(project_dir.rglob("vbmeta.img"))
@@ -561,7 +561,7 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
         return mi_incremental, android_release
 
     log("\n==========================================")
-    log("   HYPERUR VBMeta Generator")
+    log("   DEADZONE VBMeta Generator")
     log("   VO HIEU HOA VBMETA - dm-verity Disabled")
     log("==========================================")
     log("[INFO] Dang patch file vbmeta...")
@@ -1129,8 +1129,8 @@ def _miui_systemui_src_dir(work_dir: Path) -> Path:
     return work_dir / MIUI_SYSTEM_UI_SRC_DIR_NAME
 
 
-def _usagi_ui_dir() -> Path:
-    return ROOT_DIR / USAGI_UI_DIR_NAME
+def _mezo_ui_dir() -> Path:
+    return ROOT_DIR / MEZO_UI_DIR_NAME
 
 
 def _insert_after_method_registers(file_path: Path, method_pattern: str, insert_lines: list[str], guard_text: str) -> bool:
@@ -1322,7 +1322,7 @@ def disable_private_chip(work_dir: Path) -> None:
         log(f"Khong tim thay thu muc source {apk_src_dir} de disable private chip.")
         return
 
-    settings_helper_source = _usagi_ui_dir() / "SettingsHelper.smali"
+    settings_helper_source = _mezo_ui_dir() / "SettingsHelper.smali"
     settings_helper_target = apk_src_dir / "smali" / "classes4" / "android" / "preference" / "SettingsHelper.smali"
     legacy_settings_helper_target = apk_src_dir / "smali" / "classes3" / "android" / "preference" / "SettingsHelper.smali"
     privacy_controller_file = apk_src_dir / "smali" / "classes3" / "com" / "android" / "systemui" / "statusbar" / "privacy" / "MiuiPrivacyControllerImpl.smali"
@@ -1369,7 +1369,7 @@ def change_clock_format(work_dir: Path) -> None:
         log(f"Khong tim thay thu muc source {apk_src_dir} de doi dinh dang dong ho.")
         return
 
-    settings_helper_source = _usagi_ui_dir() / "SettingsHelper.smali"
+    settings_helper_source = _mezo_ui_dir() / "SettingsHelper.smali"
     settings_helper_target = apk_src_dir / "smali" / "classes4" / "android" / "preference" / "SettingsHelper.smali"
     legacy_settings_helper_target = apk_src_dir / "smali" / "classes3" / "android" / "preference" / "SettingsHelper.smali"
     if settings_helper_source.is_file() and not settings_helper_target.exists():
@@ -1472,7 +1472,7 @@ def fix_recompile(work_dir: Path) -> None:
 
 def icon_style(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
-    icon_style_source_dir = _usagi_ui_dir() / "iconStyle"
+    icon_style_source_dir = _mezo_ui_dir() / "iconStyle"
     icon_style_target_dir = apk_src_dir / "resources" / "package_1" / "res"
     public_xml_path = icon_style_target_dir / "values" / "public.xml"
 
@@ -1522,7 +1522,7 @@ def icon_style(work_dir: Path) -> None:
 
 def pill_gesture(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
-    navigation_handle_dir = _usagi_ui_dir() / "NavigationHandle"
+    navigation_handle_dir = _mezo_ui_dir() / "NavigationHandle"
     if not apk_src_dir.is_dir():
         log(f"Khong tim thay thu muc source {apk_src_dir} de xu ly pill gesture.")
         return
@@ -1559,7 +1559,7 @@ def pill_gesture(work_dir: Path) -> None:
 
 def clock_style(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
-    clock_style_dir = _usagi_ui_dir() / "clockStyle"
+    clock_style_dir = _mezo_ui_dir() / "clockStyle"
     if not apk_src_dir.is_dir():
         log(f"Khong tim thay thu muc source {apk_src_dir} de xu ly clock style.")
         return
@@ -2930,9 +2930,9 @@ def disable_signature_verification_a16(work_dir: Path) -> None:
 
 
 def copy_settings_helper(work_dir: Path) -> bool:
-    """Copy SettingsHelper.smali from USAGI to framework_unpacked/smali_classes3/android/preference"""
+    """Copy SettingsHelper.smali from MEZO to framework_unpacked/smali_classes3/android/preference"""
     try:
-        source_path = ROOT_DIR / "USAGI" / "SettingsHelper.smali"
+        source_path = ROOT_DIR / "MEZO" / "SettingsHelper.smali"
         target_dir = work_dir / "framework_unpacked" / "smali_classes3" / "android" / "preference"
         target_path = target_dir / "SettingsHelper.smali"
         
@@ -3361,7 +3361,7 @@ def modify_window_state(file_path: Path) -> bool:
 def copy_settings_helper_a16(work_dir: Path) -> bool:
     """Copy SettingsHelper.smali vào framework_unpacked/smali_classes6/android/preference (a16)."""
     try:
-        source_path = ROOT_DIR / "USAGI" / "SettingsHelper.smali"
+        source_path = ROOT_DIR / "MEZO" / "SettingsHelper.smali"
         target_dir = work_dir / "framework_unpacked" / "smali_classes6" / "android" / "preference"
         target_path = target_dir / "SettingsHelper.smali"
 
@@ -3898,7 +3898,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
     
     total_files_processed = 0
     
-    # 1. Copy SettingsHelper.smali from USAGI to framework_unpacked/smali_classes3/android/preference
+    # 1. Copy SettingsHelper.smali from MEZO to framework_unpacked/smali_classes3/android/preference
     log("\n📁 Dang copy SettingsHelper.smali...")
     if copy_settings_helper(work_dir):
         total_files_processed += 1
@@ -3971,9 +3971,9 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
 
 
 def copy_kaorios_folder(work_dir: Path) -> bool:
-    """Copy kaorios folder from USAGI to framework_unpacked"""
+    """Copy kaorios folder from MEZO to framework_unpacked"""
     try:
-        source = ROOT_DIR / "USAGI" / "kaorios"
+        source = ROOT_DIR / "MEZO" / "kaorios"
         if not source.exists():
             log(f"    ❌ Không có thư mục nguồn {source}")
             return False
@@ -4280,7 +4280,7 @@ def modify_android_keystore_spi_kaori(file_path: Path) -> bool:
 def kaori_toolbox(work_dir: Path) -> None:
     """Kaori Toolbox - Apply kaorios modifications"""
     import re
-    log("\n🎨 Usagi mod...")
+    log("\n🎨 Mezo mod...")
     operations = 0
 
     if copy_kaorios_folder(work_dir):
@@ -4338,14 +4338,14 @@ def kaori_toolbox(work_dir: Path) -> None:
     else:
         log("    ⚠️ Không tìm thấy AndroidKeyStoreSpi.smali")
 
-    log(f"\n🎉 Hoàn tất Usagi mod ({operations} thao tác).")
+    log(f"\n🎉 Hoàn tất Mezo mod ({operations} thao tác).")
 
 
 def tricky_wukong_a15(work_dir: Path) -> None:
     """Apply Wukong hooks to framework KeyStore2 and copy bridge smali for Android 15."""
     log("\n🐒 Dang xu ly Tricky Wukong...")
 
-    bridge_src = ROOT_DIR / "USAGI" / "WukongFrameworkBridge.smali"
+    bridge_src = ROOT_DIR / "MEZO" / "WukongFrameworkBridge.smali"
     bridge_dst_dir = work_dir / "framework_unpacked" / "smali_classes5" / "android" / "security"
     bridge_dst = bridge_dst_dir / "WukongFrameworkBridge.smali"
 
@@ -4562,7 +4562,7 @@ def tricky_wukong_a16(work_dir: Path) -> None:
     """Apply Wukong hooks to framework KeyStore2 and copy bridge smali."""
     log("\n🐒 Dang xu ly Tricky Wukong...")
 
-    bridge_src = ROOT_DIR / "USAGI" / "WukongFrameworkBridge.smali"
+    bridge_src = ROOT_DIR / "MEZO" / "WukongFrameworkBridge.smali"
     bridge_dst_dir = work_dir / "framework_unpacked" / "smali_classes6" / "android" / "security"
     bridge_dst = bridge_dst_dir / "WukongFrameworkBridge.smali"
 
@@ -5283,9 +5283,9 @@ def fix_nfc(project_dir: Path) -> None:
     else:
         log(f"Da chuyen {moved_count} muc NFC sang system/app.")
 
-def copy_usagi_app_product(project_dir: Path) -> None:
+def copy_mezo_app_product(project_dir: Path) -> None:
     script_dir = Path(__file__).parent
-    src_dir = script_dir / "USAGI_APP" / "product"
+    src_dir = script_dir / "MEZO_APP" / "product"
 
     if not src_dir.is_dir():
         log(f"Khong tim thay thu muc nguon: {src_dir}")
@@ -5293,12 +5293,12 @@ def copy_usagi_app_product(project_dir: Path) -> None:
 
     product_root = resolve_partition_root(project_dir, "product")
     if product_root is None:
-        log("Khong tim thay thu muc partition product de copy USAGI_APP/product.")
+        log("Khong tim thay thu muc partition product de copy MEZO_APP/product.")
         return
 
-    copy_tree_contents(src_dir, product_root, "USAGI_APP/product")
+    copy_tree_contents(src_dir, product_root, "MEZO_APP/product")
 
-    thermal_src = script_dir / "USAGI_APP" / "thermallevel_to_fps.xml"
+    thermal_src = script_dir / "MEZO_APP" / "thermallevel_to_fps.xml"
     if not thermal_src.is_file():
         log(f"Khong tim thay thermallevel_to_fps.xml tai {thermal_src}")
         return
@@ -5317,13 +5317,13 @@ def copy_usagi_app_product(project_dir: Path) -> None:
         log(f"    Loi khi copy thermallevel_to_fps.xml: {exc}")
 
 
-def copy_usagi_app_mod(project_dir: Path) -> None:
+def copy_mezo_app_mod(project_dir: Path) -> None:
     """
-    Copy các thư mục mod: USAGI_APP/appMod/<name>
+    Copy các thư mục mod: MEZO_APP/appMod/<name>
     -> tìm thư mục cùng tên trong partition `product` và thay thế thư mục gốc.
     """
     script_dir = Path(__file__).parent
-    app_mod_root = script_dir / "USAGI_APP" / "appMod"
+    app_mod_root = script_dir / "MEZO_APP" / "appMod"
     if not app_mod_root.is_dir():
         log(f"Khong tim thay thu muc nguon app mod: {app_mod_root}")
         return
@@ -5341,7 +5341,7 @@ def copy_usagi_app_mod(project_dir: Path) -> None:
         log(f"Khong co thu muc mod nao trong: {app_mod_root}")
         return
 
-    log("Dang ap dung app mod tu USAGI_APP/appMod ...")
+    log("Dang ap dung app mod tu MEZO_APP/appMod ...")
     replaced_count = 0
 
     for mod_dir in mod_dirs:
@@ -5362,22 +5362,22 @@ def copy_usagi_app_mod(project_dir: Path) -> None:
                 log(f"    Loi khi thay the thu muc '{target_dir}' bang '{mod_dir}': {exc}")
 
     if replaced_count == 0:
-        log("    Khong thay the duoc thu muc nao tu USAGI_APP/appMod.")
+        log("    Khong thay the duoc thu muc nao tu MEZO_APP/appMod.")
 
 
-def copy_usagi_app_system(project_dir: Path) -> None:
+def copy_mezo_app_system(project_dir: Path) -> None:
     """
-    Copy USAGI_APP/system -> project_dir/system/system (overlay).
+    Copy MEZO_APP/system -> project_dir/system/system (overlay).
     """
     script_dir = Path(__file__).parent
-    src_dir = script_dir / "USAGI_APP" / "system"
+    src_dir = script_dir / "MEZO_APP" / "system"
     if not src_dir.is_dir():
         log(f"Khong tim thay thu muc nguon: {src_dir}")
         return
 
     # Theo yeu cau cua ban: project_dir\system\system
     dest_dir = project_dir / "system" / "system"
-    copy_tree_contents(src_dir, dest_dir, "USAGI_APP/system")
+    copy_tree_contents(src_dir, dest_dir, "MEZO_APP/system")
 
 
 Q_FIX_SELINUX_LINE = "/system/system/bin/q_fix u:object_r:q_fix_exec:s0"
@@ -5386,7 +5386,7 @@ Q_FIX_SELINUX_LINE = "/system/system/bin/q_fix u:object_r:q_fix_exec:s0"
 Q_FIX_PLAT_FILE_CONTEXTS_LINE = "/system/bin/q_fix\tu:object_r:q_fix_exec:s0"
 
 # Nhận diện block đã chèn (tránh append trùng)
-Q_FIX_INIT_RC_MARKER = "# UsagiBuildRom_q_fix_BLOCK"
+Q_FIX_INIT_RC_MARKER = "# MezoBuildRom_q_fix_BLOCK"
 
 # Khối append init.rc; "nuwa-locked" được thay bằng {ro.product.odm.device}-locked khi chạy q_fix()
 Q_FIX_INIT_RC_APPEND = f"""
@@ -5457,12 +5457,12 @@ def _q_fix_read_ro_product_odm_device(project_dir: Path) -> str | None:
 
 def q_fix(project_dir: Path) -> None:
     """
-    Copy USAGI/q_fix → system …/bin; system_file_contexts; plat_file_contexts; plat_sepolicy.cil
+    Copy MEZO/q_fix → system …/bin; system_file_contexts; plat_file_contexts; plat_sepolicy.cil
     (type q_fix_exec + typeattributeset exec_type); append khối init.rc.
     """
-    src = ROOT_DIR / "USAGI" / "q_fix"
+    src = ROOT_DIR / "MEZO" / "q_fix"
     if not src.exists():
-        log("q_fix: bo qua — khong co USAGI/q_fix")
+        log("q_fix: bo qua — khong co MEZO/q_fix")
         return
 
     system_root = resolve_partition_root(project_dir, "system")
@@ -5493,14 +5493,14 @@ def q_fix(project_dir: Path) -> None:
                     copied += 1
                     log(f"    Da copy {item.name} -> {dst}")
         else:
-            log("q_fix: bo qua — USAGI/q_fix khong phai file hoac thu muc")
+            log("q_fix: bo qua — MEZO/q_fix khong phai file hoac thu muc")
             return
     except OSError as exc:
         log(f"q_fix: loi khi copy: {exc}")
         return
 
     if copied == 0:
-        log("q_fix: khong co file nao de copy trong USAGI/q_fix")
+        log("q_fix: khong co file nao de copy trong MEZO/q_fix")
         return
 
     contexts_path = project_dir / "config" / "system_file_contexts"
@@ -6038,11 +6038,11 @@ def apply_language_overlay(project_dir: Path, mi_incremental: str) -> None:
     script_dir = Path(__file__).parent
     src_dirs = []
 
-    os_lang_dir = script_dir / "USAGI_OVERLAY" / f"{prefix}_language"
+    os_lang_dir = script_dir / "MEZO_OVERLAY" / f"{prefix}_language"
     if os_lang_dir.is_dir():
         src_dirs.append(os_lang_dir)
 
-    common_overlay_dir = script_dir / "USAGI_OVERLAY" / "overlay"
+    common_overlay_dir = script_dir / "MEZO_OVERLAY" / "overlay"
     if common_overlay_dir.is_dir():
         src_dirs.append(common_overlay_dir)
 
@@ -6079,7 +6079,7 @@ def apply_version_specific_apks(project_dir: Path, mi_incremental: str, major: i
     if major is not None:
         prefix = f"{prefix}_{major}"
     script_dir = Path(__file__).parent
-    src_dir = script_dir / "USAGI_APP" / prefix
+    src_dir = script_dir / "MEZO_APP" / prefix
     if not src_dir.is_dir():
         return
 
@@ -6087,7 +6087,7 @@ def apply_version_specific_apks(project_dir: Path, mi_incremental: str, major: i
     if not apk_files:
         return
 
-    log(f"Thay the apk theo phien ban {prefix} trong USAGI_APP/{prefix}...")
+    log(f"Thay the apk theo phien ban {prefix} trong MEZO_APP/{prefix}...")
 
     for apk in apk_files:
         try:
@@ -6628,17 +6628,17 @@ def build_output_dir(input_path: Path) -> Path:
 
 def zip_output_folder(images_output_dir: Path) -> Path | None:
     """
-    Nen toan bo thu muc HyperUR_* (cha cua images) thanh file zip cung ten.
+    Nen toan bo thu muc DeadZone_* (cha cua images) thanh file zip cung ten.
     Sau khi nen xong, di chuyen file zip ra ROOT_DIR va xoa thu muc giai nen ban dau.
     Tra ve duong dan file zip neu thanh cong, None neu that bai.
     """
-    hyperur_dir = images_output_dir.parent
-    zip_name = f"{hyperur_dir.name}.zip"
-    zip_path = hyperur_dir / zip_name
+    deadzone_dir = images_output_dir.parent
+    zip_name = f"{deadzone_dir.name}.zip"
+    zip_path = deadzone_dir / zip_name
     zip_dest = ROOT_DIR / zip_name
 
-    if not hyperur_dir.is_dir():
-        log(f"[ZIP] Khong tim thay thu muc can nen: {hyperur_dir}")
+    if not deadzone_dir.is_dir():
+        log(f"[ZIP] Khong tim thay thu muc can nen: {deadzone_dir}")
         return None
 
     if zip_path.exists():
@@ -6649,19 +6649,19 @@ def zip_output_folder(images_output_dir: Path) -> Path | None:
             log(f"[ZIP] Khong the xoa file zip cu: {exc}")
             return None
 
-    log(f"[ZIP] Dang nen {hyperur_dir.name} thanh {zip_name}...")
-    log(f"       Thu muc nguon: {hyperur_dir}")
+    log(f"[ZIP] Dang nen {deadzone_dir.name} thanh {zip_name}...")
+    log(f"       Thu muc nguon: {deadzone_dir}")
 
     try:
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
             file_count = 0
-            for root, _, files in os.walk(hyperur_dir):
+            for root, _, files in os.walk(deadzone_dir):
                 for name in files:
                     file_path = Path(root) / name
                     # Bo qua file zip dang duoc tao ra trong cung thu muc
                     if name.endswith(".zip"):
                         continue
-                    arcname = file_path.relative_to(hyperur_dir)
+                    arcname = file_path.relative_to(deadzone_dir)
                     zf.write(file_path, arcname)
                     file_count += 1
                     if file_count % 100 == 0:
@@ -6678,8 +6678,8 @@ def zip_output_folder(images_output_dir: Path) -> Path | None:
         log(f"[ZIP] Da chuyen file zip ra: {zip_dest}")
 
         # Xoa thu muc giai nen ban dau
-        remove_path_force(hyperur_dir)
-        log(f"[ZIP] Da xoa thu muc giai nen: {hyperur_dir}")
+        remove_path_force(deadzone_dir)
+        log(f"[ZIP] Da xoa thu muc giai nen: {deadzone_dir}")
 
         return zip_dest
     except Exception as exc:
@@ -6705,11 +6705,11 @@ def build_repack_output_dir(project_dir: Path) -> Path:
     release = aggregated.get("ro.system.build.version.release", "")
 
     if device and release:
-        folder_name = f"HyperUR_{device}_{mi_incremental}_{release}"
+        folder_name = f"DeadZone_{device}_{mi_incremental}_{release}"
     elif device:
-        folder_name = f"HyperUR_{device}_{mi_incremental}"
+        folder_name = f"DeadZone_{device}_{mi_incremental}"
     else:
-        folder_name = f"HyperUR_{device}"
+        folder_name = f"DeadZone_{device}"
 
     return project_dir / folder_name / "images"
 
@@ -7211,14 +7211,14 @@ def main() -> int:
             )
 
         mi_incremental, _android_release = find_and_read_build_props(output_dir)
-        major = usagi_android_major(_android_release)
+        major = mezo_android_major(_android_release)
         debloat_project(output_dir, ROOT_DIR / "debloat.txt")
         clean_system_framework_arch_dirs(output_dir)
         move_product_data_app_to_app(output_dir)
         fix_nfc(output_dir)
-        copy_usagi_app_product(output_dir)
-        copy_usagi_app_mod(output_dir)
-        copy_usagi_app_system(output_dir)
+        copy_mezo_app_product(output_dir)
+        copy_mezo_app_mod(output_dir)
+        copy_mezo_app_system(output_dir)
 
         if mi_incremental:
             apply_language_overlay(output_dir, mi_incremental)
@@ -7291,7 +7291,7 @@ def main() -> int:
             except Exception as exc:
                 log(f"Loi khi copy thu muc flash: {exc}")
 
-        # Nen thu muc HyperUR_* thanh file zip
+        # Nen thu muc DeadZone_* thanh file zip
         zip_output_folder(images_output_dir)
 
         return 0
