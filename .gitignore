@@ -23,3 +23,6 @@ downloads/
 *.key
 *.jks
 *.keystore
+
+third_party/mezo_core/MEZO_APP/
+third_party/mezo_core/_asset_downloads/
