@@ -124,7 +124,8 @@ jobs:
             zip unzip p7zip-full \
             zstd brotli lz4 \
             file python3-tk \
-            ca-certificates curl wget
+            ca-certificates curl wget \
+            erofs-utils
 
       - name: Prepare MEZO tools
         working-directory: third_party/mezo_core
@@ -137,8 +138,43 @@ jobs:
           echo "MEZO core tree:"
           ls -lah
 
+          echo "Bundled bin tools:"
+          ls -lah bin || true
+
           echo "Python deps:"
           python -m pip freeze | sort
+
+      - name: Diagnose EROFS tools
+        working-directory: third_party/mezo_core
+        run: |
+          echo "PATH=$PATH"
+
+          echo ""
+          echo "=== System EROFS tools ==="
+          which mkfs.erofs || true
+          which fsck.erofs || true
+          which dump.erofs || true
+          which extract.erofs || true
+
+          echo ""
+          echo "=== Bundled extract.erofs ==="
+          ls -lah bin/extract.erofs || true
+          file bin/extract.erofs || true
+          ldd bin/extract.erofs || true
+          bin/extract.erofs -h || true
+          bin/extract.erofs --help || true
+
+          echo ""
+          echo "=== Bundled mkfs.erofs ==="
+          ls -lah bin/mkfs.erofs || true
+          file bin/mkfs.erofs || true
+          ldd bin/mkfs.erofs || true
+          bin/mkfs.erofs -h || true
+          bin/mkfs.erofs --help || true
+
+          echo ""
+          echo "=== EROFS package info ==="
+          apt-cache policy erofs-utils || true
 
       - name: Prepare empty MEZO_APP folders
         working-directory: third_party/mezo_core
