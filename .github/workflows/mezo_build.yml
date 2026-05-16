@@ -9,7 +9,7 @@ on:
         type: string
 
       asset_key:
-        description: "MEZO_APP asset set"
+        description: "MEZO_APP asset set - skipped temporarily"
         required: true
         default: "OS3_A16"
         type: choice
@@ -130,6 +130,7 @@ jobs:
         working-directory: third_party/mezo_core
         run: |
           find bin -type f -exec chmod +x {} \; || true
+
           python -m py_compile MEZOBuildRom.py
           python -m py_compile tools_scripts/download_mezo_assets.py
 
@@ -139,13 +140,22 @@ jobs:
           echo "Python deps:"
           python -m pip freeze | sort
 
-      - name: Download MEZO_APP assets
+      - name: Prepare empty MEZO_APP folders
         working-directory: third_party/mezo_core
         run: |
-          python tools_scripts/download_mezo_assets.py "${{ inputs.asset_key }}"
+          mkdir -p MEZO_APP
+          mkdir -p MEZO_APP/product
+          mkdir -p MEZO_APP/system
+          mkdir -p MEZO_APP/appMod
+          mkdir -p MEZO_APP/OS3_A16
+          mkdir -p MEZO_APP/OS3_A15
+          mkdir -p MEZO_APP/OS2_A15
+          mkdir -p MEZO_APP/OS2_A14
+          mkdir -p MEZO_APP/OS1_A14
 
-          echo "MEZO_APP:"
-          find MEZO_APP -maxdepth 2 -type d | sort || true
+          echo "MEZO_APP asset download skipped temporarily."
+          echo "Requested asset key: ${{ inputs.asset_key }}"
+          find MEZO_APP -maxdepth 2 -type d | sort
           du -sh MEZO_APP || true
 
       - name: Download ROM
