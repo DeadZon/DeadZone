@@ -1,0 +1,164 @@
+#!/sbin/sh
+
+# Prepare for flashing
+outfd=/proc/self/fd/$2
+zipfile=$3
+
+ui_print() {
+  echo -e "ui_print $1\nui_print " >> "$outfd"
+}
+
+# Recovery progress for TWRP: use "progress" + "set_progress" commands
+progress_ui() {
+  echo "progress $1 $2" >> "$outfd"
+}
+
+set_progress_ui() {
+  echo "set_progress $1" >> "$outfd"
+}
+
+# Call after each flash step; uses global PROG_CUR and TOTAL
+bump_progress() {
+  PROG_CUR=$((PROG_CUR + 1))
+  awk "BEGIN {printf \"set_progress %.6f\\n\", $PROG_CUR / $TOTAL}" >> "$outfd"
+}
+
+bin="/tmp/META-INF/arm64"
+rm -rf "$bin"
+mkdir -p "$bin"
+unzip -o "$zipfile" "META-INF/arm64/binary" -d "/tmp"
+chmod -R 0777 "$bin"
+
+package_extract_file() {
+  if ! unzip -p "$zipfile" "$1" > "$2"; then
+    ui_print "[!] Failed to extract $1"
+    exit 1
+  fi
+}
+
+# UI Header
+serial=$(getprop ro.serialno | tr -d '\r')
+device=$(getprop ro.product.device | tr -d '\r')
+# Strip CR (Windows CRLF in zip) or values keep a trailing \r -> TWRP shows a box, device check fails
+firmware_info=$(unzip -p "$zipfile" "images/HyperUR_firmware.txt" 2>/dev/null | tr -d '\r')
+fw_codename=$(echo "$firmware_info" | awk -F= '/^Codename=/{print $2; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+fw_device_name=$(echo "$firmware_info" | awk -F= '/^Device name=/{print $2; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+fw_mi_version=$(echo "$firmware_info" | awk -F= '/^MI version=/{print $2; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+fw_android_release=$(echo "$firmware_info" | awk -F= '/^Android release=/{print $2; exit}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+ui_print "================================="
+ui_print "       HyperUR Team"
+ui_print "---------------------------------"
+ui_print " Device (current) : $device"
+ui_print " Serial           : $serial"
+ui_print " Code name        : ${fw_codename:-N/A}"
+ui_print " Device name      : ${fw_device_name:-N/A}"
+ui_print " MI version       : ${fw_mi_version:-N/A}"
+ui_print " Android release  : ${fw_android_release:-N/A}"
+ui_print "================================="
+sleep 1
+
+# Device check
+device1="$fw_codename"
+[ -z "$device1" ] && ui_print "[!] HyperUR_firmware.txt not found or Codename not set." && exit 1
+
+case "$device" in
+  "$device1")
+    ui_print "[*] Device check passed: $device"
+    ;;
+  *)
+    ui_print "[!] Unsupported device: $device"
+    exit 1
+    ;;
+esac
+
+# Total flash steps for progress (firmware slots + boot_a/b + super + cust? + recovery? + final)
+fw_ops=0
+for img in $(unzip -l "$zipfile" | awk '{print $4}' | grep '^images/.*\.img$' | sed -E 's|images/||; s|\.img$||' | sort -u); do
+  case "$img" in
+    super|recovery|cust|boot*) continue ;;
+  esac
+  for slot in a b; do
+    if unzip -l "$zipfile" "images/${img}.img" | grep -q "images/${img}.img"; then
+      fw_ops=$((fw_ops + 1))
+    fi
+  done
+done
+TOTAL=$((fw_ops + 2 + 1 + 1))
+unzip -l "$zipfile" "images/cust.img" | grep -q "images/cust.img" && TOTAL=$((TOTAL + 1))
+unzip -l "$zipfile" "images/recovery.img" | grep -q "images/recovery.img" && TOTAL=$((TOTAL + 1))
+[ "$TOTAL" -lt 1 ] && TOTAL=1
+PROG_CUR=0
+
+progress_ui 1.0 7200
+set_progress_ui 0.0
+
+# Flash firmware partitions
+ui_print "[*] Flashing firmware partitions..."
+
+for img in $(unzip -l "$zipfile" | awk '{print $4}' | grep '^images/.*\.img$' | sed -E 's|images/||; s|\.img$||' | sort -u); do
+  case "$img" in
+    super|recovery|cust|boot*) continue ;;
+  esac
+  for slot in a b; do
+    if unzip -l "$zipfile" "images/${img}.img" | grep -q "images/${img}.img"; then
+      ui_print "[*] Flashing ${img}.img to ${img}_${slot}..."
+      if package_extract_file "images/${img}.img" "/dev/block/bootdevice/by-name/${img}_${slot}"; then
+        ui_print "[OK] ${img}_${slot} flashed"
+      else
+        ui_print "[!] Failed to flash ${img}_${slot}"
+      fi
+      bump_progress
+    fi
+  done
+done
+
+# Boot partition
+for boot in boot_a boot_b; do
+  package_extract_file "images/boot.img" "/dev/block/bootdevice/by-name/$boot"
+  bump_progress
+done
+
+# Cust partition
+if unzip -l "$zipfile" "images/cust.img" | grep -q "images/cust.img"; then
+  package_extract_file "images/cust.img" "/dev/block/bootdevice/by-name/cust"
+  bump_progress
+fi
+
+# recovery partition
+if unzip -l "$zipfile" "images/recovery.img" | grep -q "images/recovery.img"; then
+  package_extract_file "images/recovery.img" "/dev/block/bootdevice/by-name/recovery"
+  bump_progress
+fi
+
+# Super partition
+ui_print "[*] Flashing super partition..."
+
+package_extract_file "images/super.img" "/dev/block/bootdevice/by-name/super"
+ui_print "[OK] Super partition flashed"
+bump_progress
+
+# Cache wipe
+ui_print "[*] Wiping system cache..."
+
+rm -rf /data/{dalvik-cache,system/package_cache,system/dropbox,cache}/*
+
+# Set boot slot to A
+bootctl set-active-boot-slot 0
+
+bump_progress
+set_progress_ui 1.0
+
+ui_print "[OK] Flashing completed!"
+
+ui_print "================================="
+ui_print "       HyperUR Team"
+ui_print "---------------------------------"
+ui_print " Device (current) : $device"
+ui_print " Serial           : $serial"
+ui_print " Code name        : ${fw_codename:-N/A}"
+ui_print " Device name      : ${fw_device_name:-N/A}"
+ui_print " MI version       : ${fw_mi_version:-N/A}"
+ui_print " Android release  : ${fw_android_release:-N/A}"
+ui_print "================================="
+exit 0

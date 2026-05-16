@@ -1,0 +1,186 @@
+
+on post-fs-data
+    # 1. Giải phóng bộ lập lịch hiệu ứng (Miui Animator)
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_animator_sched.bigcores ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_animator_sched.big_prime_cores ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_animator_sched.sched_threads ""
+
+    # 2. Giải phóng bộ nạp sẵn ứng dụng (Dex Preload)
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.dexpreload.cpu_cores ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.dexpreload.big_prime_cores ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.dexpreload.other_cores ""
+
+    # 3. Giải phóng bộ dựng hình hệ thống (Composer Boost)
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.vendor.display.miui.composer_boost ""
+
+    # 4. Giải phóng giới hạn nhân cho máy ảo Dalvik (Dex2oat)
+    # Cho phép hệ thống dùng mọi nhân CPU khả dụng để xử lý app
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.default-dex2oat-cpu-set ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.boot-dex2oat-cpu-set ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.background-dex2oat-cpu-set ""
+
+    # --- 1. ÉP KỶ LUẬT RAM & DALVIK HEAP (CHUẨN AOSP) ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.heapstartsize 16m
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.heapgrowthlimit 256m
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.heapsize 512m
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.heaptargetutilization 0.5
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.heapminfree 8m
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.heapmaxfree 32m
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.usap_pool_enabled false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.dalvik.vm.enable_uffd_gc true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.systemuicompilerfilter speed
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.multithreaded.dexloader.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.art_startup_class_preload.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.app_dexfile_preload.enable false
+
+    # --- 2. TỐI ƯU LTPO, ĐỒ HỌA & TRẢM BLUR (AOSP + HYPEROS) ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.surface_flinger.set_idle_timer_ms 4000
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.surface_flinger.set_touch_timer_ms 4000
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.surface_flinger.set_display_power_timer_ms 1000
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.surface_flinger.use_content_detection_for_refresh_rate true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.surface_flinger.game_default_frame_rate_override 60
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.sf.frame_rate_multiple_threshold 60
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n vendor.perf.framepacing.enable 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.vendor.perf.scroll_opt 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.sf.blurs_are_expensive 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.sf.disable_blurs 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.launcher.blur.appLaunch 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.advanced_visual_release 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.bitmap_scale_opt_enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.force_sw_gles 0
+
+    # --- 3. CACHE HWUI DỰNG HÌNH (CHUẨN AOSP) ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.hwui.use_hint_manager true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.hwui.target_cpu_time_percent 30
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.texture_cache_size 72
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.layer_cache_size 48
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.r_buffer_cache_size 8
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.path_cache_size 32
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.gradient_cache_size 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.drop_shadow_cache_size 6
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.hwui.texture_cache_flushrate 0.4
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.sf.latch_unsignaled 1
+
+    # --- 4. ĐIỀU PHỐI NĂNG LƯỢNG CPU & PHẦN CỨNG (ADPF & PASR) ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.sf.enable_adpf_cpu_hint true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dev.pm.dyn_samplingrate 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n vendor.power.pasr.enabled true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n vendor.pasr.activemode.enabled true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.vendor.qspm.enable true
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n dalvik.vm.dexopt.thermal-cutoff 2
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.smartpower.intercept.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_sptm.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.smartpower.display.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.smartpower.fz.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.speedui_boost_start_enable false
+
+    # --- 5. TRIỆT SẢN ÉP XUNG CPU CỦA XIAOMI (TURBOSCHED & MIPERF) ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enable_v2 false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enable.coreApp.optimizer false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.local.enable_v2 false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.local.coreApp.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.local.coreAppTop20.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.local.policy_list ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enabletop20app false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.gaea.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.policy_list ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.miui.miperf.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.perf_turbo_type 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.computility.cpulevel 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.computility.gpulevel 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.spc.cpulimit.enabled false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.enable_templimit false
+
+    # --- 6. DỌN RÁC BỘ NHỚ, TẮT RAM ẢO & PRECACHE ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.miui.extm.enable 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.miui.extm.version 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.dynamicbuffer.max_adjust_num 1
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.mms.bg_apps_limit 96
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.precache.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.precache.number 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.precache.appstrs1 ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.precache.appstrs2 ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.precache.appstrs3 ""
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.app_resurrection.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.activity_helper.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.prestart.proc false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.smart_gc.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.mimd.reclaim.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.mimd.sleep.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.memory_standard.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.cross_process_jump_response_opt false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.notification_launch false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui.recent.app.protect.enable false
+
+    # --- 7. TẮT MEMTAG & ĐỘI GIÁM SÁT NGẦM (GIẢM TẢI CPU KỊCH TRẦN) ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.arm64.memtag.process.system_server off
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.arm64.memtag.app.com.android.se off
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.arm64.memtag.app.com.google.android.bluetooth off
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.arm64.memtag.app.com.android.nfc off
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.hwui.skia_atrace_enabled false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.atrace.tags.enableflags 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n debug.sf.enable_transaction_tracing false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.traced.enable 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.debug.coresight.config none
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.device_config.runtime_native_boot.iorap_perfetto_enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.cloud.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_art_report.enable 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_record_enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.perfdebug.monitor.enable 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_sentinel_resource_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_rss_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_process_exit_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_thread_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_dmabuf_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_fd_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.enable_slab_monitor false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.monitor_third_party_app false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.report_app_launch.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.miui_fbo_enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.stability.window_monitor.enabled false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.miui_scout_binder_full_kill_process false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.whole_machine_d_status_enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.miui.enable_cloud_verify false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.vendor.displayfeature.dump false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.vendor.ssr.enable_ramdumps 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.vendor.qcomsysd.enabled 0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n ro.logd.size.stats 0
+    
+    # --- 8. NGOẠI LỆ MỞ RỘNG ---
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n media.stagefright.audio.deep false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.gallery_hdr_boost_max_factor 1.0
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n vendor.camera.support.mivi false
+
+
+# ======================================================================
+# GIAI ĐOẠN 2: DIỆT ZOMBIE (SĂN SERVICE SAU KHI BOOT HOÀN TẤT)
+# ======================================================================
+on property:sys.boot_completed=1
+    # Bắn bồi Turbosched (Đề phòng file hệ thống nạp đè)
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enable false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enable_v2 false
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n persist.sys.turbosched.enable.coreApp.optimizer false
+
+    # Lớp 1: Ra lệnh dừng dịch vụ ngốn pin
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.stop miuibooster
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.stop qadaemon
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.stop mi_thermald
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.stop poweropt-service
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.stop mimd-service2_0
+
+    # Lớp 2: Khóa giao diện điều khiển (Chặn ROM gọi lại)
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.interface_stop miuibooster
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.interface_stop qadaemon
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.interface_stop mi_thermald
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.interface_stop poweropt-service
+    exec u:r:init:s0 root root -- /system/bin/setprop ctl.interface_stop mimd-service2_0
+
+    # Lớp 3: Ép trạng thái về Stopped (Phủ đầu init)
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n init.svc.miuibooster stopped
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n init.svc.qadaemon stopped
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n init.svc.mi_thermald stopped
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n init.svc.poweropt-service stopped
+    exec u:r:init:s0 root root -- /system/bin/q_fix -n init.svc.mimd-service2_0 stopped
+
+

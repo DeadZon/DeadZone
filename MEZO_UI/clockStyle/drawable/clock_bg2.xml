@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This is a modified version of AXMLPrinter2(By Google) library. Check out how many changes are made at https://github.com/developer-krushna/AXMLPrinter by (@developer-krushna) -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@android:color/system_accent1_300">
+    <item
+        android:id="@android:id/mask">
+        <shape>
+            <gradient
+                android:startColor="@android:color/system_accent1_300"
+                android:endColor="#00000000" />
+            <corners android:radius="7dp" />
+        </shape>
+    </item>
+    <item
+        android:id="@android:id/background">
+        <shape
+            android:tint="@android:color/system_accent1_300"
+            android:shape="rectangle">
+            <padding
+                android:left="6dp"
+                android:top="0.8dp"
+                android:right="6dp"
+                android:bottom="0.8dp" />
+            <gradient
+                android:startColor="@android:color/system_accent1_300"
+                android:endColor="#00000000"
+                android:angle="45.0" />
+            <corners
+                android:topLeftRadius="20dp"
+                android:topRightRadius="8dp"
+                android:bottomLeftRadius="8dp"
+                android:bottomRightRadius="20dp" />
+        </shape>
+    </item>
+</ripple>

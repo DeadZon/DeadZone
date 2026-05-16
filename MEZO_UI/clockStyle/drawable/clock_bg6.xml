@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This is a modified version of AXMLPrinter2(By Google) library. Check out how many changes are made at https://github.com/developer-krushna/AXMLPrinter by (@developer-krushna) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:startColor="#ffff0000"
+        android:endColor="#ffff0000"
+        android:angle="1.9"
+        android:centerColor="#00000000" />
+    <stroke
+        android:width="0dp"
+        android:color="#ffff0000" />
+    <padding
+        android:left="2.5dp"
+        android:top="-0.5dp"
+        android:right="7dp"
+        android:bottom="1dp" />
+    <corners android:radius="20dp" />
+</shape>
