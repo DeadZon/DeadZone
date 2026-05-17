@@ -31,18 +31,18 @@ set "fastboot=META-INF\windows\fastboot.exe"
 if not exist "%fastboot%" (
     echo %RED%[DEADZONE ERROR] fastboot.exe not found at: %fastboot%%RESET%
     echo %YELLOW%[DEADZONE WARNING] Make sure the ZIP was extracted completely.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 if not exist "images" (
     echo %RED%[DEADZONE ERROR] images\ folder not found. Extract the full ZIP first.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 set "fwinfo=images\DeadZone_firmware.txt"
 if not exist "%fwinfo%" (
     echo %RED%[DEADZONE ERROR] images\DeadZone_firmware.txt not found.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 :: ============================================================
@@ -66,7 +66,7 @@ for %%I in (super.img boot.img init_boot.img vendor_boot.img vbmeta.img) do (
 )
 if "!missing!" equ "1" (
     echo %RED%[DEADZONE ERROR] Required images are missing. Aborting.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 echo %GREEN%[DEADZONE OK] All required images present.%RESET%
 echo.
@@ -82,7 +82,7 @@ set "expected="
 for /f "tokens=2 delims==" %%A in ('type "%fwinfo%" ^| findstr /C:"Codename="') do set "expected=%%A"
 if "%expected%" equ "" (
     echo %RED%[DEADZONE ERROR] Codename missing in DeadZone_firmware.txt.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 set "connected="
@@ -90,7 +90,7 @@ for /f "tokens=2" %%A in ('"%fastboot%" getvar product 2^>^&1 ^| findstr "produc
 if "%connected%" equ "" (
     echo %RED%[DEADZONE ERROR] No device detected. Is fastboot mode active?%RESET%
     echo %YELLOW%[DEADZONE WARNING] Hold Power + Volume Down to enter fastboot.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 echo %WHITE%  Connected device  : %CYAN%%connected%%RESET%
@@ -101,7 +101,7 @@ if /i "%connected%" neq "%expected%" (
     echo %RED%[DEADZONE ERROR] Device mismatch — flash aborted for safety.%RESET%
     echo %RED%  Connected: %connected%    Expected: %expected%%RESET%
     echo %YELLOW%[DEADZONE WARNING] Flashing to a wrong device can cause permanent damage.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 echo %GREEN%[DEADZONE OK] Device codename verified.%RESET%
 echo.
@@ -123,6 +123,7 @@ echo.
 :: ============================================================
 echo %WHITE%Setting active slot to A...%RESET%
 "%fastboot%" set_active a
+if errorlevel 1 goto :fail
 
 :: ============================================================
 ::  FLASH — Core partition images (required)
@@ -130,13 +131,13 @@ echo %WHITE%Setting active slot to A...%RESET%
 echo.
 echo %WHITE%Flashing core boot images...%RESET%
 "%fastboot%" flash boot_ab "images\boot.img"
-if errorlevel 1 ( echo %RED%[DEADZONE ERROR] Failed to flash boot.img%RESET% & pause & exit /B 1 )
+if errorlevel 1 goto :fail
 
 "%fastboot%" flash init_boot_ab "images\init_boot.img"
-if errorlevel 1 ( echo %RED%[DEADZONE ERROR] Failed to flash init_boot.img%RESET% & pause & exit /B 1 )
+if errorlevel 1 goto :fail
 
 "%fastboot%" flash vendor_boot_ab "images\vendor_boot.img"
-if errorlevel 1 ( echo %RED%[DEADZONE ERROR] Failed to flash vendor_boot.img%RESET% & pause & exit /B 1 )
+if errorlevel 1 goto :fail
 
 :: ============================================================
 ::  FLASH — Vbmeta
@@ -144,16 +145,40 @@ if errorlevel 1 ( echo %RED%[DEADZONE ERROR] Failed to flash vendor_boot.img%RES
 echo.
 echo %WHITE%Flashing vbmeta...%RESET%
 "%fastboot%" flash vbmeta_ab "images\vbmeta.img"
-if errorlevel 1 ( echo %RED%[DEADZONE ERROR] Failed to flash vbmeta.img%RESET% & pause & exit /B 1 )
+if errorlevel 1 goto :fail
 
-if exist "images\vbmeta_system.img"  ( "%fastboot%" flash vbmeta_system_ab "images\vbmeta_system.img" ) else ( echo %YELLOW%[SKIP] vbmeta_system.img not present%RESET% )
-if exist "images\vbmeta_vendor.img"  ( "%fastboot%" flash vbmeta_vendor_ab "images\vbmeta_vendor.img" ) else ( echo %YELLOW%[SKIP] vbmeta_vendor.img not present%RESET% )
+if exist "images\vbmeta_system.img" (
+    "%fastboot%" flash vbmeta_system_ab "images\vbmeta_system.img"
+    if errorlevel 1 goto :fail
+) else (
+    echo %YELLOW%[SKIP] vbmeta_system.img not present%RESET%
+)
+
+if exist "images\vbmeta_vendor.img" (
+    "%fastboot%" flash vbmeta_vendor_ab "images\vbmeta_vendor.img"
+    if errorlevel 1 goto :fail
+) else (
+    echo %YELLOW%[SKIP] vbmeta_vendor.img not present%RESET%
+)
 
 :: ============================================================
 ::  FLASH — Optional boot-related
 :: ============================================================
-if exist "images\dtbo.img"      ( echo %WHITE%Flashing dtbo...%RESET%     & "%fastboot%" flash dtbo_ab "images\dtbo.img"         ) else ( echo %YELLOW%[SKIP] dtbo.img%RESET% )
-if exist "images\recovery.img"  ( echo %WHITE%Flashing recovery...%RESET% & "%fastboot%" flash recovery_ab "images\recovery.img" ) else ( echo %YELLOW%[SKIP] recovery.img%RESET% )
+if exist "images\dtbo.img" (
+    echo %WHITE%Flashing dtbo...%RESET%
+    "%fastboot%" flash dtbo_ab "images\dtbo.img"
+    if errorlevel 1 goto :fail
+) else (
+    echo %YELLOW%[SKIP] dtbo.img%RESET%
+)
+
+if exist "images\recovery.img" (
+    echo %WHITE%Flashing recovery...%RESET%
+    "%fastboot%" flash recovery_ab "images\recovery.img"
+    if errorlevel 1 goto :fail
+) else (
+    echo %YELLOW%[SKIP] recovery.img%RESET%
+)
 
 :: ============================================================
 ::  FLASH — Snapdragon firmware (all optional)
@@ -164,12 +189,18 @@ for %%I in (abl aop aop_config bluetooth cpucp cpucp_dtb devcfg dsp featenabler 
     if exist "images\%%I.img" (
         echo %WHITE%  Flashing %%I...%RESET%
         "%fastboot%" flash %%I_ab "images\%%I.img"
-        if errorlevel 1 ( echo %YELLOW%[DEADZONE WARNING] %%I flash returned non-zero — continuing%RESET% )
+        if errorlevel 1 goto :fail
     ) else (
         echo %YELLOW%[SKIP] %%I.img%RESET%
     )
 )
-if exist "images\countrycode.img" ( "%fastboot%" flash countrycode "images\countrycode.img" ) else ( echo %YELLOW%[SKIP] countrycode.img%RESET% )
+
+if exist "images\countrycode.img" (
+    "%fastboot%" flash countrycode "images\countrycode.img"
+    if errorlevel 1 goto :fail
+) else (
+    echo %YELLOW%[SKIP] countrycode.img%RESET%
+)
 
 :: ============================================================
 ::  FLASH — MTK firmware (all optional, NO preloader)
@@ -180,12 +211,18 @@ for %%I in (apusys audio_dsp ccu connsys_gnss dpm gpueb gz lk logo mcf_ota mcupm
     if exist "images\%%I.img" (
         echo %WHITE%  Flashing %%I...%RESET%
         "%fastboot%" flash %%I_ab "images\%%I.img"
-        if errorlevel 1 ( echo %YELLOW%[DEADZONE WARNING] %%I flash returned non-zero — continuing%RESET% )
+        if errorlevel 1 goto :fail
     ) else (
         echo %YELLOW%[SKIP] %%I.img%RESET%
     )
 )
-if exist "images\cust.img" ( "%fastboot%" flash cust "images\cust.img" ) else ( echo %YELLOW%[SKIP] cust.img%RESET% )
+
+if exist "images\cust.img" (
+    "%fastboot%" flash cust "images\cust.img"
+    if errorlevel 1 goto :fail
+) else (
+    echo %YELLOW%[SKIP] cust.img%RESET%
+)
 
 :: MTK preloader — NEVER flash by default
 set "FLASH_PRELOADER=0"
@@ -199,9 +236,13 @@ if "%FLASH_PRELOADER%" equ "1" (
     if exist "images\preloader_raw.img" (
         echo %YELLOW%[DEADZONE WARNING] Flashing preloader — advanced mode enabled by user.%RESET%
         "%fastboot%" flash preloader_a "images\preloader_raw.img"
+        if errorlevel 1 goto :fail
         "%fastboot%" flash preloader_b "images\preloader_raw.img"
+        if errorlevel 1 goto :fail
         "%fastboot%" flash preloader1 "images\preloader_raw.img"
+        if errorlevel 1 goto :fail
         "%fastboot%" flash preloader2 "images\preloader_raw.img"
+        if errorlevel 1 goto :fail
     )
 )
 
@@ -211,7 +252,7 @@ if "%FLASH_PRELOADER%" equ "1" (
 echo.
 echo %WHITE%Flashing super.img (this may take several minutes)...%RESET%
 "%fastboot%" flash super "images\super.img"
-if errorlevel 1 ( echo %RED%[DEADZONE ERROR] Failed to flash super.img%RESET% & pause & exit /B 1 )
+if errorlevel 1 goto :fail
 
 :: ============================================================
 ::  REBOOT
@@ -231,3 +272,19 @@ echo.
 echo Press any key to close this window.
 pause >nul
 endlocal
+exit /B 0
+
+:: ============================================================
+::  FAIL
+:: ============================================================
+:fail
+echo.
+echo %RED%%BOLD%  ============================================================%RESET%
+echo %RED%%BOLD%   [DEADZONE ERROR] Flash failed.%RESET%
+echo %RED%%BOLD%   Do NOT reboot until you understand what failed.%RESET%
+echo %RED%%BOLD%   Check the output above for the failing command.%RESET%
+echo %RED%%BOLD%  ============================================================%RESET%
+echo.
+pause
+endlocal
+exit /B 1

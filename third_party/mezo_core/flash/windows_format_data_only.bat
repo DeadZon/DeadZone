@@ -35,7 +35,7 @@ set "fastboot=META-INF\windows\fastboot.exe"
 if not exist "%fastboot%" (
     echo %RED%[DEADZONE ERROR] fastboot.exe not found at: %fastboot%%RESET%
     echo %YELLOW%[DEADZONE WARNING] Make sure the ZIP was extracted completely.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 :: ============================================================
@@ -50,7 +50,7 @@ for /f "tokens=2" %%A in ('"%fastboot%" getvar product 2^>^&1 ^| findstr "produc
 if "%connected%" equ "" (
     echo %RED%[DEADZONE ERROR] No device detected. Is fastboot mode active?%RESET%
     echo %YELLOW%[DEADZONE WARNING] Hold Power + Volume Down to enter fastboot.%RESET%
-    pause & exit /B 1
+    goto :fail
 )
 
 echo %WHITE%  Connected device: %CYAN%%connected%%RESET%
@@ -91,10 +91,7 @@ if errorlevel 1 (
 
 echo %YELLOW%[DEADZONE] Erasing userdata partition...%RESET%
 "%fastboot%" erase userdata
-if errorlevel 1 (
-    echo %RED%[DEADZONE ERROR] Failed to erase userdata.%RESET%
-    pause & exit /B 1
-)
+if errorlevel 1 goto :fail
 
 :: ============================================================
 ::  REBOOT
@@ -113,3 +110,19 @@ echo.
 echo Press any key to close this window.
 pause >nul
 endlocal
+exit /B 0
+
+:: ============================================================
+::  FAIL
+:: ============================================================
+:fail
+echo.
+echo %RED%%BOLD%  ============================================================%RESET%
+echo %RED%%BOLD%   [DEADZONE ERROR] Operation failed.%RESET%
+echo %RED%%BOLD%   Do NOT reboot until you understand what failed.%RESET%
+echo %RED%%BOLD%   Check the output above for the failing command.%RESET%
+echo %RED%%BOLD%  ============================================================%RESET%
+echo.
+pause
+endlocal
+exit /B 1
