@@ -30,7 +30,7 @@ from src.core.lpunpack import get_info as lpunpack_get_info  # noqa: E402
 from src.core.imgextractor import Extractor  # noqa: E402
 from src.core.posix import symlink as posix_symlink  # noqa: E402
 from src.core import contextpatch, fspatch  # noqa: E402
-from src.core.utils import call, gettype, simg2img, JsonEdit  # noqa: E402
+from src.core.utils import call, gettype, simg2img, JsonEdit, tool_bin  # noqa: E402
 
 
 SUPPORTED_ARCHIVES = (".zip", ".tgz", ".tar.gz", ".tar")
@@ -6881,16 +6881,109 @@ def repack_erofs(part_name: str, project_dir: Path, output_img: Path) -> None:
     if output_img.exists():
         output_img.unlink()
 
+    # ── Preflight checks ──────────────────────────────────────────────────────
+    fs_config = project_dir / "config" / f"{part_name}_fs_config"
+    file_contexts = project_dir / "config" / f"{part_name}_file_contexts"
+    part_dir = project_dir / part_name
+
+    def _dir_size(d: Path) -> str:
+        try:
+            return str(sum(f.stat().st_size for f in d.rglob("*") if f.is_file()))
+        except Exception:
+            return "error"
+
+    log(f"[EROFS PREFLIGHT] partition={part_name}")
+    log(f"  part_dir      : {part_dir} | exists={part_dir.exists()} | bytes={_dir_size(part_dir) if part_dir.exists() else 'N/A'}")
+    log(f"  fs_config     : {fs_config} | exists={fs_config.exists()} | bytes={fs_config.stat().st_size if fs_config.exists() else 'N/A'}")
+    log(f"  file_contexts : {file_contexts} | exists={file_contexts.exists()} | bytes={file_contexts.stat().st_size if file_contexts.exists() else 'N/A'}")
+
+    if not part_dir.exists():
+        raise RuntimeError(f"[EROFS PREFLIGHT FAIL] part_dir missing: {part_dir}")
+    if not fs_config.exists() or fs_config.stat().st_size == 0:
+        raise RuntimeError(f"[EROFS PREFLIGHT FAIL] fs_config missing or empty: {fs_config}")
+    if not file_contexts.exists() or file_contexts.stat().st_size == 0:
+        raise RuntimeError(f"[EROFS PREFLIGHT FAIL] file_contexts missing or empty: {file_contexts}")
+
+    # ── Log directory ─────────────────────────────────────────────────────────
+    log_dir = project_dir / "logs" / "mkfs_erofs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
     commands = build_erofs_commands(part_name, project_dir, output_img)
     last_error = None
     for index, command in enumerate(commands, start=1):
-        log(f"Thu repack erofs lan {index}: {' '.join(command)}")
-        ret = call(command, out=True)
+        # Resolve the binary the same way call() does: prepend tool_bin to command[0]
+        resolved_cmd = list(command)
+        resolved_cmd[0] = f"{tool_bin}{command[0]}"
+
+        log(f"Thu repack erofs lan {index}: {' '.join(resolved_cmd)}")
+        try:
+            result = subprocess.run(
+                resolved_cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name != "posix" else 0,
+            )
+            ret = result.returncode
+            combined_output = result.stdout.decode("utf-8", errors="replace")
+        except FileNotFoundError as exc:
+            ret = 2
+            combined_output = f"[FileNotFoundError] {exc}\n"
+
+        for line in combined_output.splitlines():
+            print(line, flush=True)
+
+        log_file = log_dir / f"{part_name}_attempt_{index}.log"
+        try:
+            with log_file.open("w", encoding="utf-8") as lf:
+                lf.write(f"partition     : {part_name}\n")
+                lf.write(f"attempt       : {index}\n")
+                lf.write(f"command       : {' '.join(resolved_cmd)}\n")
+                lf.write(f"return_code   : {ret}\n")
+                lf.write(f"output_img    : {output_img} | exists={output_img.exists()} | bytes={output_img.stat().st_size if output_img.exists() else 'N/A'}\n")
+                lf.write(f"part_dir      : {part_dir} | exists={part_dir.exists()} | bytes={_dir_size(part_dir) if part_dir.exists() else 'N/A'}\n")
+                lf.write(f"fs_config     : {fs_config} | exists={fs_config.exists()} | bytes={fs_config.stat().st_size if fs_config.exists() else 'N/A'}\n")
+                lf.write(f"file_contexts : {file_contexts} | exists={file_contexts.exists()} | bytes={file_contexts.stat().st_size if file_contexts.exists() else 'N/A'}\n")
+                lf.write("\n--- stdout+stderr ---\n")
+                lf.write(combined_output)
+            log(f"[EROFS] attempt={index} ret={ret} log={log_file}")
+        except Exception as write_err:
+            log(f"[EROFS] attempt={index} ret={ret} (log write failed: {write_err})")
+
         if ret == 0 and output_img.exists() and output_img.stat().st_size > 0:
             return
         last_error = ret
         if output_img.exists():
             output_img.unlink()
+
+    # ── All attempts failed: dump diagnostic info ─────────────────────────────
+    log(f"[EROFS FAIL] All {len(commands)} attempt(s) failed for {part_name} (last_ret={last_error})")
+    dump_file = log_dir / f"{part_name}_fail_dump.log"
+    try:
+        with dump_file.open("w", encoding="utf-8") as df:
+            df.write(f"=== EROFS FAIL DUMP: {part_name} ===\n\n")
+            df.write("--- fs_config (first 40 lines) ---\n")
+            try:
+                lines = fs_config.read_text(encoding="utf-8", errors="replace").splitlines()
+                df.write("\n".join(lines[:40]) + "\n")
+            except Exception as e:
+                df.write(f"[ERROR reading fs_config] {e}\n")
+            df.write("\n--- file_contexts (first 40 lines) ---\n")
+            try:
+                lines = file_contexts.read_text(encoding="utf-8", errors="replace").splitlines()
+                df.write("\n".join(lines[:40]) + "\n")
+            except Exception as e:
+                df.write(f"[ERROR reading file_contexts] {e}\n")
+            df.write("\n--- part_dir contents (first 80 entries) ---\n")
+            try:
+                entries = sorted(part_dir.rglob("*"))[:80]
+                for entry in entries:
+                    df.write(f"  {entry.relative_to(part_dir)}\n")
+            except Exception as e:
+                df.write(f"[ERROR listing part_dir] {e}\n")
+        log(f"[EROFS FAIL DUMP] written to {dump_file}")
+    except Exception as dump_err:
+        log(f"[EROFS FAIL DUMP] could not write dump: {dump_err}")
 
     raise RuntimeError(f"Repack erofs that bai: {part_name} (ret={last_error})")
 

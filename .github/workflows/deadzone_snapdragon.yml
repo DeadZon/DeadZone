@@ -358,3 +358,15 @@ jobs:
           path: _factory_outputs/*
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Upload EROFS diagnostic logs
+        if: always() && inputs.execute_build == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: "erofs-logs-snapdragon-${{ steps.parse_device.outputs.codename }}-${{ github.run_number }}"
+          path: |
+            third_party/mezo_core/**/logs/mkfs_erofs/**
+            third_party/mezo_core/**/*_fs_config
+            third_party/mezo_core/**/*_file_contexts
+          if-no-files-found: ignore
+          retention-days: 14
