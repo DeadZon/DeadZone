@@ -6571,12 +6571,72 @@ def extract_single_partition(img_path: Path, output_dir: Path, parts_info: dict)
     if fs_type == "ext":
         Extractor().main(str(img_path), str(part_dir), str(output_dir))
     elif fs_type == "erofs":
-        ret = call(
-            ['extract.erofs', '-i', str(img_path), '-o', str(output_dir), '-x'],
-            out=False,
+        def _clean_partial_erofs_extract() -> None:
+            if part_dir.exists():
+                shutil.rmtree(part_dir, ignore_errors=True)
+
+        def _run_erofs_extract(label: str, command: list[str]) -> int | str:
+            log(f"Thu extract erofs bang {label}: {' '.join(command)}")
+            try:
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                )
+            except FileNotFoundError as exc:
+                log(f"{label} khong chay duoc: {exc}")
+                return "not found"
+
+            if result.stdout:
+                print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+            if result.stderr:
+                print(result.stderr, end="" if result.stderr.endswith("\n") else "\n")
+            return result.returncode
+
+        bundled_extract_erofs = ROOT_DIR / "bin" / "extract.erofs"
+        erofs_attempts: list[tuple[str, list[str]]] = [
+            (
+                "bundled extract.erofs",
+                [str(bundled_extract_erofs), "-i", str(img_path), "-o", str(output_dir), "-x"],
+            ),
+        ]
+
+        system_extract_erofs = shutil.which("extract.erofs")
+        if system_extract_erofs:
+            erofs_attempts.append(
+                (
+                    "system extract.erofs",
+                    [system_extract_erofs, "-i", str(img_path), "-o", str(output_dir), "-x"],
+                )
+            )
+        else:
+            log("Khong tim thay system extract.erofs trong PATH.")
+
+        erofs_attempts.extend(
+            [
+                (
+                    "fsck.erofs --extract=<dir>",
+                    ["fsck.erofs", f"--extract={part_dir}", str(img_path)],
+                ),
+                (
+                    "fsck.erofs --extract <dir>",
+                    ["fsck.erofs", "--extract", str(part_dir), str(img_path)],
+                ),
+            ]
         )
-        if ret != 0:
-            raise RuntimeError(f"extract.erofs that bai voi {img_path.name}")
+
+        erofs_errors: list[str] = []
+        for label, command in erofs_attempts:
+            _clean_partial_erofs_extract()
+            ret = _run_erofs_extract(label, command)
+            erofs_errors.append(f"{label} (ret={ret})")
+            if ret == 0 and part_dir.exists():
+                break
+        else:
+            raise RuntimeError(
+                f"extract.erofs that bai voi {img_path.name}: "
+                + "; ".join(erofs_errors)
+            )
     else:
         log(f"Bo qua {img_path.name}: filesystem khong ho tro [{fs_type}]")
         return
