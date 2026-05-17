@@ -70,7 +70,7 @@ def log(message: str) -> None:
 def pause_if_needed() -> None:
     if os.name == "nt":
         try:
-            input("\nNhan Enter de thoat...")
+            input("\nPress Enter to exit...")
         except EOFError:
             pass
 
@@ -85,7 +85,7 @@ def choose_path() -> Path | None:
     root = tk.Tk()
     root.withdraw()
     file_path = filedialog.askopenfilename(
-        title="Chon file ROM, super.img hoac huy de chon thu muc project",
+        title="Select ROM file, super.img, or cancel to choose a project folder",
         filetypes=[
             ("ROM files", "*.zip *.tgz *.tar.gz *.tar *.img"),
             ("All files", "*.*"),
@@ -95,7 +95,7 @@ def choose_path() -> Path | None:
         root.destroy()
         return Path(file_path)
 
-    dir_path = filedialog.askdirectory(title="Chon thu muc project de repack")
+    dir_path = filedialog.askdirectory(title="Choose project folder to repack")
     root.destroy()
     return Path(dir_path) if dir_path else None
 
@@ -135,7 +135,7 @@ def extract_tar_safe(archive: tarfile.TarFile, dest: Path) -> None:
     for member in archive.getmembers():
         member_path = (dest / member.name).resolve()
         if os.path.commonpath([str(dest_abs), str(member_path)]) != str(dest_abs):
-            raise RuntimeError(f"Tar entry khong hop le: {member.name}")
+            raise RuntimeError(f"Invalid tar entry: {member.name}")
     archive.extractall(dest)
 
 
@@ -144,7 +144,7 @@ def extract_rom(rom_path: Path, output_dir: Path) -> Path:
     ensure_clean_dir(rom_extract_dir)
 
     name_lower = rom_path.name.lower()
-    log(f"[1/3] Dang giai nen ROM: {rom_path.name}")
+    log(f"[1/3] Extracting ROM: {rom_path.name}")
 
     if name_lower.endswith(".zip"):
         with zipfile.ZipFile(rom_path, "r") as zip_file:
@@ -193,7 +193,7 @@ def _resolve_cpio_entry_path(output_dir: Path, entry_name: str) -> Path:
     target_path = (output_dir / normalized).resolve()
     output_dir_resolved = output_dir.resolve()
     if os.path.commonpath([str(output_dir_resolved), str(target_path)]) != str(output_dir_resolved):
-        raise RuntimeError(f"Duong dan CPIO khong hop le: {entry_name}")
+        raise RuntimeError(f"Invalid CPIO path: {entry_name}")
     return target_path
 
 
@@ -206,11 +206,11 @@ def extract_cpio_without_toml(cpio_path: Path, output_dir: Path) -> None:
             if not header:
                 break
             if len(header) != 110:
-                raise RuntimeError(f"Header CPIO khong hop le trong {cpio_path}")
+                raise RuntimeError(f"Invalid CPIO header in {cpio_path}")
 
             magic = header[:6]
             if magic not in (b"070701", b"070702"):
-                raise RuntimeError(f"Magic CPIO khong duoc ho tro trong {cpio_path}: {magic!r}")
+                raise RuntimeError(f"Unsupported CPIO magic in {cpio_path}: {magic!r}")
 
             fields = [int(header[offset:offset + 8], 16) for offset in range(6, 110, 8)]
             mode = fields[1]
@@ -219,7 +219,7 @@ def extract_cpio_without_toml(cpio_path: Path, output_dir: Path) -> None:
 
             name_bytes = file.read(name_size)
             if len(name_bytes) != name_size:
-                raise RuntimeError(f"Khong doc du ten entry trong {cpio_path}")
+                raise RuntimeError(f"Could not read full entry name in {cpio_path}")
 
             entry_name = name_bytes[:-1].decode("utf-8", errors="ignore")
             file.read(_cpio_aligned_size(110 + name_size))
@@ -229,7 +229,7 @@ def extract_cpio_without_toml(cpio_path: Path, output_dir: Path) -> None:
 
             file_data = file.read(file_size)
             if len(file_data) != file_size:
-                raise RuntimeError(f"Khong doc du du lieu cho entry {entry_name} trong {cpio_path}")
+                raise RuntimeError(f"Could not read full data for entry {entry_name} in {cpio_path}")
             file.read(_cpio_aligned_size(file_size))
 
             if not entry_name or entry_name == ".":
@@ -259,7 +259,7 @@ def extract_cpio_without_toml(cpio_path: Path, output_dir: Path) -> None:
                     pass
                 continue
 
-            log(f"    Canh bao: bo qua entry CPIO khong ho tro {entry_name} (mode={oct(mode)})")
+            log(f"    Warning: skipping unsupported CPIO entry {entry_name} (mode={oct(mode)})")
 
 
 
@@ -305,7 +305,7 @@ def try_extract_super_from_payload(
     try:
         from src.core.payload_extract import extract_partitions_from_payload
     except Exception as exc:
-        log(f"Khong import payload_extract (canh bao): {exc}")
+        log(f"Could not import payload_extract (warning): {exc}")
         return False
 
     payload_candidates: list[Path] = []
@@ -328,7 +328,7 @@ def try_extract_super_from_payload(
         unique_payloads.append(p)
 
     if not unique_payloads:
-        log("Khong tim thay payload.bin de giai nen.")
+        log("payload.bin not found for extraction.")
         return False
 
     payload_out_dir = extracted_dir / "payload_extracted"
@@ -345,7 +345,7 @@ def try_extract_super_from_payload(
 
     for idx, payload_path in enumerate(unique_payloads, start=1):
         try:
-            log(f"[Payload] [{idx}/{len(unique_payloads)}] Tham giai nen: {payload_path}")
+            log(f"[Payload] [{idx}/{len(unique_payloads)}] Attempting extraction: {payload_path}")
             if payload_out_dir.exists():
                 remove_path_force(payload_out_dir)
             payload_out_dir.mkdir(parents=True, exist_ok=True)
@@ -401,15 +401,15 @@ def try_extract_super_from_payload(
 
             found_super = find_super_img(extracted_dir) is not None
             if found_super:
-                log("[Payload] Da tao duoc super.img tu payload.bin.")
+                log("[Payload] super.img created from payload.bin.")
                 return True
             else:
-                log("[Payload] Giai nen xong nhung van khong tim thay super.img.")
+                log("[Payload] Extraction complete but super.img not found.")
                 if payload_partition_extracted_any:
-                    log("[Payload] Da giai nen duoc partition img tu payload (tiep tuc tiep theo).")
+                    log("[Payload] Partition images extracted from payload (continuing).")
                     return True
         except Exception as exc:
-            log(f"[Payload] Loi khi giai nen {payload_path.name}: {exc}")
+            log(f"[Payload] Error extracting {payload_path.name}: {exc}")
 
     return False
 
@@ -431,7 +431,7 @@ def parse_build_prop(path: Path) -> dict[str, str]:
                 if key in BUILD_PROP_KEYS and key not in props:
                     props[key] = value
     except Exception as exc:
-        log(f"Loi khi doc '{path}': {exc}")
+        log(f"Error reading '{path}': {exc}")
 
     return props
 
@@ -451,14 +451,14 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
                 aggregated[key] = props[key]
 
     if not found_any_file:
-        log("Khong tim thay file build.prop nao trong project.")
+        log("No build.prop file found in project.")
         return None, None
 
     if not aggregated:
-        log("Khong tim thay gia tri build.prop nao cho cac key can doc.")
+        log("No build.prop values found for required keys.")
         return None, None
 
-    log("Thong tin ROM:")
+    log("ROM info:")
 
     brand = aggregated.get("ro.product.odm.brand")
     device = aggregated.get("ro.product.odm.device")
@@ -468,17 +468,17 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
     android_release = aggregated.get("ro.system.build.version.release")
 
     if brand:
-        log(f"    Hãng: {brand}")
+        log(f"    Brand: {brand}")
     if device:
-        log(f"    Thiết bị: {device}")
+        log(f"    Device: {device}")
     if marketname:
-        log(f"    Tên máy: {marketname}")
+        log(f"    Market name: {marketname}")
     if model:
-        log(f"    Mã máy: {model}")
+        log(f"    Model: {model}")
     if mi_incremental:
-        log(f"    Phiên bản MI: {mi_incremental}")
+        log(f"    MI version: {mi_incremental}")
     if android_release:
-        log(f"    Phiên bản Android: {android_release}")
+        log(f"    Android version: {android_release}")
 
     # Ghi thong tin vao file DeadZone_firmware.txt trong thu muc output
     try:
@@ -490,9 +490,9 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
             f.write(f"Device name={marketname or ''}\n")
             f.write(f"MI version={mi_incremental or ''}\n")
             f.write(f"Android release={android_release or ''}\n")
-        log(f"    Da ghi thong tin firmware: {firmware_info_path}")
+        log(f"    Firmware info written: {firmware_info_path}")
     except Exception as exc:
-        log(f"    Loi khi ghi DeadZone_firmware.txt: {exc}")
+        log(f"    Error writing DeadZone_firmware.txt: {exc}")
     
     #chuyển file từ rom/payload_extracted vào images
     payload_extracted_dir = project_dir / "rom" / "payload_extracted"
@@ -505,20 +505,20 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
                 target = payload_images_dir / entry.name
                 if target.exists():
                     if remove_path_force(target):
-                        log(f"    Da xoa trung tai dich: {target}")
+                        log(f"    Removed duplicate target: {target}")
                     else:
-                        log(f"    Canh bao: khong xoa duoc muc trung tai: {target}")
+                        log(f"    Warning: could not remove duplicate target: {target}")
                         continue
                 shutil.move(str(entry), str(target))
-                log(f"    Da chuyen {entry.name} -> {payload_images_dir}")
+                log(f"    Moved {entry.name} -> {payload_images_dir}")
                 moved_count += 1
             if moved_count > 0:
                 shutil.rmtree(payload_extracted_dir.parent, ignore_errors=True)
-                log(f"Da chuyen {moved_count} file tu rom/payload_extracted vao images, xoa thu muc rom.")
+                log(f"Moved {moved_count} file(s) from payload_extracted to images, removed rom directory.")
             else:
-                log("Khong co file nao de chuyen tu payload_extracted.")
+                log("No files to move from payload_extracted.")
         except Exception as exc:
-            log(f"Loi khi xu ly payload_extracted: {exc}")
+            log(f"Error processing payload_extracted: {exc}")
 
     # vo hieu hoa vbmeta ben trong thu muc images_dir
     images_dir: Path | None = None
@@ -531,7 +531,7 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
             images_dir = candidates[0].parent
             log(f"[DEBUG] Tu dong tim thay images_dir: {images_dir}")
         else:
-            log("[INFO] Khong tim thay vbmeta.img trong project.")
+            log("[INFO] vbmeta.img not found in project.")
             return mi_incremental, android_release
 
     vbmeta_img = images_dir / "vbmeta.img"
@@ -540,31 +540,31 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
     vbmeta_tmp = images_dir / "vbmeta_patched.img"
 
     if not images_dir.is_dir():
-        log(f"[INFO] Khong tim thay thu muc images: {images_dir}")
+        log(f"[INFO] images directory not found: {images_dir}")
         return mi_incremental, android_release
 
     if not vbmeta_img.is_file():
-        log(f"[INFO] Khong tim thay vbmeta.img trong images: {images_dir}")
+        log(f"[INFO] vbmeta.img not found in images: {images_dir}")
         return mi_incremental, android_release
 
     if not avbtool_path.is_file():
-        log(f"[LOI] Khong tim thay avbtool: {avbtool_path}")
+        log(f"[ERROR] avbtool not found: {avbtool_path}")
         return mi_incremental, android_release
 
     if not avb_key_path.is_file():
-        log(f"[LOI] Khong tim thay key AVB: {avb_key_path}")
+        log(f"[ERROR] AVB key not found: {avb_key_path}")
         return mi_incremental, android_release
 
     openssl_bin_dir = ROOT_DIR / "bin" / "openssl"
     if not (openssl_bin_dir / "openssl.exe").is_file():
-        log(f"[LOI] Khong tim thay openssl.exe trong {openssl_bin_dir}!")
+        log(f"[ERROR] openssl.exe not found in {openssl_bin_dir}!")
         return mi_incremental, android_release
 
     log("\n==========================================")
     log("   DEADZONE VBMeta Generator")
     log("   VO HIEU HOA VBMETA - dm-verity Disabled")
     log("==========================================")
-    log("[INFO] Dang patch file vbmeta...")
+    log("[INFO] Patching vbmeta file...")
     log(f"       Ke thua cau truc tu: {vbmeta_img.name}")
     log("       Trang thai: AVB Enable, dm-verity Disabled")
     log("       Thu muc:  " + str(images_dir))
@@ -597,10 +597,10 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
         log("[INFO] De flash vao may, hay dua may ve Fastboot va chay lenh:")
         log(f"       fastboot flash vbmeta {images_dir / 'vbmeta.img'}")
     except subprocess.CalledProcessError as exc:
-        log(f"[LOI] Loi khi patch vbmeta (ma loi {exc.returncode}).")
-        log("[FIX] Kiem tra thu muc 'bin' da co du file openssl chua.")
+        log(f"[ERROR] Error patching vbmeta (exit code {exc.returncode}).")
+        log("[FIX] Check that the 'bin' directory contains the openssl files.")
     except Exception as exc:
-        log(f"[LOI] Loi khi patch vbmeta: {exc}")
+        log(f"[ERROR] Error patching vbmeta: {exc}")
     finally:
         if vbmeta_tmp.exists():
             remove_path_force(vbmeta_tmp)
@@ -611,7 +611,7 @@ def read_debloat_list(debloat_path: Path) -> list[str]:
     names: list[str] = []
 
     if not debloat_path.is_file():
-        log(f"Khong tim thay file debloat: {debloat_path}")
+        log(f"Debloat file not found: {debloat_path}")
         return names
 
     try:
@@ -622,7 +622,7 @@ def read_debloat_list(debloat_path: Path) -> list[str]:
                     continue
                 names.append(name)
     except Exception as exc:
-        log(f"Loi khi doc debloat list: {exc}")
+        log(f"Error reading debloat list: {exc}")
 
     return names
 
@@ -651,13 +651,13 @@ def debloat_project(project_dir: Path, debloat_path: Path) -> None:
     if not names:
         return
 
-    log("Bat dau debloat theo danh sach trong debloat.txt ...")
+    log("Starting debloat from debloat.txt list...")
 
     # Thu thap truoc de tranh loi do vua duyet vua xoa.
     all_dirs = _safe_collect_dirs(project_dir)
 
     for name in names:
-        log(f"- Tim va xoa thu muc lien quan toi: {name}")
+        log(f"- Searching and removing directories related to: {name}")
         found_any = False
         needle = name.lower()
 
@@ -666,18 +666,18 @@ def debloat_project(project_dir: Path, debloat_path: Path) -> None:
                 if path.is_dir() and path.name.lower() == needle:
                     found_any = True
                     if remove_path_force(path):
-                        log(f"    Da xoa: {path}")
+                        log(f"    Removed: {path}")
                     else:
-                        log(f"    Canh bao: khong xoa duoc {path}")
+                        log(f"    Warning: could not remove {path}")
             except OSError as exc:
-                log(f"    Bo qua (khong truy cap duoc): {path} ({exc})")
+                log(f"    Skipping (inaccessible): {path} ({exc})")
             except Exception as exc:
-                log(f"    Loi khi xoa {path}: {exc}")
+                log(f"    Error removing {path}: {exc}")
 
         if not found_any:
-            log("    Khong tim thay thu muc nao phu hop.")
+            log("    No matching directories found.")
 
-    log("Hoan thanh debloat.")
+    log("Debloat complete.")
 
 
 def resolve_partition_root(project_dir: Path, partition_name: str) -> Path | None:
@@ -702,12 +702,12 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
     dest_dir = work_dir or project_dir
     system_ext_root = resolve_partition_root(project_dir, "system_ext")
     if system_ext_root is None:
-        log("Khong tim thay partition system_ext de xu ly MiuiSystemUI.apk.")
+        log("system_ext partition not found for MiuiSystemUI.apk processing.")
         return
 
     apk_candidates = sorted(system_ext_root.rglob(MIUI_SYSTEM_UI_APK_NAME))
     if not apk_candidates:
-        log("Khong tim thay MiuiSystemUI.apk trong system_ext sau khi unpack.")
+        log("MiuiSystemUI.apk not found in system_ext after unpack.")
         return
 
     src_apk = apk_candidates[0]
@@ -716,7 +716,7 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
     apk_editor_src = ROOT_DIR / APK_EDITOR_JAR_NAME
     apk_editor_dst = dest_dir / APK_EDITOR_JAR_NAME
 
-    log(f"Tim thay {MIUI_SYSTEM_UI_APK_NAME}: {src_apk}")
+    log(f"Found {MIUI_SYSTEM_UI_APK_NAME}: {src_apk}")
 
     try:
         if dest_apk.exists():
@@ -724,11 +724,11 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
         shutil.copy2(src_apk, dest_apk)
         log(f"    Da xuat {MIUI_SYSTEM_UI_APK_NAME} -> {dest_apk}")
     except Exception as exc:
-        log(f"    Loi khi xuat {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
+        log(f"    Error extracting {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
         return
 
     if not apk_editor_src.is_file():
-        log(f"Khong tim thay {APK_EDITOR_JAR_NAME} tai {apk_editor_src}")
+        log(f"{APK_EDITOR_JAR_NAME} not found at {apk_editor_src}")
         return
 
     try:
@@ -737,7 +737,7 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
         shutil.copy2(apk_editor_src, apk_editor_dst)
         log(f"    Da copy {APK_EDITOR_JAR_NAME} -> {apk_editor_dst}")
     except Exception as exc:
-        log(f"    Loi khi copy {APK_EDITOR_JAR_NAME}: {exc}")
+        log(f"    Error copying {APK_EDITOR_JAR_NAME}: {exc}")
         return
 
     try:
@@ -756,22 +756,22 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
             "-o",
             str(dest_apk_src),
         ]
-        log(f"Dang decompile {MIUI_SYSTEM_UI_APK_NAME} -> {dest_apk_src} ...")
+        log(f"Decompiling {MIUI_SYSTEM_UI_APK_NAME} -> {dest_apk_src} ...")
         subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=dest_dir)
         if dest_apk_src.is_dir():
             log(f"    Da decompile xong {MIUI_SYSTEM_UI_APK_NAME}")
         else:
-            log(f"    Canh bao: lenh decompile da chay nhung khong tao thu muc {dest_apk_src}")
+            log(f"    Warning: decompile ran but did not create directory {dest_apk_src}")
     except subprocess.CalledProcessError as exc:
         err = (exc.stderr or exc.stdout or "").strip()
         if err:
-            log(f"    Loi khi decompile {MIUI_SYSTEM_UI_APK_NAME}: {err}")
+            log(f"    Error decompiling {MIUI_SYSTEM_UI_APK_NAME}: {err}")
         else:
-            log(f"    Loi khi decompile {MIUI_SYSTEM_UI_APK_NAME} (exit code {exc.returncode})")
+            log(f"    Error decompiling {MIUI_SYSTEM_UI_APK_NAME} (exit code {exc.returncode})")
     except FileNotFoundError:
-        log(f"Khong tim thay Java de chay {APK_EDITOR_JAR_NAME}.")
+        log(f"Java not found to run {APK_EDITOR_JAR_NAME}.")
     except Exception as exc:
-        log(f"    Loi khi decompile {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
+        log(f"    Error decompiling {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
 
 
 def recompile_apk(work_dir: Path) -> bool:
@@ -781,11 +781,11 @@ def recompile_apk(work_dir: Path) -> bool:
     apk_editor_jar = apk_editor_in_workdir if apk_editor_in_workdir.is_file() else ROOT_DIR / APK_EDITOR_JAR_NAME
 
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de build lai APK.")
+        log(f"Source directory not found: {apk_src_dir} (cannot rebuild APK).")
         return False
 
     if not apk_editor_jar.is_file():
-        log(f"Khong tim thay {APK_EDITOR_JAR_NAME} de build lai APK.")
+        log(f"{APK_EDITOR_JAR_NAME} not found to rebuild APK.")
         return False
 
     try:
@@ -805,50 +805,50 @@ def recompile_apk(work_dir: Path) -> bool:
             str(output_apk),
         ]
 
-        log(f"Dang build lai {MIUI_SYSTEM_UI_APK_NAME} tu {apk_src_dir} ...")
+        log(f"Rebuilding {MIUI_SYSTEM_UI_APK_NAME} from {apk_src_dir} ...")
         subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=work_dir)
 
         if not output_apk.is_file():
-            log(f"Build lai {MIUI_SYSTEM_UI_APK_NAME} that bai: khong tao duoc file output.")
+            log(f"Rebuild of {MIUI_SYSTEM_UI_APK_NAME} failed: could not create output file.")
             return False
 
         log(f"    Build lai thanh cong -> {output_apk}")
 
         if remove_path_force(apk_src_dir):
-            log(f"    Da xoa thu muc source tam: {apk_src_dir}")
+            log(f"    Removed temporary source directory: {apk_src_dir}")
         else:
-            log(f"    Canh bao: khong xoa duoc thu muc source tam: {apk_src_dir}")
+            log(f"    Warning: could not remove temporary source directory: {apk_src_dir}")
 
         return True
     except subprocess.CalledProcessError as exc:
         err = (exc.stderr or exc.stdout or "").strip()
         if err:
-            log(f"    Loi khi build lai {MIUI_SYSTEM_UI_APK_NAME}: {err}")
+            log(f"    Error rebuilding {MIUI_SYSTEM_UI_APK_NAME}: {err}")
         else:
-            log(f"    Loi khi build lai {MIUI_SYSTEM_UI_APK_NAME} (exit code {exc.returncode})")
+            log(f"    Error rebuilding {MIUI_SYSTEM_UI_APK_NAME} (exit code {exc.returncode})")
         return False
     except FileNotFoundError:
-        log(f"Khong tim thay Java de chay {APK_EDITOR_JAR_NAME}.")
+        log(f"Java not found to run {APK_EDITOR_JAR_NAME}.")
         return False
     except Exception as exc:
-        log(f"    Loi khi build lai {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
+        log(f"    Error rebuilding {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
         return False
 
 
 def restore_recompiled_miui_systemui_to_project(project_dir: Path, work_dir: Path) -> bool:
     rebuilt_apk = work_dir / MIUI_SYSTEM_UI_APK_NAME
     if not rebuilt_apk.is_file():
-        log(f"Khong tim thay APK da build lai tai {rebuilt_apk}.")
+        log(f"Rebuilt APK not found at {rebuilt_apk}.")
         return False
 
     system_ext_root = resolve_partition_root(project_dir, "system_ext")
     if system_ext_root is None:
-        log("Khong tim thay partition system_ext de khoi phuc MiuiSystemUI.apk.")
+        log("system_ext partition not found to restore MiuiSystemUI.apk.")
         return False
 
     apk_candidates = sorted(system_ext_root.rglob(MIUI_SYSTEM_UI_APK_NAME))
     if not apk_candidates:
-        log("Khong tim thay dich MiuiSystemUI.apk trong system_ext de ghi de.")
+        log("MiuiSystemUI.apk target not found in system_ext to overwrite.")
         return False
 
     target_apk = apk_candidates[0]
@@ -859,7 +859,7 @@ def restore_recompiled_miui_systemui_to_project(project_dir: Path, work_dir: Pat
         log(f"    Da di chuyen {MIUI_SYSTEM_UI_APK_NAME} moi build -> {target_apk}")
         return True
     except Exception as exc:
-        log(f"    Loi khi khoi phuc {MIUI_SYSTEM_UI_APK_NAME} ve system_ext: {exc}")
+        log(f"    Error restoring {MIUI_SYSTEM_UI_APK_NAME} to system_ext: {exc}")
         return False
 
 
@@ -867,12 +867,12 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
     dest_dir = work_dir or project_dir
     system_ext_root = resolve_partition_root(project_dir, "system_ext")
     if system_ext_root is None:
-        log("Khong tim thay partition system_ext de xu ly Provision.apk.")
+        log("system_ext partition not found for Provision.apk processing.")
         return False
 
     apk_candidates = sorted(system_ext_root.rglob(PROVISION_APK_NAME))
     if not apk_candidates:
-        log("Khong tim thay Provision.apk trong system_ext sau khi unpack.")
+        log("Provision.apk not found in system_ext after unpack.")
         return False
 
     src_apk = apk_candidates[0]
@@ -881,7 +881,7 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
     apk_editor_src = ROOT_DIR / APK_EDITOR_JAR_NAME
     apk_editor_dst = dest_dir / APK_EDITOR_JAR_NAME
 
-    log(f"Tim thay {PROVISION_APK_NAME}: {src_apk}")
+    log(f"Found {PROVISION_APK_NAME}: {src_apk}")
 
     try:
         if dest_apk.exists():
@@ -889,11 +889,11 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
         shutil.copy2(src_apk, dest_apk)
         log(f"    Da xuat {PROVISION_APK_NAME} -> {dest_apk}")
     except Exception as exc:
-        log(f"    Loi khi xuat {PROVISION_APK_NAME}: {exc}")
+        log(f"    Error extracting {PROVISION_APK_NAME}: {exc}")
         return False
 
     if not apk_editor_src.is_file():
-        log(f"Khong tim thay {APK_EDITOR_JAR_NAME} tai {apk_editor_src}")
+        log(f"{APK_EDITOR_JAR_NAME} not found at {apk_editor_src}")
         return False
 
     try:
@@ -902,7 +902,7 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
         shutil.copy2(apk_editor_src, apk_editor_dst)
         log(f"    Da copy {APK_EDITOR_JAR_NAME} -> {apk_editor_dst}")
     except Exception as exc:
-        log(f"    Loi khi copy {APK_EDITOR_JAR_NAME}: {exc}")
+        log(f"    Error copying {APK_EDITOR_JAR_NAME}: {exc}")
         return False
 
     try:
@@ -921,25 +921,25 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
             "-o",
             str(dest_apk_src),
         ]
-        log(f"Dang decompile {PROVISION_APK_NAME} -> {dest_apk_src} ...")
+        log(f"Decompiling {PROVISION_APK_NAME} -> {dest_apk_src} ...")
         subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=dest_dir)
         if dest_apk_src.is_dir():
             log(f"    Da decompile xong {PROVISION_APK_NAME}")
             return True
-        log(f"    Canh bao: lenh decompile da chay nhung khong tao thu muc {dest_apk_src}")
+        log(f"    Warning: decompile ran but did not create directory {dest_apk_src}")
         return False
     except subprocess.CalledProcessError as exc:
         err = (exc.stderr or exc.stdout or "").strip()
         if err:
-            log(f"    Loi khi decompile {PROVISION_APK_NAME}: {err}")
+            log(f"    Error decompiling {PROVISION_APK_NAME}: {err}")
         else:
-            log(f"    Loi khi decompile {PROVISION_APK_NAME} (exit code {exc.returncode})")
+            log(f"    Error decompiling {PROVISION_APK_NAME} (exit code {exc.returncode})")
         return False
     except FileNotFoundError:
-        log(f"Khong tim thay Java de chay {APK_EDITOR_JAR_NAME}.")
+        log(f"Java not found to run {APK_EDITOR_JAR_NAME}.")
         return False
     except Exception as exc:
-        log(f"    Loi khi decompile {PROVISION_APK_NAME}: {exc}")
+        log(f"    Error decompiling {PROVISION_APK_NAME}: {exc}")
         return False
 
 
@@ -992,12 +992,12 @@ def patch_provision_utils(work_dir: Path) -> bool:
                             break
 
                     if move_result_idx == -1:
-                        log("    Khong tim thay move-result sau getApplicationEnabledSetting trong Utils.smali")
+                        log("    move-result after getApplicationEnabledSetting not found in Utils.smali")
                         return False
 
                     for scan_idx in range(move_result_idx + 1, method_end):
                         if "if-ne" in lines[scan_idx]:
-                            log("    Bo qua patch Provision Utils: noi dung da ton tai.")
+                            log("    Skipping Provision Utils patch: content already present.")
                             return True
                         if "if-eq" not in lines[scan_idx]:
                             continue
@@ -1007,16 +1007,16 @@ def patch_provision_utils(work_dir: Path) -> bool:
                         log("    Da patch Utils.smali cho setGmsAppEnabledStateForCn")
                         return True
 
-                    log("    Khong tim thay dong if-eq/if-eqz sau move-result trong Utils.smali")
+                    log("    if-eq/if-eqz line after move-result not found in Utils.smali")
                     return False
 
-                log("    Khong tim thay loi goi getApplicationEnabledSetting trong method muc tieu cua Utils.smali")
+                log("    getApplicationEnabledSetting call not found in target method of Utils.smali")
                 return False
 
-        log("    Khong tim thay method chua setGmsAppEnabledStateForCn trong Utils.smali")
+        log("    Method containing setGmsAppEnabledStateForCn not found in Utils.smali")
         return False
     except Exception as exc:
-        log(f"    Loi khi patch Utils.smali: {exc}")
+        log(f"    Error patching Utils.smali: {exc}")
         return False
 
 
@@ -1027,11 +1027,11 @@ def recompile_provision_apk(work_dir: Path) -> bool:
     apk_editor_jar = apk_editor_in_workdir if apk_editor_in_workdir.is_file() else ROOT_DIR / APK_EDITOR_JAR_NAME
 
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de build lai APK.")
+        log(f"Source directory not found: {apk_src_dir} (cannot rebuild APK).")
         return False
 
     if not apk_editor_jar.is_file():
-        log(f"Khong tim thay {APK_EDITOR_JAR_NAME} de build lai APK.")
+        log(f"{APK_EDITOR_JAR_NAME} not found to rebuild APK.")
         return False
 
     try:
@@ -1051,33 +1051,33 @@ def recompile_provision_apk(work_dir: Path) -> bool:
             str(output_apk),
         ]
 
-        log(f"Dang build lai {PROVISION_APK_NAME} tu {apk_src_dir} ...")
+        log(f"Rebuilding {PROVISION_APK_NAME} from {apk_src_dir} ...")
         subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=work_dir)
 
         if not output_apk.is_file():
-            log(f"Build lai {PROVISION_APK_NAME} that bai: khong tao duoc file output.")
+            log(f"Rebuild of {PROVISION_APK_NAME} failed: could not create output file.")
             return False
 
         log(f"    Build lai thanh cong -> {output_apk}")
 
         if remove_path_force(apk_src_dir):
-            log(f"    Da xoa thu muc source tam: {apk_src_dir}")
+            log(f"    Removed temporary source directory: {apk_src_dir}")
         else:
-            log(f"    Canh bao: khong xoa duoc thu muc source tam: {apk_src_dir}")
+            log(f"    Warning: could not remove temporary source directory: {apk_src_dir}")
 
         return True
     except subprocess.CalledProcessError as exc:
         err = (exc.stderr or exc.stdout or "").strip()
         if err:
-            log(f"    Loi khi build lai {PROVISION_APK_NAME}: {err}")
+            log(f"    Error rebuilding {PROVISION_APK_NAME}: {err}")
         else:
-            log(f"    Loi khi build lai {PROVISION_APK_NAME} (exit code {exc.returncode})")
+            log(f"    Error rebuilding {PROVISION_APK_NAME} (exit code {exc.returncode})")
         return False
     except FileNotFoundError:
-        log(f"Khong tim thay Java de chay {APK_EDITOR_JAR_NAME}.")
+        log(f"Java not found to run {APK_EDITOR_JAR_NAME}.")
         return False
     except Exception as exc:
-        log(f"    Loi khi build lai {PROVISION_APK_NAME}: {exc}")
+        log(f"    Error rebuilding {PROVISION_APK_NAME}: {exc}")
         return False
 
 
@@ -1085,17 +1085,17 @@ def restore_recompiled_provision_to_project(project_dir: Path, work_dir: Path) -
     rebuilt_apk = work_dir / PROVISION_APK_NAME
     apk_editor_in_workdir = work_dir / APK_EDITOR_JAR_NAME
     if not rebuilt_apk.is_file():
-        log(f"Khong tim thay APK da build lai tai {rebuilt_apk}.")
+        log(f"Rebuilt APK not found at {rebuilt_apk}.")
         return False
 
     system_ext_root = resolve_partition_root(project_dir, "system_ext")
     if system_ext_root is None:
-        log("Khong tim thay partition system_ext de khoi phuc Provision.apk.")
+        log("system_ext partition not found to restore Provision.apk.")
         return False
 
     apk_candidates = sorted(system_ext_root.rglob(PROVISION_APK_NAME))
     if not apk_candidates:
-        log("Khong tim thay dich Provision.apk trong system_ext de ghi de.")
+        log("Provision.apk target not found in system_ext to overwrite.")
         return False
 
     target_apk = apk_candidates[0]
@@ -1106,12 +1106,12 @@ def restore_recompiled_provision_to_project(project_dir: Path, work_dir: Path) -
         log(f"    Da di chuyen {PROVISION_APK_NAME} moi build -> {target_apk}")
         if apk_editor_in_workdir.exists():
             if remove_path_force(apk_editor_in_workdir):
-                log(f"    Da xoa file tam: {apk_editor_in_workdir}")
+                log(f"    Removed temporary file: {apk_editor_in_workdir}")
             else:
-                log(f"    Canh bao: khong xoa duoc file tam: {apk_editor_in_workdir}")
+                log(f"    Warning: could not remove temporary file: {apk_editor_in_workdir}")
         return True
     except Exception as exc:
-        log(f"    Loi khi khoi phuc {PROVISION_APK_NAME} ve system_ext: {exc}")
+        log(f"    Error restoring {PROVISION_APK_NAME} to system_ext: {exc}")
         return False
 
 
@@ -1135,14 +1135,14 @@ def _mezo_ui_dir() -> Path:
 
 def _insert_after_method_registers(file_path: Path, method_pattern: str, insert_lines: list[str], guard_text: str) -> bool:
     if not file_path.is_file():
-        log(f"    Khong tim thay file: {file_path}")
+        log(f"    File not found: {file_path}")
         return False
 
     try:
         lines = file_path.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
         content_str = "".join(lines)
         if guard_text in content_str:
-            log(f"    Bo qua {file_path.name}: patch da ton tai.")
+            log(f"    Skipping {file_path.name}: patch already applied.")
             return True
 
         method_start = -1
@@ -1164,13 +1164,13 @@ def _insert_after_method_registers(file_path: Path, method_pattern: str, insert_
                 break
 
         if method_start == -1:
-            log(f"    Khong tim thay method can sua trong {file_path.name}")
+            log(f"    Target method not found in {file_path.name}")
             return False
         if registers_line_idx == -1:
-            log(f"    Khong tim thay .locals/.registers trong {file_path.name}")
+            log(f"    .locals/.registers not found in {file_path.name}")
             return False
         if method_end == -1:
-            log(f"    Khong tim thay ket thuc method trong {file_path.name}")
+            log(f"    Method end not found in {file_path.name}")
             return False
 
         insert_pos = registers_line_idx + 1
@@ -1178,13 +1178,13 @@ def _insert_after_method_registers(file_path: Path, method_pattern: str, insert_
         file_path.write_text("".join(lines), encoding="utf-8", errors="ignore")
         return True
     except Exception as exc:
-        log(f"    Loi khi sua {file_path.name}: {exc}")
+        log(f"    Error editing {file_path.name}: {exc}")
         return False
 
 
 def _replace_method_body(file_path: Path, method_pattern: str, new_body_lines: list[str]) -> bool:
     if not file_path.is_file():
-        log(f"    Khong tim thay file: {file_path}")
+        log(f"    File not found: {file_path}")
         return False
 
     try:
@@ -1206,7 +1206,7 @@ def _replace_method_body(file_path: Path, method_pattern: str, new_body_lines: l
             log(f"    Khong tim thay method can thay trong {file_path.name}")
             return False
         if method_end == -1:
-            log(f"    Khong tim thay ket thuc method trong {file_path.name}")
+            log(f"    Method end not found in {file_path.name}")
             return False
 
         replacement = [lines[method_start], *new_body_lines, lines[method_end]]
@@ -1214,7 +1214,7 @@ def _replace_method_body(file_path: Path, method_pattern: str, new_body_lines: l
         file_path.write_text("".join(lines), encoding="utf-8", errors="ignore")
         return True
     except Exception as exc:
-        log(f"    Loi khi thay noi dung method trong {file_path.name}: {exc}")
+        log(f"    Error replacing method content in {file_path.name}: {exc}")
         return False
 
 
@@ -1319,7 +1319,7 @@ def _ensure_color_entry(colors_xml_path: Path, color_name: str, color_value: str
 def disable_private_chip(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de disable private chip.")
+        log(f"Source directory not found: {apk_src_dir} (cannot disable private chip).")
         return
 
     settings_helper_source = _mezo_ui_dir() / "SettingsHelper.smali"
@@ -1328,7 +1328,7 @@ def disable_private_chip(work_dir: Path) -> None:
     privacy_controller_file = apk_src_dir / "smali" / "classes3" / "com" / "android" / "systemui" / "statusbar" / "privacy" / "MiuiPrivacyControllerImpl.smali"
 
     if not settings_helper_source.is_file():
-        log(f"Khong tim thay file nguon: {settings_helper_source}")
+        log(f"Source file not found: {settings_helper_source}")
         return
 
     try:
@@ -1337,9 +1337,9 @@ def disable_private_chip(work_dir: Path) -> None:
         log(f"    Da copy SettingsHelper.smali -> {settings_helper_target}")
         if legacy_settings_helper_target.is_file():
             legacy_settings_helper_target.unlink()
-            log(f"    Da xoa SettingsHelper.smali cu o {legacy_settings_helper_target}")
+            log(f"    Removed legacy SettingsHelper.smali at {legacy_settings_helper_target}")
     except Exception as exc:
-        log(f"    Loi khi copy SettingsHelper.smali: {exc}")
+        log(f"    Error copying SettingsHelper.smali: {exc}")
         return
 
     inserted = _insert_after_method_registers(
@@ -1379,7 +1379,7 @@ def change_clock_format(work_dir: Path) -> None:
             log(f"    Da bo sung SettingsHelper.smali -> {settings_helper_target}")
             if legacy_settings_helper_target.is_file():
                 legacy_settings_helper_target.unlink()
-                log(f"    Da xoa SettingsHelper.smali cu o {legacy_settings_helper_target}")
+                log(f"    Removed legacy SettingsHelper.smali at {legacy_settings_helper_target}")
         except Exception as exc:
             log(f"    Loi khi bo sung SettingsHelper.smali: {exc}")
 
@@ -1984,7 +1984,7 @@ def fix_earlier_notification(work_dir: Path) -> None:
         log("    Da patch MiuiBaseNotifUtil.shouldSuppressFold()Z")
 
 def apply_miui_systemui_mods_android15(work_dir: Path) -> None:
-    log("Bat dau ap dung mod MiuiSystemUI cho Android 15...")
+    log("Applying MiuiSystemUI mod for Android 15...")
     disable_private_chip(work_dir)
     #change_clock_format(work_dir)
     fix_earlier_notification(work_dir)
@@ -1995,7 +1995,7 @@ def apply_miui_systemui_mods_android15(work_dir: Path) -> None:
     log("Hoan thanh mod MiuiSystemUI cho Android 15.")
 
 def apply_miui_systemui_mods_android16(work_dir: Path) -> None:
-    log("Bat dau ap dung mod MiuiSystemUI cho Android 16...")
+    log("Applying MiuiSystemUI mod for Android 16...")
     disable_private_chip(work_dir)
     #change_clock_format(work_dir)
     fix_earlier_notification(work_dir)
@@ -2087,7 +2087,7 @@ def fix_specific_smali_file(smali_file: Path) -> bool:
 
 def fix_bootloop_a15(work_dir: Path) -> None:
     """Fix bootloop for A15 devices by handling invoke-custom methods in specific files"""
-    log("\n🔧 Dang xu ly fix bootloop (a15)...")
+    log("\n🔧 Processing bootloop fix (a15)...")
     log("📝 Tim kiem va sua cac method chua 'invoke-custom' trong cac file cu the...")
     
     # Define target files to fix
@@ -2126,7 +2126,7 @@ def fix_bootloop_a15(work_dir: Path) -> None:
             log(f"❌ Thu muc {directory} khong ton tai")
             continue
         
-        log(f"\n📁 Dang xu ly thu muc: {directory}")
+        log(f"\n📁 Processing directory: {directory}")
         log(f"📄 Tim thay {len(files)} file can xu ly")
         
         for file_path in files:
@@ -2138,7 +2138,7 @@ def fix_bootloop_a15(work_dir: Path) -> None:
                 log(f"  ⚠️  File {file_path} khong ton tai tai: {full_file_path}")
                 continue
             
-            log(f"  🔍 Dang xu ly: {file_path}")
+            log(f"  🔍 Processing: {file_path}")
             if fix_specific_smali_file(full_file_path):
                 total_files_processed += 1
                 log(f"    ✅ Da sua thanh cong")
@@ -3775,19 +3775,19 @@ def modify_window_state_a16(file_path: Path) -> bool:
 
 def disable_flag_secure_a16(work_dir: Path) -> None:
     """Disable Flag Secure (Android 16 / a16.py): SettingsHelper → smali_classes6, paths như a16."""
-    log("\n🔒 Dang xu ly Disable Flag Secure A16...")
+    log("\n🔒 Processing Disable Flag Secure A16...")
     log("📝 Chinh sua cac file de vo hieu hoa Flag Secure (a16)...")
 
     total_files_processed = 0
 
-    log("\n📁 Dang copy SettingsHelper.smali (smali_classes6)...")
+    log("\n📁 Copying SettingsHelper.smali (smali_classes6)...")
     if copy_settings_helper_a16(work_dir):
         total_files_processed += 1
         log("    ✅ Da copy SettingsHelper.smali thanh cong")
     else:
         log("    ❌ Loi khi copy SettingsHelper.smali")
 
-    log("\n📁 Dang xu ly: WindowManagerServiceImpl.smali")
+    log("\n📁 Processing: WindowManagerServiceImpl.smali")
     wms_impl_path = (
         work_dir
         / "miui_services_unpacked"
@@ -3807,7 +3807,7 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
     else:
         log("    ⚠️  File WindowManagerServiceImpl.smali khong tim thay")
 
-    log("\n📁 Dang xu ly: DevicePolicyCacheImpl.smali")
+    log("\n📁 Processing: DevicePolicyCacheImpl.smali")
     dpc_impl_path = (
         work_dir
         / "services_unpacked"
@@ -3827,7 +3827,7 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
     else:
         log("    ⚠️  File DevicePolicyCacheImpl.smali khong tim thay")
 
-    log("\n📁 Dang xu ly: DevicePolicyManagerService.smali")
+    log("\n📁 Processing: DevicePolicyManagerService.smali")
     dpm_service_path = (
         work_dir
         / "services_unpacked"
@@ -3847,7 +3847,7 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
     else:
         log("    ⚠️  File DevicePolicyManagerService.smali khong tim thay")
 
-    log("\n📁 Dang xu ly: WindowManagerService.smali")
+    log("\n📁 Processing: WindowManagerService.smali")
     wm_service_path = (
         work_dir
         / "services_unpacked"
@@ -3867,7 +3867,7 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
     else:
         log("    ⚠️  File WindowManagerService.smali khong tim thay")
 
-    log("\n📁 Dang xu ly: WindowState.smali")
+    log("\n📁 Processing: WindowState.smali")
     window_state_path = (
         work_dir
         / "services_unpacked"
@@ -3893,13 +3893,13 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
 
 def disable_flag_secure_a14_15(work_dir: Path) -> None:
     """Disable Flag Secure by modifying various framework and service files"""
-    log("\n🔒 Dang xu ly Disable Flag Secure...")
+    log("\n🔒 Processing Disable Flag Secure...")
     log("📝 Chinh sua cac file de vo hieu hoa Flag Secure...")
     
     total_files_processed = 0
     
     # 1. Copy SettingsHelper.smali from MEZO to framework_unpacked/smali_classes3/android/preference
-    log("\n📁 Dang copy SettingsHelper.smali...")
+    log("\n📁 Copying SettingsHelper.smali...")
     if copy_settings_helper(work_dir):
         total_files_processed += 1
         log("    ✅ Da copy SettingsHelper.smali thanh cong")
@@ -3907,7 +3907,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
         log("    ❌ Loi khi copy SettingsHelper.smali")
     
     # 2. Modify WindowManagerServiceImpl.smali in miui_services_unpacked
-    log("\n📁 Dang xu ly: WindowManagerServiceImpl.smali")
+    log("\n📁 Processing: WindowManagerServiceImpl.smali")
     wms_impl_path = work_dir / "miui_services_unpacked" / "smali_classes" / "com" / "android" / "server" / "wm" / "WindowManagerServiceImpl.smali"
     if wms_impl_path.exists():
         if modify_window_manager_service_impl(wms_impl_path):
@@ -3919,7 +3919,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
         log("    ⚠️  File WindowManagerServiceImpl.smali khong tim thay")
     
     # 3. Modify DevicePolicyCacheImpl.smali in services_unpacked
-    log("\n📁 Dang xu ly: DevicePolicyCacheImpl.smali")
+    log("\n📁 Processing: DevicePolicyCacheImpl.smali")
     dpc_impl_path = work_dir / "services_unpacked" / "smali_classes" / "com" / "android" / "server" / "devicepolicy" / "DevicePolicyCacheImpl.smali"
     if dpc_impl_path.exists():
         if modify_device_policy_cache_impl(dpc_impl_path):
@@ -3931,7 +3931,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
         log("    ⚠️  File DevicePolicyCacheImpl.smali khong tim thay")
     
     # 4. Modify DevicePolicyManagerService.smali in services_unpacked
-    log("\n📁 Dang xu ly: DevicePolicyManagerService.smali")
+    log("\n📁 Processing: DevicePolicyManagerService.smali")
     dpm_service_path = work_dir / "services_unpacked" / "smali_classes" / "com" / "android" / "server" / "devicepolicy" / "DevicePolicyManagerService.smali"
     if dpm_service_path.exists():
         if modify_device_policy_manager_service(dpm_service_path):
@@ -3943,7 +3943,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
         log("    ⚠️  File DevicePolicyManagerService.smali khong tim thay")
     
     # 5. Modify WindowManagerService.smali in services_unpacked/smali_classes3
-    log("\n📁 Dang xu ly: WindowManagerService.smali")
+    log("\n📁 Processing: WindowManagerService.smali")
     wm_service_path = work_dir / "services_unpacked" / "smali_classes3" / "com" / "android" / "server" / "wm" / "WindowManagerService.smali"
     if wm_service_path.exists():
         if modify_window_manager_service(wm_service_path):
@@ -3955,7 +3955,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
         log("    ⚠️  File WindowManagerService.smali khong tim thay")
     
     # 6. Modify WindowState.smali in services_unpacked/smali_classes3
-    log("\n📁 Dang xu ly: WindowState.smali")
+    log("\n📁 Processing: WindowState.smali")
     window_state_path = work_dir / "services_unpacked" / "smali_classes3" / "com" / "android" / "server" / "wm" / "WindowState.smali"
     if window_state_path.exists():
         if modify_window_state(window_state_path):
@@ -4343,7 +4343,7 @@ def kaori_toolbox(work_dir: Path) -> None:
 
 def tricky_wukong_a15(work_dir: Path) -> None:
     """Apply Wukong hooks to framework KeyStore2 and copy bridge smali for Android 15."""
-    log("\n🐒 Dang xu ly Tricky Wukong...")
+    log("\n🐒 Processing Tricky Wukong...")
 
     bridge_src = ROOT_DIR / "MEZO" / "WukongFrameworkBridge.smali"
     bridge_dst_dir = work_dir / "framework_unpacked" / "smali_classes5" / "android" / "security"
@@ -4560,7 +4560,7 @@ def tricky_wukong_a15(work_dir: Path) -> None:
 
 def tricky_wukong_a16(work_dir: Path) -> None:
     """Apply Wukong hooks to framework KeyStore2 and copy bridge smali."""
-    log("\n🐒 Dang xu ly Tricky Wukong...")
+    log("\n🐒 Processing Tricky Wukong...")
 
     bridge_src = ROOT_DIR / "MEZO" / "WukongFrameworkBridge.smali"
     bridge_dst_dir = work_dir / "framework_unpacked" / "smali_classes6" / "android" / "security"
@@ -4760,7 +4760,7 @@ def tricky_wukong_a16(work_dir: Path) -> None:
 
 def enhanced_keyboard(work_dir: Path) -> None:
     """Enhanced Keyboard - Replace Baidu input method with Google Keyboard"""
-    log("\n⌨️ Dang xu ly Enhanced Keyboard...")
+    log("\n⌨️ Processing Enhanced Keyboard...")
     log("📝 Tim kiem va thay the com.baidu.input_mi thanh com.google.android.inputmethod.latin...")
     
     # Tim theo ten file thay vi duong dan co dinh
@@ -4793,7 +4793,7 @@ def enhanced_keyboard(work_dir: Path) -> None:
         for filename in target_files_services:
             file_path = find_first_by_name(miui_services_root, filename)
             if file_path:
-                log(f"\n  🔍 Dang xu ly: {filename}")
+                log(f"\n  🔍 Processing: {filename}")
                 try:
                     # Doc noi dung file
                     content = file_path.read_text(encoding='utf-8', errors='ignore')
@@ -4832,7 +4832,7 @@ def enhanced_keyboard(work_dir: Path) -> None:
         for filename in target_files_framework:
             file_path = find_first_by_name(miui_framework_root, filename)
             if file_path:
-                log(f"\n  🔍 Dang xu ly: {filename}")
+                log(f"\n  🔍 Processing: {filename}")
                 try:
                     # Doc noi dung file
                     content = file_path.read_text(encoding='utf-8', errors='ignore')
@@ -4863,18 +4863,18 @@ def enhanced_keyboard(work_dir: Path) -> None:
 
 def enable_floating_window_all_app(work_dir: Path) -> None:
     """Enable floating window for all apps by modifying MiuiMultiWindowAdapter.smali"""
-    log("\n🪟 Dang xu ly Enable Floating Window All App...")
+    log("\n🪟 Processing Enable Floating Window All App...")
     log("📝 Chinh sua file MiuiMultiWindowAdapter.smali...")
     
     # Path to MiuiMultiWindowAdapter.smali
     miui_multi_window_path = work_dir / "miui_framework_unpacked" / "smali_classes" / "android" / "util" / "MiuiMultiWindowAdapter.smali"
     
     if not miui_multi_window_path.exists():
-        log(f"❌ File MiuiMultiWindowAdapter.smali khong tim thay tai: {miui_multi_window_path}")
-        log("⚠️  Hay dam bao da giai nen miui-framework.jar truoc")
+        log(f"❌ MiuiMultiWindowAdapter.smali not found at: {miui_multi_window_path}")
+        log("⚠️  Make sure miui-framework.jar has been extracted first")
         return
     
-    log(f"📁 Dang xu ly: {miui_multi_window_path}")
+    log(f"📁 Processing: {miui_multi_window_path}")
     
     try:
         with miui_multi_window_path.open('r', encoding='utf-8', errors='ignore') as f:
@@ -5023,7 +5023,7 @@ def fix_notification(work_dir: Path) -> None:
     """Fix notification delay by setting IS_INTERNATIONAL_BUILD to true and CN_MODEL to false (smali edits)."""
     import re
     
-    log("\n🔧 Dang xu ly fix notification...")
+    log("\n🔧 Processing notification fix...")
     log("📝 Tim kiem va sua cac dong chua 'IS_INTERNATIONAL_BUILD' trong cac file...")
     
     base_dir = work_dir / "miui_services_unpacked" / "smali_classes" / "com" / "android" / "server" / "am"
@@ -5048,7 +5048,7 @@ def fix_notification(work_dir: Path) -> None:
             log(f"  ⚠️  File {filename} khong ton tai tai: {file_path}")
             continue
         
-        log(f"\n  🔍 Dang xu ly: {filename}")
+        log(f"\n  🔍 Processing: {filename}")
         try:
             content = file_path.read_text(encoding='utf-8')
             lines = content.split('\n')
@@ -5090,7 +5090,7 @@ def fix_notification(work_dir: Path) -> None:
     log("\n📝 Tim kiem va sua file PolicyManager.smali...")
     policy_manager_path = work_dir / "miui_services_unpacked" / "smali_classes" / "com" / "miui" / "server" / "greeze" / "PolicyManager.smali"
     if policy_manager_path.exists():
-        log(f"\n  🔍 Dang xu ly: PolicyManager.smali")
+        log(f"\n  🔍 Processing: PolicyManager.smali")
         try:
             content = policy_manager_path.read_text(encoding='utf-8')
             lines = content.split('\n')
@@ -5134,7 +5134,7 @@ def fix_notification(work_dir: Path) -> None:
 
 def fix_theme_reset(work_dir: Path) -> None:
     """Remove smali lines from nearest `.line` down to DRM broadcast call."""
-    log("\n🔧 Dang xu ly fix theme reset...")
+    log("\n🔧 Processing theme reset fix...")
     target_file = (
         work_dir
         / "miui_services_unpacked"
@@ -5341,7 +5341,7 @@ def copy_mezo_app_mod(project_dir: Path) -> None:
         log(f"Khong co thu muc mod nao trong: {app_mod_root}")
         return
 
-    log("Dang ap dung app mod tu MEZO_APP/appMod ...")
+    log("Applying app mods from MEZO_APP/appMod ...")
     replaced_count = 0
 
     for mod_dir in mod_dirs:
@@ -5679,7 +5679,7 @@ def dex_redivision(work_dir: Path) -> None:
         log(f"    Dex redivision: bo qua — khong co {dex_redivision_file}")
         return
 
-    log("\n📦 Dang xu ly Dex redivision...")
+    log("\n📦 Processing Dex redivision...")
     log("📝 Doc DexRedivision.txt va copy sang framework_unpacked/smali_classes6...")
 
     try:
@@ -5719,7 +5719,7 @@ def dex_redivision(work_dir: Path) -> None:
     files_to_delete: list[Path] = []
     copy_count = 0
 
-    log("\n🔍 Dang tim kiem va copy...")
+    log("\n🔍 Searching and copying...")
     for filename in target_files:
         file_found = False
         for source_dir in source_dirs:
@@ -5747,7 +5747,7 @@ def dex_redivision(work_dir: Path) -> None:
     log(f"  ✅ Da copy {copy_count} file")
 
     if files_to_delete:
-        log("\n🗑️  Dang xoa file cu o smali_classes … smali_classes5...")
+        log("\n🗑️  Removing old files in smali_classes … smali_classes5...")
         deleted_count = 0
         failed_count = 0
         for source_file in files_to_delete:
@@ -5823,7 +5823,7 @@ def unpack_framework_jars_and_classes(work_dir: Path | None = None) -> None:
 
     has_baksmali = baksmali_jar is not None and baksmali_jar.is_file()
     if not has_baksmali:
-        log("Khong tim thay baksmali.jar. Se chi giai nen JAR, khong decompile DEX -> smali.")
+        log("baksmali.jar not found. Will only extract JAR, skipping DEX -> smali decompile.")
 
     for jar_name, out_dir_name in jar_to_unpack_dir.items():
         jar_path = wd / jar_name
@@ -5831,7 +5831,7 @@ def unpack_framework_jars_and_classes(work_dir: Path | None = None) -> None:
             continue
 
         out_dir = wd / out_dir_name
-        log(f"Dang giai nen {jar_name} -> {out_dir_name} ...")
+        log(f"Extracting {jar_name} -> {out_dir_name} ...")
 
         try:
             if out_dir.exists():
@@ -5841,9 +5841,9 @@ def unpack_framework_jars_and_classes(work_dir: Path | None = None) -> None:
             with zipfile.ZipFile(jar_path, "r") as zip_file:
                 zip_file.extractall(out_dir)
 
-            log(f"    Da giai nen: {jar_name}")
+            log(f"    Extracted: {jar_name}")
         except Exception as exc:
-            log(f"    Loi khi giai nen {jar_name}: {exc}")
+            log(f"    Error extracting {jar_name}: {exc}")
             continue
 
         dex_files = sorted(out_dir.rglob("*.dex"))
@@ -5947,7 +5947,7 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
         log("Khong tim thay smali.jar de repack classes.")
         return
 
-    log("Bat dau repack tat ca thu muc smali_classes...")
+    log("Starting repack of all smali_classes directories...")
     unpacked_dirs: list[Path] = []
     for base_name in (
         "framework_unpacked",
@@ -5968,7 +5968,7 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
 
     for dir_path in unpacked_dirs:
         try:
-            log(f"Dang repack {dir_path.name}...")
+            log(f"Repacking {dir_path.name}...")
             output_file = dir_path.name.replace("smali_", "") + ".dex"
             output_path = dir_path.parent / output_file
             cmd = [
@@ -5997,7 +5997,7 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
 
 def repack_all_jar_files(work_dir: Path | None = None) -> None:
     wd = work_dir or ROOT_DIR
-    log("Bat dau repack tat ca thu muc *_unpacked...")
+    log("Starting repack of all *_unpacked directories...")
 
     unpacked_dirs = [
         ("framework.jar", wd / "framework_unpacked"),
@@ -6012,7 +6012,7 @@ def repack_all_jar_files(work_dir: Path | None = None) -> None:
             continue
         found_any = True
         try:
-            log(f"Dang repack {dir_path.name} thanh {jar_name}...")
+            log(f"Repacking {dir_path.name} into {jar_name}...")
             cmd = ["jar", "cfM", str(wd / jar_name), "-C", str(dir_path), "."]
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
@@ -6136,7 +6136,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                     dest_file.write(src_content)
                 log("    Da them noi dung build.prop tuy chinh")
         except Exception as exc:
-            log(f"Loi khi noi build.prop: {exc}")
+            log(f"Error merging build.prop: {exc}")
 
     device_value: str | None = None
     try:
@@ -6216,7 +6216,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                     xml_path.write_text(content, encoding="utf-8", errors="ignore")
                     log(f"    Da chinh sua device_features: {xml_path.name}")
             except Exception as exc:
-                log(f"Loi khi chinh sua {xml_path}: {exc}")
+                log(f"Error editing {xml_path}: {exc}")
 
     cust_keys_path = resolve_partition_file(project_dir, "system_ext", "etc", "cust_prop_white_keys_list")
     try:
@@ -6227,7 +6227,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                 cust_keys_path.write_text("\n".join(lines) + "\n", encoding="utf-8", errors="ignore")
                 log("    Da them ro.crypto.state vao cust_prop_white_keys_list")
     except Exception as exc:
-        log(f"Loi khi chinh sua cust_prop_white_keys_list: {exc}")
+        log(f"Error editing cust_prop_white_keys_list: {exc}")
 
     fstab_path = resolve_partition_file(project_dir, "vendor", "etc", "fstab.qcom")
     try:
@@ -6346,7 +6346,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                 normalize_unix_newlines(fstab_path)
                 log("    Da chinh sua fstab.qcom")
     except Exception as exc:
-        log(f"Loi khi chinh sua fstab.qcom: {exc}")
+        log(f"Error editing fstab.qcom: {exc}")
 
     mi_ext_build_prop_path = resolve_partition_file(project_dir, "mi_ext", "etc", "build.prop")
     try:
@@ -6363,7 +6363,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                     file.writelines(lines)
                 log("    Da xoa dong ro.miui.support.system.app.uninstall.v2 trong mi_ext build.prop")
     except Exception as exc:
-        log(f"Loi khi xoa dong trong mi_ext build.prop: {exc}")
+        log(f"Error removing lines from mi_ext build.prop: {exc}")
 
     wifi_rc_dest = project_dir / "system" / "system" / "etc" / "init" / "wifi.rc"
     try:
@@ -6383,7 +6383,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
         else:
             log(f"Khong tim thay wifi.rc dich: {wifi_rc_dest}")
     except Exception as exc:
-        log(f"Loi khi xu ly wifi.rc: {exc}")
+        log(f"Error processing wifi.rc: {exc}")
 
     perfinit_path = resolve_partition_file(project_dir, "system_ext", "etc", "perfinit.conf")
     try:
@@ -6406,7 +6406,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                 normalize_unix_newlines(perfinit_path)
                 log("    Da chinh sua perfinit.conf: tat swap va zram")
     except Exception as exc:
-        log(f"Loi khi chinh sua perfinit.conf: {exc}")
+        log(f"Error editing perfinit.conf: {exc}")
 
     mcd_default_path = resolve_partition_file(project_dir, "system_ext", "etc", "mcd_default.conf")
     try:
@@ -6429,7 +6429,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
                 normalize_unix_newlines(mcd_default_path)
                 log("    Da chinh sua mcd_default.conf: tat memory_opt")
     except Exception as exc:
-        log(f"Loi khi chinh sua mcd_default.conf: {exc}")
+        log(f"Error editing mcd_default.conf: {exc}")
 
 
 def convert_sparse_super_to_raw(super_img: Path, output_dir: Path) -> Path:
@@ -6459,7 +6459,7 @@ def unpack_super(super_img: Path, output_dir: Path) -> Path:
     ensure_clean_dir(super_out_dir)
 
     raw_super_img = convert_sparse_super_to_raw(super_img, output_dir)
-    log(f"[4/4] Dang unpack super.img: {raw_super_img}")
+    log(f"[4/4] Unpacking super.img: {raw_super_img}")
     lpunpack_unpack(str(raw_super_img), str(super_out_dir))
     temp_raw_super = output_dir / "super_raw.img"
     if raw_super_img == temp_raw_super and temp_raw_super.exists():
@@ -6562,11 +6562,11 @@ def extract_single_partition(img_path: Path, output_dir: Path, parts_info: dict)
 
     fs_type = gettype(str(img_path))
     if fs_type == "sparse":
-        log(f"Dang convert partition sparse sang raw: {img_path.name}")
+        log(f"Converting sparse partition to raw: {img_path.name}")
         simg2img(str(img_path))
         fs_type = gettype(str(img_path))
 
-    log(f"Dang giai nen partition: {part_name}.img [{fs_type}]")
+    log(f"Extracting partition: {part_name}.img [{fs_type}]")
 
     if fs_type == "ext":
         Extractor().main(str(img_path), str(part_dir), str(output_dir))
@@ -6634,15 +6634,15 @@ def extract_single_partition(img_path: Path, output_dir: Path, parts_info: dict)
                 break
         else:
             raise RuntimeError(
-                f"extract.erofs that bai voi {img_path.name}: "
+                f"extract.erofs failed for {img_path.name}: "
                 + "; ".join(erofs_errors)
             )
     else:
-        log(f"Bo qua {img_path.name}: filesystem khong ho tro [{fs_type}]")
+        log(f"Skipping {img_path.name}: unsupported filesystem [{fs_type}]")
         return
 
     if not part_dir.exists():
-        raise RuntimeError(f"Khong thay thu muc sau khi giai nen: {part_dir}")
+        raise RuntimeError(f"Directory not found after extraction: {part_dir}")
 
     seed_partition_config(config_dir, part_name, fs_type, part_dir)
 
@@ -6659,12 +6659,12 @@ def extract_single_partition(img_path: Path, output_dir: Path, parts_info: dict)
 
 
 def extract_partitions_from_super(super_out_dir: Path, output_dir: Path, super_img: Path) -> None:
-    log("[5/6] Dang chuan bi giai nen cac partition _a...")
+    log("[5/6] Preparing to extract _a partitions...")
     write_super_config(output_dir, super_img)
 
     normalized_images = normalize_partition_images(super_out_dir, output_dir)
     if not normalized_images:
-        log("Khong tim thay partition _a nao trong thu muc super.")
+        log("No _a partitions found in super directory.")
         return
 
     parts_info_path = output_dir / "config" / "parts_info"
@@ -6674,7 +6674,7 @@ def extract_partitions_from_super(super_out_dir: Path, output_dir: Path, super_i
         extract_single_partition(img_path, output_dir, parts_info)
 
     JsonEdit(str(parts_info_path)).write(parts_info)
-    log(f"[6/6] Da giai nen xong {len(normalized_images)} partition _a va tao config.")
+    log(f"[6/6] Extracted {len(normalized_images)} _a partitions and created config.")
 
 
 def build_output_dir(input_path: Path) -> Path:
@@ -6709,7 +6709,7 @@ def zip_output_folder(images_output_dir: Path) -> Path | None:
             log(f"[ZIP] Khong the xoa file zip cu: {exc}")
             return None
 
-    log(f"[ZIP] Dang nen {deadzone_dir.name} thanh {zip_name}...")
+    log(f"[ZIP] Compressing {deadzone_dir.name} into {zip_name}...")
     log(f"       Thu muc nguon: {deadzone_dir}")
 
     try:
@@ -6735,15 +6735,14 @@ def zip_output_folder(images_output_dir: Path) -> Path | None:
         if zip_dest.exists():
             remove_path_force(zip_dest)
         shutil.move(str(zip_path), str(zip_dest))
-        log(f"[ZIP] Da chuyen file zip ra: {zip_dest}")
+        log(f"[ZIP] Moved output zip to: {zip_dest}")
 
-        # Xoa thu muc giai nen ban dau
         remove_path_force(deadzone_dir)
-        log(f"[ZIP] Da xoa thu muc giai nen: {deadzone_dir}")
+        log(f"[ZIP] Removed extraction directory: {deadzone_dir}")
 
         return zip_dest
     except Exception as exc:
-        log(f"[ZIP] Loi khi nen file zip: {exc}")
+        log(f"[ZIP] Error creating zip file: {exc}")
         if zip_path.exists():
             remove_path_force(zip_path)
         return None
@@ -6877,6 +6876,63 @@ def build_erofs_commands(part_name: str, project_dir: Path, output_img: Path) ->
     return unique_commands
 
 
+def resolve_mkfs_erofs_binary(original_binary: str) -> str:
+    """
+    Resolve the mkfs.erofs binary path using a safe fallback chain:
+      1. original_binary if absolute and exists
+      2. original_binary as relative path if exists
+      3. tool_bin + "mkfs.erofs" if that path exists
+      4. ROOT_DIR / "bin" / "mkfs.erofs" (bundled, no arch subdir)
+      5. shutil.which("mkfs.erofs") (system PATH)
+      6. original_binary as-is (let subprocess produce the normal error)
+    """
+    import stat as _stat
+
+    def _try(path_str: str) -> str | None:
+        p = Path(path_str)
+        if p.exists():
+            # Ensure bundled binary is executable on Linux
+            if os.name == "posix" and not os.access(str(p), os.X_OK):
+                try:
+                    p.chmod(p.stat().st_mode | _stat.S_IXUSR | _stat.S_IXGRP | _stat.S_IXOTH)
+                except Exception:
+                    pass
+            return str(p)
+        return None
+
+    # 1. Absolute existing path
+    if Path(original_binary).is_absolute():
+        if (found := _try(original_binary)):
+            log(f"[EROFS TOOL] mkfs.erofs resolved to: {found}")
+            return found
+
+    # 2. Relative path exists from cwd
+    if (found := _try(original_binary)):
+        log(f"[EROFS TOOL] mkfs.erofs resolved to: {found}")
+        return found
+
+    # 3. tool_bin + basename (only if it exists — do NOT blindly trust tool_bin)
+    tool_bin_candidate = f"{tool_bin}mkfs.erofs"
+    if (found := _try(tool_bin_candidate)):
+        log(f"[EROFS TOOL] mkfs.erofs resolved to: {found}")
+        return found
+
+    # 4. Bundled binary (no arch subdir)
+    bundled = ROOT_DIR / "bin" / "mkfs.erofs"
+    if (found := _try(str(bundled))):
+        log(f"[EROFS TOOL] mkfs.erofs resolved to: {found}")
+        return found
+
+    # 5. System PATH
+    which_result = shutil.which("mkfs.erofs")
+    if which_result:
+        log(f"[EROFS TOOL] mkfs.erofs resolved to: {which_result}")
+        return which_result
+
+    log("[EROFS TOOL] mkfs.erofs resolver could not find an existing binary; using original command.")
+    return original_binary
+
+
 def repack_erofs(part_name: str, project_dir: Path, output_img: Path) -> None:
     if output_img.exists():
         output_img.unlink()
@@ -6911,11 +6967,13 @@ def repack_erofs(part_name: str, project_dir: Path, output_img: Path) -> None:
     commands = build_erofs_commands(part_name, project_dir, output_img)
     last_error = None
     for index, command in enumerate(commands, start=1):
-        # Resolve the binary the same way call() does: prepend tool_bin to command[0]
-        resolved_cmd = list(command)
-        resolved_cmd[0] = f"{tool_bin}{command[0]}"
+        original_binary = command[0]
+        resolved_binary = resolve_mkfs_erofs_binary(original_binary)
 
-        log(f"Thu repack erofs lan {index}: {' '.join(resolved_cmd)}")
+        resolved_cmd = list(command)
+        resolved_cmd[0] = resolved_binary
+
+        log(f"EROFS repack attempt {index}: {' '.join(resolved_cmd)}")
         try:
             result = subprocess.run(
                 resolved_cmd,
@@ -6936,10 +6994,15 @@ def repack_erofs(part_name: str, project_dir: Path, output_img: Path) -> None:
         log_file = log_dir / f"{part_name}_attempt_{index}.log"
         try:
             with log_file.open("w", encoding="utf-8") as lf:
-                lf.write(f"partition     : {part_name}\n")
-                lf.write(f"attempt       : {index}\n")
-                lf.write(f"command       : {' '.join(resolved_cmd)}\n")
-                lf.write(f"return_code   : {ret}\n")
+                lf.write(f"partition          : {part_name}\n")
+                lf.write(f"attempt            : {index}\n")
+                lf.write(f"original_binary    : {original_binary}\n")
+                lf.write(f"resolved_binary    : {resolved_binary}\n")
+                lf.write(f"resolved_binary_exists: {Path(resolved_binary).exists()}\n")
+                lf.write(f"which_mkfs_erofs   : {shutil.which('mkfs.erofs') or 'not found'}\n")
+                lf.write(f"PATH               : {os.environ.get('PATH', '')}\n")
+                lf.write(f"command            : {' '.join(resolved_cmd)}\n")
+                lf.write(f"return_code        : {ret}\n")
                 lf.write(f"output_img    : {output_img} | exists={output_img.exists()} | bytes={output_img.stat().st_size if output_img.exists() else 'N/A'}\n")
                 lf.write(f"part_dir      : {part_dir} | exists={part_dir.exists()} | bytes={_dir_size(part_dir) if part_dir.exists() else 'N/A'}\n")
                 lf.write(f"fs_config     : {fs_config} | exists={fs_config.exists()} | bytes={fs_config.stat().st_size if fs_config.exists() else 'N/A'}\n")
@@ -6985,17 +7048,17 @@ def repack_erofs(part_name: str, project_dir: Path, output_img: Path) -> None:
     except Exception as dump_err:
         log(f"[EROFS FAIL DUMP] could not write dump: {dump_err}")
 
-    raise RuntimeError(f"Repack erofs that bai: {part_name} (ret={last_error})")
+    raise RuntimeError(f"EROFS repack failed: {part_name} (ret={last_error})")
 
 
 def sync_partition_configs(part_dir: Path, fs_config: Path, file_contexts: Path) -> None:
-    log(f"Dang dong bo config voi thu muc partition: {part_dir.name}")
+    log(f"Syncing config with partition directory: {part_dir.name}")
 
     current_fs = fspatch.scanfs(str(fs_config.resolve()))
     new_fs, fs_added = fspatch.fs_patch(current_fs, str(part_dir))
     with fs_config.open("w", encoding="utf-8", newline="\n") as file:
         file.writelines(f"{path} {' '.join(new_fs[path])}\n" for path in sorted(new_fs.keys()))
-    log(f"    Fs config: them {fs_added} entry moi")
+    log(f"    fs_config: added {fs_added} new entries")
 
     if CONTEXT_RULES_FILE.exists():
         fix_permission = JsonEdit(str(CONTEXT_RULES_FILE)).read()
@@ -7009,7 +7072,7 @@ def sync_partition_configs(part_dir: Path, fs_config: Path, file_contexts: Path)
     )
     with file_contexts.open("w", encoding="utf-8", newline="\n") as file:
         file.writelines(f"{path} {new_contexts[path]}\n" for path in sorted(new_contexts.keys()))
-    log(f"    File contexts: them {context_added} entry moi")
+    log(f"    file_contexts: added {context_added} new entries")
 
 
 def repack_single_partition(project_dir: Path, super_dir: Path, part_name: str) -> Path | None:
@@ -7020,7 +7083,7 @@ def repack_single_partition(project_dir: Path, super_dir: Path, part_name: str) 
     fs_config = project_dir / "config" / f"{part_name}_fs_config"
     file_contexts = project_dir / "config" / f"{part_name}_file_contexts"
     if not fs_config.exists() or not file_contexts.exists():
-        log(f"Bo qua {part_name}: thieu file config.")
+        log(f"Skipping {part_name}: missing config files.")
         return None
 
     sync_partition_configs(part_dir, fs_config, file_contexts)
@@ -7029,12 +7092,12 @@ def repack_single_partition(project_dir: Path, super_dir: Path, part_name: str) 
     if output_img.exists():
         output_img.unlink()
 
-    log(f"Dang repack {part_name} thanh erofs raw -> {output_img.name}")
+    log(f"Repacking {part_name} to EROFS raw -> {output_img.name}")
     repack_erofs(part_name, project_dir, output_img)
     if remove_path_force(part_dir):
-        log(f"Da xoa thu muc sau khi repack xong: {part_dir}")
+        log(f"Removed partition directory after repack: {part_dir}")
     else:
-        log(f"Canh bao: khong xoa duoc thu muc sau khi repack: {part_dir}")
+        log(f"Warning: could not remove partition directory after repack: {part_dir}")
     return output_img
 
 
@@ -7193,7 +7256,7 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
 
     ret = call(command, out=True)
     if ret != 0 or not super_img_out.exists():
-        raise RuntimeError("lpmake that bai khi build super.img")
+        raise RuntimeError("lpmake failed building super.img")
     return super_img_out
 
 
@@ -7225,7 +7288,7 @@ def repack_project(project_dir: Path, rom_path: Path | None = None, output_dir: 
         raise RuntimeError("Khong co partition nao trong config/parts_info de repack.")
 
     super_info = load_super_info(project_dir)
-    log(f"Dang repack project: {project_dir}")
+    log(f"Repacking project: {project_dir}")
     for part_name in part_names:
         repack_single_partition(project_dir, super_dir, part_name)
 
@@ -7333,12 +7396,12 @@ def main() -> int:
             super_img_path = input_path
         else:
             extracted_dir = extract_rom(input_path, output_dir)
-            log(f"[2/4] Dang tim super.img trong: {extracted_dir}")
+            log(f"[2/4] Searching for super.img in: {extracted_dir}")
             super_img_path = find_super_img(extracted_dir)
 
         if super_img_path is None:
             log(
-                "Khong tim thay super.img sau khi giai nen ROM. Thu giai nen payload.bin (neu co)..."
+                "super.img not found after ROM extraction. Trying to extract payload.bin (if available)..."
             )
             if extracted_dir is not None:
                 payload_partitions_extracted = try_extract_super_from_payload(
@@ -7346,21 +7409,21 @@ def main() -> int:
                     project_dir=output_dir,
                     search_roots=[extracted_dir, ROOT_DIR],
                 )
-                # neu payload tao ra super.img thi co the tim lai
+                # if payload produced super.img, search again
                 if payload_partitions_extracted:
                     super_img_path = find_super_img(extracted_dir)
 
             if super_img_path is None and not payload_partitions_extracted:
-                log("Khong tim thay super.img (cung khong tao duoc tu payload.bin).")
+                log("super.img not found (could not be produced from payload.bin either).")
                 return 1
 
         if super_img_path is not None:
-            log(f"Da tim thay super.img: {super_img_path}")
+            log(f"Found super.img: {super_img_path}")
             super_out_dir = unpack_super(super_img_path, output_dir)
             extract_partitions_from_super(super_out_dir, output_dir, super_img_path)
         else:
             log(
-                "Khong co super.img goc. Se tiep tuc dung cac partition da giai nen tu payload.bin."
+                "No original super.img. Continuing with partitions extracted from payload.bin."
             )
 
         mi_incremental, _android_release = find_and_read_build_props(output_dir)
@@ -7414,8 +7477,8 @@ def main() -> int:
         restore_recompiled_miui_systemui_to_project(output_dir, output_dir)
         process_provision_apk(output_dir, output_dir)
 
-        log("Da giai nen xong super.img va cac partition.")
-        log("Dang tiep tuc repack lai cac partition _a va super.img...")
+        log("Finished extracting super.img and partitions.")
+        log("Continuing to repack _a partitions and super.img...")
         sync_super_config_for_device(output_dir)
         images_output_dir = build_repack_output_dir(output_dir)
         final_super_img = repack_project(output_dir, input_path, images_output_dir)
@@ -7442,7 +7505,7 @@ def main() -> int:
                 if copy_count > 0:
                     log(f"Da copy {copy_count} file tu thu muc flash vao {flash_dest_parent}")
             except Exception as exc:
-                log(f"Loi khi copy thu muc flash: {exc}")
+                log(f"Error copying flash directory: {exc}")
 
         # Nen thu muc DeadZone_* thanh file zip
         zip_output_folder(images_output_dir)
