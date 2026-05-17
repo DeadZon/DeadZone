@@ -27,6 +27,18 @@ def cmd_validate_zip(args):
     sys.exit(0 if ok else 1)
 
 
+def cmd_upload_pixeldrain(args):
+    from factory.services.pixeldrain_upload import upload_to_pixeldrain, write_sidecar
+    result = upload_to_pixeldrain(args.file)
+    write_sidecar(result)
+    if result.get("success"):
+        print(f"[PIXELDRAIN] Link: {result['link']}")
+        sys.exit(0)
+    else:
+        print(f"[PIXELDRAIN] Upload failed: {result.get('error', 'unknown')}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_run_mezo(args):
     rom_path = Path(args.rom)
     print(f"[INFO] Device  : {args.device}")
@@ -63,6 +75,10 @@ def main():
     p_zip = sub.add_parser("validate-zip", help="Validate a public ROM ZIP")
     p_zip.add_argument("--zip", required=True, help="Path to the ZIP to validate")
     p_zip.set_defaults(func=cmd_validate_zip)
+
+    p_pd = sub.add_parser("upload-pixeldrain", help="Upload final ROM ZIP to PixelDrain")
+    p_pd.add_argument("--file", required=True, help="Path to the final public ROM ZIP")
+    p_pd.set_defaults(func=cmd_upload_pixeldrain)
 
     p_run = sub.add_parser(
         "run-mezo",

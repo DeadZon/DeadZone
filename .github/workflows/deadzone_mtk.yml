@@ -49,6 +49,11 @@ on:
         type: boolean
         default: false
 
+env:
+  TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
+  TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
+  PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
+
 jobs:
   mtk-build:
     name: "MTK | ${{ inputs.device }} | ${{ inputs.platform }} | ${{ inputs.flavor }}"
@@ -84,6 +89,26 @@ jobs:
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           echo "codename=$DEVICE" >> "$GITHUB_OUTPUT"
           echo "[INFO] Parsed codename: $DEVICE"
+
+      # ── Notify build started (execute_build only) ────────────────────────────
+
+      - name: Notify build started
+        if: inputs.execute_build == true
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from factory.reports.build_summary import format_build_start
+          from factory.services.telegram_notify import send_mtk_message
+          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          msg = format_build_start(
+              device="${{ steps.parse_device.outputs.codename }}",
+              soc="mtk",
+              platform="${{ inputs.platform }}",
+              flavor="${{ inputs.flavor }}",
+              run_url=run_url,
+          )
+          send_mtk_message(msg)
+          PY
 
       # ── Always: print build plan ─────────────────────────────────────────────
 
@@ -296,3 +321,111 @@ jobs:
           path: _factory_outputs/*
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Upload EROFS diagnostic logs
+        if: always() && inputs.execute_build == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: "erofs-logs-mtk-${{ steps.parse_device.outputs.codename }}-${{ github.run_number }}"
+          path: |
+            third_party/mezo_core/**/logs/mkfs_erofs/**
+            third_party/mezo_core/**/*_fs_config
+            third_party/mezo_core/**/*_file_contexts
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # ── Notify build failure ─────────────────────────────────────────────────
+
+      - name: Notify build failed
+        if: failure() && inputs.execute_build == true
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from factory.reports.build_summary import format_build_failure
+          from factory.services.telegram_notify import send_mtk_message
+          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          msg = format_build_failure(
+              device="${{ steps.parse_device.outputs.codename }}",
+              soc="mtk",
+              platform="${{ inputs.platform }}",
+              flavor="${{ inputs.flavor }}",
+              run_url=run_url,
+          )
+          send_mtk_message(msg)
+          PY
+
+      # ── Find final ROM ZIP and upload to PixelDrain ──────────────────────────
+
+      - name: Find and upload final ROM to PixelDrain
+        id: pixeldrain
+        if: success() && inputs.execute_build == true
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          EXCLUDE_DIRS = {"_input_roms", "_asset_downloads", "_factory_outputs", "MEZO_APP"}
+          EXCLUDE_SUFFIXES = ("_logs.zip", "_diagnostic.zip")
+
+          search_roots = [Path("output"), Path("output/final")]
+          search_roots += sorted(Path("third_party/mezo_core").glob("DeadZone*"))
+          search_roots += [Path("third_party/mezo_core")]
+
+          seen = set()
+          candidates = []
+          for root in search_roots:
+              if not root.exists():
+                  continue
+              for f in root.rglob("*.zip"):
+                  if f in seen:
+                      continue
+                  seen.add(f)
+                  if EXCLUDE_DIRS & set(f.parts):
+                      continue
+                  if any(f.name.endswith(s) for s in EXCLUDE_SUFFIXES):
+                      continue
+                  if "DeadZone" in f.name or "output" in str(f):
+                      candidates.append(f)
+
+          gho = os.environ.get("GITHUB_OUTPUT", "")
+          if not candidates:
+              print("[PIXELDRAIN] No final ROM ZIP found — skipping upload.")
+              if gho:
+                  with open(gho, "a") as out:
+                      out.write("pd_link=\npd_found=false\n")
+          else:
+              candidates.sort(key=lambda p: (p.stat().st_mtime, p.stat().st_size), reverse=True)
+              print(f"[PIXELDRAIN] Candidates: {[str(c) for c in candidates]}")
+              final_zip = candidates[0]
+              print(f"[PIXELDRAIN] Selected: {final_zip}")
+
+              from factory.services.pixeldrain_upload import upload_to_pixeldrain, write_sidecar
+              result = upload_to_pixeldrain(str(final_zip))
+              write_sidecar(result)
+
+              link = result.get("link", "")
+              if gho:
+                  with open(gho, "a") as out:
+                      out.write(f"pd_link={link}\npd_found=true\n")
+          PY
+
+      - name: Notify upload success
+        if: success() && inputs.execute_build == true && steps.pixeldrain.outputs.pd_found == 'true' && steps.pixeldrain.outputs.pd_link != ''
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from factory.reports.build_summary import format_upload_success
+          from factory.services.telegram_notify import send_mtk_message
+          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          link = "${{ steps.pixeldrain.outputs.pd_link }}"
+          msg = format_upload_success(
+              device="${{ steps.parse_device.outputs.codename }}",
+              soc="mtk",
+              platform="${{ inputs.platform }}",
+              flavor="${{ inputs.flavor }}",
+              pixeldrain_link=link,
+              run_url=run_url,
+          )
+          send_mtk_message(msg)
+          PY
