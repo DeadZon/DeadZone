@@ -8,7 +8,73 @@ on:
         required: true
         type: choice
         options:
-          - "garnet | Redmi Note 13 Pro 5G"
+          - "amethyst | Redmi Note 14 Pro+ 5G"
+          - "aurora | Xiaomi 14 Ultra"
+          - "babylon | Xiaomi MIX Fold 3"
+          - "breeze | Redmi 13 5G / Redmi Note 13R / POCO M6 Plus 5G"
+          - "chenfeng | Xiaomi Civi 4 Pro"
+          - "cupid | Xiaomi 12"
+          - "dada | Xiaomi 15"
+          - "dagu | Xiaomi Pad 5 Pro 12.4"
+          - "diting | Xiaomi 12T Pro / Redmi K50 Ultra"
+          - "dizi | Redmi Pad Pro"
+          - "flame | Redmi 14R 5G / Redmi 14C 5G / POCO M7 5G"
+          - "fuxi | Xiaomi 13"
+          - "garnet | Redmi Note 13 Pro 5G / POCO X6 5G"
+          - "goku | Xiaomi MIX Fold 4"
+          - "haotian | Xiaomi 15 Pro"
+          - "haydn | Redmi K40 Pro / K40 Pro+ / Mi 11i"
+          - "houji | Xiaomi 14"
+          - "ingres | Redmi K50 Gaming / POCO F4 GT"
+          - "ishtar | Xiaomi 13 Ultra"
+          - "lisa | Xiaomi 11 Lite 5G NE"
+          - "liuqin | Xiaomi Pad 6 Pro"
+          - "marble | Redmi Note 12 Turbo / POCO F5"
+          - "mayfly | Xiaomi 12S"
+          - "miro | Redmi K80 Pro / POCO F7 Ultra"
+          - "mondrian | Redmi K60 / POCO F5 Pro"
+          - "moonstone | POCO X5 5G"
+          - "munch | Redmi K40S / POCO F4"
+          - "muyu | Xiaomi Pad 7 Pro"
+          - "myron | Redmi K90 Pro Max / POCO F8 Ultra"
+          - "nezha | Xiaomi 17 Ultra"
+          - "nuwa | Xiaomi 13 Pro"
+          - "odin | Xiaomi MIX 4"
+          - "onyx | Redmi Turbo 4 Pro / POCO F7"
+          - "pandora | Xiaomi 17 Pro"
+          - "peridot | Redmi Turbo 3 / POCO F6"
+          - "piano | Xiaomi Pad 8 Pro"
+          - "pipa | Xiaomi Pad 6"
+          - "popsicle | Xiaomi 17 Pro Max"
+          - "pudding | Xiaomi 17"
+          - "redwood | Redmi Note 12 Pro Speed / POCO X5 Pro 5G"
+          - "ruan | Redmi Pad Pro 5G / POCO Pad 5G"
+          - "sapphire | Redmi Note 13 4G"
+          - "sapphiren | Redmi Note 13 4G NFC"
+          - "sheng | Xiaomi Pad 6S Pro 12.4"
+          - "shennong | Xiaomi 14 Pro"
+          - "sky | Redmi 12 5G / Redmi Note 12R / POCO M6 Pro 5G"
+          - "socrates | Redmi K60 Pro"
+          - "star | Xiaomi Mi 11 Ultra"
+          - "sunstone | Redmi Note 12 5G / Redmi Note 12R Pro"
+          - "taoyao | Xiaomi 12 Lite 5G"
+          - "tapas | Redmi Note 12 4G"
+          - "thor | Xiaomi 12S Ultra"
+          - "topaz | Redmi Note 12 4G NFC"
+          - "uke | Xiaomi Pad 7"
+          - "unicorn | Xiaomi 12S Pro"
+          - "venus | Xiaomi Mi 11"
+          - "vermeer | Redmi K70"
+          - "vili | Xiaomi 11T Pro"
+          - "xuanyuan | Xiaomi 15 Ultra"
+          - "xun | Redmi Pad SE"
+          - "yudi | Xiaomi Pad 6 Max 14"
+          - "yupei | Xiaomi Pad 8"
+          - "zeus | Xiaomi 12 Pro"
+          - "zijin | Xiaomi Civi 1S"
+          - "ziyi | Xiaomi 13 Lite / Xiaomi Civi 2"
+          - "zizhan | Xiaomi MIX Fold 2"
+          - "zorn | Redmi K80 / POCO F7 Pro"
 
       platform:
         description: "ROM platform"
@@ -73,10 +139,12 @@ jobs:
       # ── Parse codename from "codename | Marketing Name" format ───────────────
 
       - name: Parse device codename
+        id: parse_device
         run: |
           RAW_DEVICE="${{ inputs.device }}"
           DEVICE="${RAW_DEVICE%% | *}"
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "codename=$DEVICE" >> "$GITHUB_OUTPUT"
           echo "[INFO] Parsed codename: $DEVICE"
 
       # ── Always: print build plan ─────────────────────────────────────────────
@@ -286,7 +354,7 @@ jobs:
         if: always() && inputs.execute_build == true
         uses: actions/upload-artifact@v4
         with:
-          name: "DeadZone-snapdragon-${{ env.DEVICE }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
+          name: "DeadZone-snapdragon-${{ steps.parse_device.outputs.codename }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
           path: _factory_outputs/*
           if-no-files-found: warn
           retention-days: 7

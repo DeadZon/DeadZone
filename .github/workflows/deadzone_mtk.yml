@@ -8,6 +8,10 @@ on:
         required: true
         type: choice
         options:
+          - "agate | Xiaomi 11T"
+          - "aristotle | Xiaomi 13T"
+          - "daumier | Xiaomi 12 Pro Dimensity Edition"
+          - "plato | Xiaomi 12T"
           - "zircon | Redmi Note 13 Pro+ 5G"
 
       platform:
@@ -73,10 +77,12 @@ jobs:
       # ── Parse codename from "codename | Marketing Name" format ───────────────
 
       - name: Parse device codename
+        id: parse_device
         run: |
           RAW_DEVICE="${{ inputs.device }}"
           DEVICE="${RAW_DEVICE%% | *}"
           echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "codename=$DEVICE" >> "$GITHUB_OUTPUT"
           echo "[INFO] Parsed codename: $DEVICE"
 
       # ── Always: print build plan ─────────────────────────────────────────────
@@ -286,7 +292,7 @@ jobs:
         if: always() && inputs.execute_build == true
         uses: actions/upload-artifact@v4
         with:
-          name: "DeadZone-mtk-${{ env.DEVICE }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
+          name: "DeadZone-mtk-${{ steps.parse_device.outputs.codename }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
           path: _factory_outputs/*
           if-no-files-found: warn
           retention-days: 7
