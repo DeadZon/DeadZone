@@ -18,6 +18,7 @@ import logging
 import os
 import os.path
 import platform
+import shutil
 import struct
 import subprocess
 import sys
@@ -103,6 +104,63 @@ else:
 tool_bin = os.path.join(prog_path, 'bin', platform.system(), platform.machine()) + os.sep
 
 
+def resolve_tool_path(tool_name: str) -> str:
+    """Resolve a tool executable using a safe fallback chain.
+
+    Order:
+    1. Absolute path that exists.
+    2. Relative path that exists.
+    3. Arch-specific bundled path (bin/<platform>/<machine>/<tool>) if it exists.
+    4. Flat bundled path (bin/<tool>) if it exists.
+    5. System PATH via shutil.which.
+    6. Arch-specific candidate string (may not exist) so the error is visible.
+    """
+
+    def _make_executable(path_str: str) -> None:
+        if os.name == "posix":
+            try:
+                st = os.stat(path_str)
+                os.chmod(path_str, st.st_mode | 0o111)
+            except Exception:
+                pass
+
+    tool_basename = os.path.basename(tool_name)
+    arch_candidate = os.path.join(prog_path, 'bin', platform.system(), platform.machine(), tool_basename)
+    flat_candidate = os.path.join(prog_path, 'bin', tool_basename)
+
+    # 1. Absolute path that exists
+    if os.path.isabs(tool_name) and os.path.isfile(tool_name):
+        print(f"[TOOL] {tool_basename} resolved to: {tool_name}")
+        return tool_name
+
+    # 2. Relative path that exists
+    if not os.path.isabs(tool_name) and os.path.isfile(tool_name):
+        print(f"[TOOL] {tool_basename} resolved to: {tool_name}")
+        return tool_name
+
+    # 3. Arch-specific bundled path
+    if os.path.isfile(arch_candidate):
+        _make_executable(arch_candidate)
+        print(f"[TOOL] {tool_basename} resolved to: {arch_candidate}")
+        return arch_candidate
+
+    # 4. Flat bundled path
+    if os.path.isfile(flat_candidate):
+        _make_executable(flat_candidate)
+        print(f"[TOOL] {tool_basename} resolved to: {flat_candidate}")
+        return flat_candidate
+
+    # 5. System PATH
+    which_result = shutil.which(tool_basename)
+    if which_result:
+        print(f"[TOOL] {tool_basename} resolved to: {which_result}")
+        return which_result
+
+    # 6. Nothing found — return arch candidate so subprocess error is descriptive
+    print(f"[TOOL] {tool_basename} not found in bundled paths or PATH; using fallback: {arch_candidate}")
+    return arch_candidate
+
+
 def call(exe, extra_path=True, out: bool = True):
     def output(inp: subprocess.CalledProcessError | Popen[bytes]):
         for i in iter(inp.stdout.readline, b""):
@@ -116,12 +174,12 @@ def call(exe, extra_path=True, out: bool = True):
                 logging.info(out_put)
     logging.info(exe)
     if isinstance(exe, list):
-        cmd = exe
+        cmd = list(exe)  # copy — do not mutate caller's list
         if extra_path:
-            cmd[0] = f"{tool_bin}{exe[0]}"
+            cmd[0] = resolve_tool_path(exe[0])
         cmd = [i for i in cmd if i]
     else:
-        cmd = f'{tool_bin}{exe}' if extra_path else exe
+        cmd = resolve_tool_path(exe) if extra_path else exe
         if os.name == 'posix':
             cmd = cmd.split()
     conf = subprocess.CREATE_NO_WINDOW if os.name != 'posix' else 0
@@ -136,7 +194,17 @@ def call(exe, extra_path=True, out: bool = True):
         output(e)
         return 2
     except FileNotFoundError:
-        logging.exception('Bugs')
+        resolved_exe = cmd[0] if isinstance(cmd, list) else (cmd.split()[0] if cmd else str(cmd))
+        tool_basename = os.path.basename(resolved_exe)
+        arch_p = os.path.join(prog_path, 'bin', platform.system(), platform.machine(), tool_basename)
+        flat_p = os.path.join(prog_path, 'bin', tool_basename)
+        print(f"[TOOL ERROR] Failed to execute command")
+        print(f"  Command: {cmd}")
+        print(f"  Resolved executable: {resolved_exe}")
+        print(f"  PATH: {os.environ.get('PATH', '(not set)')}")
+        print(f"[TOOL DEBUG] arch path: {arch_p} exists={os.path.isfile(arch_p)}")
+        print(f"[TOOL DEBUG] flat bin: {flat_p} exists={os.path.isfile(flat_p)}")
+        print(f"[TOOL DEBUG] PATH which: {shutil.which(tool_basename)}")
         return 2
     ret.wait()
     return ret.returncode
@@ -495,8 +563,8 @@ def simg2img(path:str):
         if os.path.exists(unsparse_file):
             os.remove(path)
             os.rename(unsparse_file, path)
-    except Exception as e:
-        print(e)
+    except Exception as exc:
+        print(f"[ERROR] simg2img post-processing failed: {exc}")
 
 
 def img2sdat(input_image, out_dir='.', version=None, prefix='system'):
@@ -593,8 +661,8 @@ def img2simg(path: str):
         try:
             os.remove(path)
             os.rename(path + 's', path)
-        except Exception:
-            logging.exception('Bugs')
+        except Exception as exc:
+            print(f"[ERROR] img2simg post-processing failed: {exc}")
 
 
 class Vbpatch:
