@@ -1,0 +1,11 @@
+group: mtk
+label: MTK Devices
+soc: mtk
+
+devices:
+  - codename: zircon
+    name: Redmi Note 13 Pro+ 5G
+    registry_file: registry/devices/mtk/zircon.yml
+    source: manual
+    source_path: null
+    status: golden

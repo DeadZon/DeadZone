@@ -1,0 +1,292 @@
+name: DeadZone MTK Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        description: "MTK device"
+        required: true
+        type: choice
+        options:
+          - "zircon | Redmi Note 13 Pro+ 5G"
+
+      platform:
+        description: "ROM platform"
+        required: true
+        type: choice
+        options:
+          - os3_a16
+          - os3_a15
+          - os2_a15
+          - os2_a14
+          - os1_a14
+          - os1_a13
+          - miui_a13
+
+      flavor:
+        description: "DeadZone flavor"
+        required: true
+        type: choice
+        options:
+          - deadzone
+          - deadzone_gaming
+          - deadzone_epic
+          - deadzone_legend
+
+      rom_url:
+        description: "ROM download URL (required when execute_build is true)"
+        required: false
+        type: string
+        default: ""
+
+      execute_build:
+        description: "Run MEZOBuildRom.py — false = plan only (safe), true = real build"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  mtk-build:
+    name: "MTK | ${{ inputs.device }} | ${{ inputs.platform }} | ${{ inputs.flavor }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install factory requirements
+        run: |
+          python -m pip install --upgrade pip wheel
+          python -m pip install -r requirements.txt
+
+      # ── Always: validate registry ────────────────────────────────────────────
+
+      - name: Validate registry
+        run: python -m factory.cli validate-registry
+
+      # ── Parse codename from "codename | Marketing Name" format ───────────────
+
+      - name: Parse device codename
+        run: |
+          RAW_DEVICE="${{ inputs.device }}"
+          DEVICE="${RAW_DEVICE%% | *}"
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+          echo "[INFO] Parsed codename: $DEVICE"
+
+      # ── Always: print build plan ─────────────────────────────────────────────
+
+      - name: Show build plan
+        run: |
+          python -m factory.cli plan \
+            --device   "$DEVICE" \
+            --soc      mtk \
+            --platform "${{ inputs.platform }}" \
+            --flavor   "${{ inputs.flavor }}"
+
+      # ── Dry-run complete (execute_build = false) ─────────────────────────────
+
+      - name: Dry-run complete
+        if: inputs.execute_build != true
+        run: |
+          echo "=========================================="
+          echo "  execute_build = false"
+          echo "  Plan validated. No ROM build triggered."
+          echo "  Set execute_build=true + rom_url to build."
+          echo "=========================================="
+
+      # ── Real build path (execute_build = true) ───────────────────────────────
+
+      - name: Require rom_url for real build
+        if: inputs.execute_build == true
+        run: |
+          if [ -z "${{ inputs.rom_url }}" ]; then
+            echo "[ERROR] execute_build is true but rom_url is empty."
+            echo "        Provide a ROM download URL to run a real build."
+            exit 1
+          fi
+
+      - name: Free disk space
+        if: inputs.execute_build == true
+        run: |
+          echo "Disk before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet           || true
+          sudo rm -rf /usr/local/lib/android       || true
+          sudo rm -rf /opt/ghc                     || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL  || true
+          docker system prune -af                  || true
+          echo "Disk after cleanup:"
+          df -h
+
+      - name: Install system dependencies
+        if: inputs.execute_build == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            openjdk-17-jre \
+            zip unzip p7zip-full \
+            zstd brotli lz4 \
+            file \
+            ca-certificates curl wget \
+            erofs-utils
+
+      - name: Install MEZO requirements
+        if: inputs.execute_build == true
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          src = Path("third_party/mezo_core/requirements.txt")
+          dst = Path("third_party/mezo_core/.requirements.ci.txt")
+
+          if not src.is_file():
+              src.write_text(
+                  "\n".join([
+                      "cryptography>=42.0.0",
+                      "httpx>=0.27.0",
+                      "protobuf>=4.25.0",
+                      "pycryptodome>=3.19.0",
+                      "requests>=2.31.0",
+                      "toml>=0.10.2",
+                      "zstandard>=0.22.0",
+                      "brotli>=1.1.0",
+                      "",
+                  ]),
+                  encoding="utf-8",
+                  newline="\n",
+              )
+
+          lines = src.read_text(encoding="utf-8-sig", errors="ignore").splitlines()
+          cleaned = []
+          found_brotli = False
+          for line in lines:
+              raw = line.strip()
+              low = raw.lower()
+              if not raw or raw.startswith("#"):
+                  cleaned.append(line)
+                  continue
+              if low == "lzma" or low.startswith("lzma"):
+                  print("[requirements] skip:", raw)
+                  continue
+              if low == "google" or low.startswith("google"):
+                  print("[requirements] skip:", raw)
+                  continue
+              if low.startswith("brotli"):
+                  found_brotli = True
+              cleaned.append(raw)
+          if not found_brotli:
+              cleaned.append("brotli>=1.1.0")
+          dst.write_text("\n".join(cleaned) + "\n", encoding="utf-8", newline="\n")
+          print(dst.read_text(encoding="utf-8"))
+          PY
+          python -m pip install -r third_party/mezo_core/.requirements.ci.txt
+
+      - name: Prepare MEZO tools
+        if: inputs.execute_build == true
+        working-directory: third_party/mezo_core
+        run: |
+          find bin -type f -exec chmod +x {} \; || true
+          python -m py_compile MEZOBuildRom.py
+          echo "MEZO core ready."
+
+      - name: Prepare MEZO_APP folders
+        if: inputs.execute_build == true
+        working-directory: third_party/mezo_core
+        run: |
+          mkdir -p MEZO_APP/product MEZO_APP/system MEZO_APP/appMod
+          mkdir -p MEZO_APP/OS3_A16 MEZO_APP/OS3_A15 MEZO_APP/OS2_A15
+          mkdir -p MEZO_APP/OS2_A14 MEZO_APP/OS1_A14
+
+      - name: Download ROM
+        if: inputs.execute_build == true
+        run: |
+          mkdir -p _input_roms
+          python - <<'PY'
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          url = "${{ inputs.rom_url }}"
+          parsed_name = Path(urllib.parse.urlparse(url).path).name
+          name = urllib.parse.unquote(parsed_name) if parsed_name else "input_rom.zip"
+          if not name or name in ("/", "."):
+              name = "input_rom.zip"
+
+          out = Path("_input_roms") / name
+          print(f"[ROM] Downloading: {url}", flush=True)
+          print(f"[ROM] Saving to  : {out}", flush=True)
+
+          req = urllib.request.Request(url, headers={"User-Agent": "DeadZoneFactory/1.0"})
+          with urllib.request.urlopen(req, timeout=1800) as resp:
+              total = resp.headers.get("Content-Length")
+              total_int = int(total) if total and total.isdigit() else 0
+              done = 0
+              with out.open("wb") as f:
+                  while True:
+                      chunk = resp.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      f.write(chunk)
+                      done += len(chunk)
+                      if total_int:
+                          pct = done * 100 / total_int
+                          print(
+                              f"[ROM] {done/1024/1024:.1f} MiB / "
+                              f"{total_int/1024/1024:.1f} MiB ({pct:.1f}%)",
+                              flush=True,
+                          )
+                      else:
+                          print(f"[ROM] {done/1024/1024:.1f} MiB downloaded", flush=True)
+          print(f"[ROM] Done: {out} ({out.stat().st_size} bytes)", flush=True)
+          PY
+          echo "ROM files:"
+          ls -lah _input_roms
+
+      - name: Run MEZO via factory CLI
+        if: inputs.execute_build == true
+        run: |
+          ROM_FILE="$(find _input_roms -type f | head -n 1)"
+          if [ -z "$ROM_FILE" ]; then
+            echo "[ERROR] No ROM file found in _input_roms"
+            exit 1
+          fi
+          echo "[INFO] ROM: $ROM_FILE"
+          python -m factory.cli run-mezo \
+            --rom      "$ROM_FILE" \
+            --device   "$DEVICE" \
+            --soc      mtk \
+            --platform "${{ inputs.platform }}" \
+            --flavor   "${{ inputs.flavor }}" \
+            --execute
+
+      - name: Collect outputs
+        if: always() && inputs.execute_build == true
+        run: |
+          mkdir -p _factory_outputs
+          find third_party/mezo_core -type f -name "*.zip" \
+            -not -path "*/_input_roms/*" \
+            -not -path "*/_asset_downloads/*" \
+            -not -path "*/MEZO_APP/*" \
+            -exec cp -v {} _factory_outputs/ \; || true
+          find third_party/mezo_core -type f \( -name "*.txt" -o -name "*.log" \) \
+            -not -path "*/MEZO_APP/*" \
+            -not -path "*/_asset_downloads/*" \
+            -exec cp -v {} _factory_outputs/ \; || true
+          echo "Collected outputs:"
+          ls -lah _factory_outputs || true
+          df -h
+
+      - name: Upload artifacts
+        if: always() && inputs.execute_build == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: "DeadZone-mtk-${{ env.DEVICE }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
+          path: _factory_outputs/*
+          if-no-files-found: warn
+          retention-days: 7

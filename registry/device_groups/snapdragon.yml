@@ -1,0 +1,11 @@
+group: snapdragon
+label: Snapdragon Devices
+soc: snapdragon
+
+devices:
+  - codename: garnet
+    name: Redmi Note 13 Pro 5G
+    registry_file: registry/devices/snapdragon/garnet.yml
+    source: superconfig
+    source_path: third_party/mezo_core/SuperConfig/garnet
+    status: ready
