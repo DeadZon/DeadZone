@@ -7287,7 +7287,14 @@ def load_super_info(project_dir: Path) -> dict:
                 verified_size = reg_super.get("super_size") or reg_super.get("verified_size")
                 if verified_size and int(verified_size) > 0:
                     registry_super_profile_found = True
-                    log(f"[SUPER] Registry super profile found for '{factory_codename}'; super_size={verified_size}")
+                    _reg_slot_mode = reg_super.get("slot_mode", "unknown")
+                    _reg_active_slot = reg_super.get("active_slot", "unknown")
+                    _reg_inactive_zero = reg_super.get("inactive_slot_zero", False)
+                    log(f"[SUPER] Registry super profile found for {factory_codename}")
+                    log(f"[SUPER] super_size={verified_size}")
+                    log(f"[SUPER] slot_mode={_reg_slot_mode} active_slot={_reg_active_slot} inactive_slot_zero={_reg_inactive_zero}")
+                    log(f"[SUPER] _a partitions will use real images")
+                    log(f"[SUPER] _b partitions will be zero-size metadata entries")
                     info = {
                         "metadata_slot_count": 3,
                         "block_devices": [{"name": "super", "size": int(verified_size)}],
@@ -7310,9 +7317,11 @@ def load_super_info(project_dir: Path) -> dict:
     super_files_in_project = sorted(
         str(p.relative_to(project_dir)) for p in project_dir.glob("*super*") if p.is_file()
     )
-    payload_meta_found = any(
-        (project_dir / "rom").is_dir() and list((project_dir / "rom").rglob("payload.bin"))
-    )
+    _rom_dir_diag = project_dir / "rom"
+    _payload_cands: list[Path] = []
+    if _rom_dir_diag.is_dir():
+        _payload_cands = list(_rom_dir_diag.rglob("payload.bin"))
+    payload_meta_found = bool(_payload_cands)
 
     super_config_dir = ROOT_DIR / "SuperConfig" / (factory_codename or "(device)")
     registry_hint = (
@@ -7472,6 +7481,8 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
         super_img_out.unlink()
     command += ['--out', str(super_img_out)]
 
+    if super_type == 2:
+        log("[SUPER] Rebuilding sparse VAB super.img")
     ret = call(command, out=True)
     if ret != 0 or not super_img_out.exists():
         raise RuntimeError("lpmake failed building super.img")

@@ -14,9 +14,13 @@ default_flavor: deadzone
 super:
   source: auto_or_mezo_superconfig
   dynamic_group: qti_dynamic_partitions
+  super_size: 9126805504
   slot_mode: vab
+  active_slot: a
+  inactive_slot_zero: true
   filesystem: erofs
   output_format: sparse
+  metadata_slots: 3
 
 required_images:
   - boot.img
