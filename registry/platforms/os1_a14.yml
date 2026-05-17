@@ -1,0 +1,33 @@
+id: os1_a14
+name: HyperOS 1 Android 14
+android: 14
+family: hyperos
+generation: OS1
+
+asset_key: OS1_A14
+asset_manifest: assets/manifests/os1_a14.json
+
+patchpacks:
+  common:
+    - common/base
+    - common/deadzone_brand
+  platform:
+    - platforms/os1_a14
+
+partitions:
+  supports:
+    - system
+    - product
+    - system_ext
+    - vendor
+    - odm
+    - mi_ext
+
+framework_rules:
+  jar_patch_level: modern
+  apktool_mode: aapt2
+  signature_bypass: supported
+
+super:
+  filesystem: erofs
+  output_format: sparse

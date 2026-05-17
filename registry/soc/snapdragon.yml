@@ -1,0 +1,32 @@
+id: snapdragon
+name: Qualcomm Snapdragon
+
+default_dynamic_group: qti_dynamic_partitions
+default_slot_mode: vab
+default_flash_profile: snapdragon_vab
+default_vbmeta_policy: binary_flags_3
+
+engine:
+  name: snapdragon_engine
+  base: mezo_legacy_engine
+  legacy_flash_source: "third_party/mezo_core/flash/HyperUR Flash_2.bat"
+
+required_images:
+  - boot.img
+  - init_boot.img
+  - vendor_boot.img
+  - vbmeta.img
+  - super.img
+
+optional_images:
+  - dtbo.img
+  - vbmeta_system.img
+  - vbmeta_vendor.img
+  - logo.img
+
+forbidden_flash_commands:
+  - "fastboot -w"
+  - "flash preloader"
+  - "flash persist"
+  - "--disable-verity"
+  - "--disable-verification"

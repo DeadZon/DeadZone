@@ -1,0 +1,15 @@
+id: deadzone_epic
+name: DeadZone EPiC
+output_prefix: DeadZone_EPiC
+
+inherits:
+  - deadzone
+
+patchpacks:
+  - flavors/epic
+
+features:
+  premium_ui: true
+  balanced_tweaks: true
+  privacy_tweaks: true
+  debloat: balanced

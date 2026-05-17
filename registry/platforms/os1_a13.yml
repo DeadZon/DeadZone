@@ -1,0 +1,33 @@
+id: os1_a13
+name: HyperOS 1 Android 13
+android: 13
+family: hyperos
+generation: OS1
+
+asset_key: OS1_A13
+asset_manifest: assets/manifests/os1_a13.json
+
+patchpacks:
+  common:
+    - common/base
+    - common/deadzone_brand
+  platform:
+    - platforms/os1_a13
+
+partitions:
+  supports:
+    - system
+    - product
+    - system_ext
+    - vendor
+    - odm
+    - mi_ext
+
+framework_rules:
+  jar_patch_level: legacy
+  apktool_mode: aapt2
+  signature_bypass: supported
+
+super:
+  filesystem: ext4
+  output_format: sparse

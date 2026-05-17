@@ -27,5 +27,19 @@ downloads/
 third_party/mezo_core/MEZO_APP/
 third_party/mezo_core/_asset_downloads/
 
-third_party/mezo_core/MEZO_APP/
-third_party/mezo_core/_asset_downloads/
+# Factory outputs and caches (never commit)
+output/
+_input_roms/
+_asset_downloads/
+assets/cache/
+
+# Additional binary/archive types
+*.new.dat
+*.new.dat.br
+*.img.zst
+*.log
+logs/
+
+# Python
+.env
+.env.local

@@ -1,0 +1,16 @@
+id: deadzone_legend
+name: DeadZone Legend
+output_prefix: DeadZone_Legend
+
+inherits:
+  - deadzone
+
+patchpacks:
+  - flavors/legend
+
+features:
+  max_features: true
+  premium_ui: true
+  full_mezo_app: true
+  advanced_overlay: true
+  debloat: custom

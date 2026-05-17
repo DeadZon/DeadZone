@@ -1,0 +1,15 @@
+id: deadzone
+name: DeadZone
+output_prefix: DeadZone
+description: "Current base DeadZone ROM"
+
+patchpacks:
+  - flavors/deadzone
+
+features:
+  mezo_app: true
+  deadzone_branding: true
+  base_overlay: true
+  debloat: safe
+  disable_ota: true
+  signature_bypass: optional

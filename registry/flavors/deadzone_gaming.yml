@@ -1,0 +1,16 @@
+id: deadzone_gaming
+name: DeadZone Gaming
+output_prefix: DeadZone_Gaming
+
+inherits:
+  - deadzone
+
+patchpacks:
+  - flavors/gaming
+
+features:
+  gaming_tweaks: true
+  thermal_fps: true
+  performance_props: true
+  game_overlay: true
+  debloat: gaming
