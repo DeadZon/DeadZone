@@ -43,3 +43,5 @@ logs/
 # Python
 .env
 .env.local
+
+.claude/
