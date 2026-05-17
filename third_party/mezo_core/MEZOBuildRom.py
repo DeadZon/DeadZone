@@ -593,7 +593,7 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
         env["PATH"] = str(openssl_bin_dir) + os.pathsep + env.get("PATH", "")
         subprocess.run(cmd, check=True, cwd=str(ROOT_DIR / "vbmeta"), env=env)
         shutil.move(str(vbmeta_tmp), str(vbmeta_img))
-        log(f"[THANH CONG] Da patch vbmeta: {vbmeta_img.name}")
+        log(f"[OK] vbmeta patched: {vbmeta_img.name}")
         log("[INFO] To flash to device, boot into Fastboot and run:")
         log(f"       fastboot flash vbmeta {images_dir / 'vbmeta.img'}")
     except subprocess.CalledProcessError as exc:
@@ -722,7 +722,7 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
         if dest_apk.exists():
             remove_path_force(dest_apk)
         shutil.copy2(src_apk, dest_apk)
-        log(f"    Da xuat {MIUI_SYSTEM_UI_APK_NAME} -> {dest_apk}")
+        log(f"    Exported {MIUI_SYSTEM_UI_APK_NAME} -> {dest_apk}")
     except Exception as exc:
         log(f"    Error extracting {MIUI_SYSTEM_UI_APK_NAME}: {exc}")
         return
@@ -759,7 +759,7 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
         log(f"Decompiling {MIUI_SYSTEM_UI_APK_NAME} -> {dest_apk_src} ...")
         subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=dest_dir)
         if dest_apk_src.is_dir():
-            log(f"    Da decompile xong {MIUI_SYSTEM_UI_APK_NAME}")
+            log(f"    Decompile complete: {MIUI_SYSTEM_UI_APK_NAME}")
         else:
             log(f"    Warning: decompile ran but did not create directory {dest_apk_src}")
     except subprocess.CalledProcessError as exc:
@@ -812,7 +812,7 @@ def recompile_apk(work_dir: Path) -> bool:
             log(f"Rebuild of {MIUI_SYSTEM_UI_APK_NAME} failed: could not create output file.")
             return False
 
-        log(f"    Build lai thanh cong -> {output_apk}")
+        log(f"    Rebuild successful -> {output_apk}")
 
         if remove_path_force(apk_src_dir):
             log(f"    Removed temporary source directory: {apk_src_dir}")
@@ -856,7 +856,7 @@ def restore_recompiled_miui_systemui_to_project(project_dir: Path, work_dir: Pat
         if target_apk.exists():
             remove_path_force(target_apk)
         shutil.move(str(rebuilt_apk), str(target_apk))
-        log(f"    Da di chuyen {MIUI_SYSTEM_UI_APK_NAME} moi build -> {target_apk}")
+        log(f"    Moved rebuilt {MIUI_SYSTEM_UI_APK_NAME} -> {target_apk}")
         return True
     except Exception as exc:
         log(f"    Error restoring {MIUI_SYSTEM_UI_APK_NAME} to system_ext: {exc}")
@@ -887,7 +887,7 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
         if dest_apk.exists():
             remove_path_force(dest_apk)
         shutil.copy2(src_apk, dest_apk)
-        log(f"    Da xuat {PROVISION_APK_NAME} -> {dest_apk}")
+        log(f"    Exported {PROVISION_APK_NAME} -> {dest_apk}")
     except Exception as exc:
         log(f"    Error extracting {PROVISION_APK_NAME}: {exc}")
         return False
@@ -924,7 +924,7 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
         log(f"Decompiling {PROVISION_APK_NAME} -> {dest_apk_src} ...")
         subprocess.run(cmd, capture_output=True, text=True, check=True, cwd=dest_dir)
         if dest_apk_src.is_dir():
-            log(f"    Da decompile xong {PROVISION_APK_NAME}")
+            log(f"    Decompile complete: {PROVISION_APK_NAME}")
             return True
         log(f"    Warning: decompile ran but did not create directory {dest_apk_src}")
         return False
@@ -960,7 +960,7 @@ def patch_provision_utils(work_dir: Path) -> bool:
     )
 
     if not utils_file.is_file():
-        log(f"Khong tim thay file can patch: {utils_file}")
+        log(f"File to patch not found: {utils_file}")
         return False
 
     try:
@@ -1004,7 +1004,7 @@ def patch_provision_utils(work_dir: Path) -> bool:
 
                         lines[scan_idx] = re.sub(r"\bif-eqz?\b", "if-ne", lines[scan_idx], count=1)
                         utils_file.write_text("".join(lines), encoding="utf-8", errors="ignore")
-                        log("    Da patch Utils.smali cho setGmsAppEnabledStateForCn")
+                        log("    Patched Utils.smali for setGmsAppEnabledStateForCn")
                         return True
 
                     log("    if-eq/if-eqz line after move-result not found in Utils.smali")
@@ -1058,7 +1058,7 @@ def recompile_provision_apk(work_dir: Path) -> bool:
             log(f"Rebuild of {PROVISION_APK_NAME} failed: could not create output file.")
             return False
 
-        log(f"    Build lai thanh cong -> {output_apk}")
+        log(f"    Rebuild successful -> {output_apk}")
 
         if remove_path_force(apk_src_dir):
             log(f"    Removed temporary source directory: {apk_src_dir}")
@@ -1103,7 +1103,7 @@ def restore_recompiled_provision_to_project(project_dir: Path, work_dir: Path) -
         if target_apk.exists():
             remove_path_force(target_apk)
         shutil.move(str(rebuilt_apk), str(target_apk))
-        log(f"    Da di chuyen {PROVISION_APK_NAME} moi build -> {target_apk}")
+        log(f"    Moved rebuilt {PROVISION_APK_NAME} -> {target_apk}")
         if apk_editor_in_workdir.exists():
             if remove_path_force(apk_editor_in_workdir):
                 log(f"    Removed temporary file: {apk_editor_in_workdir}")
@@ -1361,7 +1361,7 @@ def disable_private_chip(work_dir: Path) -> None:
         "disable_privacy_chip",
     )
     if inserted:
-        log("    Da patch MiuiPrivacyControllerImpl.smali")
+        log("    Patched MiuiPrivacyControllerImpl.smali")
 
 def change_clock_format(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
@@ -1387,14 +1387,14 @@ def change_clock_format(work_dir: Path) -> None:
         apk_src_dir.glob("smali/classes*/miuix/pickerwidget/date/DateUtils.smali")
     )
     if not date_utils_candidates:
-        log("Khong tim thay DateUtils.smali trong MiuiSystemUI_apk_src.")
+        log("DateUtils.smali not found in MiuiSystemUI_apk_src.")
         return
 
     date_utils_path = date_utils_candidates[0]
     try:
         lines = date_utils_path.read_text(encoding="utf-8", errors="ignore").splitlines(keepends=True)
         if "change_clock_format_t" in "".join(lines):
-            log(f"    Bo qua {date_utils_path.name}: patch da ton tai.")
+            log(f"    Skipping {date_utils_path.name}: patch already applied.")
             return
 
         method_start = -1
@@ -1443,7 +1443,7 @@ def change_clock_format(work_dir: Path) -> None:
         ]
         lines[insert_pos:insert_pos] = insert_code
         date_utils_path.write_text("".join(lines), encoding="utf-8", errors="ignore")
-        log(f"    Da patch {date_utils_path}")
+        log(f"    Patched: {date_utils_path}")
     except Exception as exc:
         log(f"    Loi khi patch DateUtils.smali: {exc}")
 
@@ -1457,7 +1457,7 @@ def fix_recompile(work_dir: Path) -> None:
 
     for path in targets:
         if not path.is_file():
-            log(f"    Bo qua fix recompile, khong tim thay: {path}")
+            log(f"    Skipping fix_recompile: path not found: {path}")
             continue
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")
@@ -1527,7 +1527,7 @@ def pill_gesture(work_dir: Path) -> None:
         log(f"Source directory not found: {apk_src_dir} (pill gesture)")
         return
     if not navigation_handle_dir.is_dir():
-        log(f"Khong tim thay NavigationHandle: {navigation_handle_dir}")
+        log(f"NavigationHandle directory not found: {navigation_handle_dir}")
         return
 
     copy_tasks = [
@@ -1564,7 +1564,7 @@ def clock_style(work_dir: Path) -> None:
         log(f"Source directory not found: {apk_src_dir} (clock style)")
         return
     if not clock_style_dir.is_dir():
-        log(f"Khong tim thay clockStyle directory: {clock_style_dir}")
+        log(f"clockStyle directory not found: {clock_style_dir}")
         return
 
     helper_source = clock_style_dir / "helper.smali"
@@ -1589,7 +1589,7 @@ def clock_style(work_dir: Path) -> None:
             shutil.copy2(helper_source, helper_target)
             log(f"    Da copy helper.smali -> {helper_target}")
         else:
-            log(f"    Khong tim thay helper.smali: {helper_source}")
+            log(f"    helper.smali not found: {helper_source}")
     except Exception as exc:
         log(f"    Loi khi copy helper.smali: {exc}")
 
@@ -5300,7 +5300,7 @@ def copy_mezo_app_product(project_dir: Path) -> None:
 
     thermal_src = script_dir / "MEZO_APP" / "thermallevel_to_fps.xml"
     if not thermal_src.is_file():
-        log(f"Khong tim thay thermallevel_to_fps.xml tai {thermal_src}")
+        log(f"thermallevel_to_fps.xml not found at {thermal_src}")
         return
 
     vendor_root = resolve_partition_root(project_dir, "vendor")
@@ -5594,7 +5594,7 @@ def q_fix(project_dir: Path) -> None:
 def clean_system_framework_arch_dirs(project_dir: Path) -> None:
     system_root = resolve_partition_root(project_dir, "system")
     if system_root is None:
-        log("Khong tim thay partition system de xoa thu muc framework.")
+        log("System partition not found; cannot clean framework arch directories.")
         return
 
     framework_dir = system_root / "framework"
@@ -5636,7 +5636,7 @@ def prepare_smali_tools(work_dir: Path) -> tuple[Path | None, Path | None]:
         (smali_src, smali_dst, "smali.jar"),
     ):
         if src is None:
-            log(f"Khong tim thay {label} tai {ROOT_DIR}")
+            log(f"{label} not found at {ROOT_DIR}")
             continue
         try:
             if not dst.exists():
@@ -5796,7 +5796,7 @@ def move_framework_jars_to_cwd(project_dir: Path, work_dir: Path | None = None) 
     for src, label in tasks:
         try:
             if src is None or not src.is_file():
-                log(f"    Khong tim thay: {label}")
+                log(f"    Not found: {label}")
                 continue
 
             dst = dest_dir / label
@@ -5805,7 +5805,7 @@ def move_framework_jars_to_cwd(project_dir: Path, work_dir: Path | None = None) 
 
             # Giu lai file goc trong partition de tranh lam hong luong repack.
             shutil.copy2(src, dst)
-            log(f"    Da xuat: {label} -> {dst}")
+            log(f"    Exported: {label} -> {dst}")
         except Exception as exc:
             log(f"    Loi khi xuat {label}: {exc}")
 
@@ -5848,10 +5848,10 @@ def unpack_framework_jars_and_classes(work_dir: Path | None = None) -> None:
 
         dex_files = sorted(out_dir.rglob("*.dex"))
         if not dex_files:
-            log("    Khong tim thay file DEX nao trong JAR")
+            log("    No DEX files found in JAR")
             continue
 
-        log(f"    Tim thay {len(dex_files)} file DEX")
+        log(f"    Found {len(dex_files)} DEX file(s)")
         if not has_baksmali:
             continue
 
@@ -5898,10 +5898,10 @@ def restore_repacked_jars_to_project(project_dir: Path, work_dir: Path | None = 
     for src, dst, label in tasks:
         try:
             if not src.is_file():
-                log(f"    Bo qua {label}: khong tim thay tai {src}")
+                log(f"    Skipping {label}: source not found at {src}")
                 continue
             if dst is None:
-                log(f"    Bo qua {label}: khong tim thay dich trong partition")
+                log(f"    Skipping {label}: destination not found in partition")
                 continue
 
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -5910,7 +5910,7 @@ def restore_repacked_jars_to_project(project_dir: Path, work_dir: Path | None = 
             if remove_path_force(src):
                 log(f"    Da xoa file tam sau khi khoi phuc: {src}")
             else:
-                log(f"    Canh bao: khong xoa duoc file tam sau khi khoi phuc: {src}")
+                log(f"    Warning: could not remove temp file after restore: {src}")
         except Exception as exc:
             log(f"    Loi khi khoi phuc {label} toi {dst}: {exc}")
 
@@ -5921,7 +5921,7 @@ def restore_repacked_jars_to_project(project_dir: Path, work_dir: Path | None = 
         if remove_path_force(extra_path):
             log(f"    Da xoa file tam: {extra_path}")
         else:
-            log(f"    Canh bao: khong xoa duoc file tam: {extra_path}")
+            log(f"    Warning: could not remove temp file: {extra_path}")
 
     # Don dep cac file jar du co the con sot lai o thu muc goc tu cac lan chay cu.
     if wd.resolve() != ROOT_DIR.resolve():
@@ -5944,7 +5944,7 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
     wd = work_dir or ROOT_DIR
     _baksmali_jar, smali_jar = prepare_smali_tools(wd)
     if smali_jar is None or not smali_jar.is_file():
-        log("Khong tim thay smali.jar de repack classes.")
+        log("smali.jar not found; cannot repack classes.")
         return
 
     log("Starting repack of all smali_classes directories...")
@@ -5984,7 +5984,7 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
             ]
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                log(f"    Repack thanh cong -> {output_file}")
+                log(f"    Repacked -> {output_file}")
                 if remove_path_force(dir_path):
                     log(f"    Removed directory {dir_path}")
                 else:
@@ -6016,7 +6016,7 @@ def repack_all_jar_files(work_dir: Path | None = None) -> None:
             cmd = ["jar", "cfM", str(wd / jar_name), "-C", str(dir_path), "."]
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode == 0:
-                log(f"    Repack thanh cong -> {jar_name}")
+                log(f"    Repacked -> {jar_name}")
                 if remove_path_force(dir_path):
                     log(f"    Removed directory {dir_path}")
                 else:
@@ -6124,7 +6124,7 @@ def append_custom_build_prop(project_dir: Path) -> None:
     dest_prop = resolve_partition_file(project_dir, "system", "build.prop")
 
     if not src_prop.is_file():
-        log(f"Khong tim thay file nguon build.prop: {src_prop}")
+        log(f"Source build.prop not found: {src_prop}")
     elif dest_prop is None or not dest_prop.is_file():
         log("Khong tim thay file dich build.prop trong partition system.")
     else:
@@ -7106,6 +7106,101 @@ def repack_single_partition(project_dir: Path, super_dir: Path, part_name: str) 
     return output_img
 
 
+def _load_super_info_from_payload_manifest(project_dir: Path) -> dict | None:
+    """
+    Recover dynamic partition metadata from payload.bin when no super.img
+    was produced (MTK / payload-only builds).
+
+    Reads DeltaArchiveManifest.dynamic_partition_metadata from the payload.
+    Uses DynamicPartitionGroup.size as the super block device size — this is
+    the verified per-slot maximum from the ROM itself, not an invented value.
+
+    Returns a super_info dict compatible with derive_super_layout(), or None
+    if the manifest cannot be found / parsed / is incomplete.
+    """
+    try:
+        from src.core.payload_extract import init_payload_info
+    except Exception as exc:
+        log(f"[SUPER] Could not import payload_extract: {exc}")
+        return None
+
+    # Search for payload.bin in the ROM extraction directory
+    search_roots = [project_dir / "rom", project_dir]
+    payload_candidates: list[Path] = []
+    for root in search_roots:
+        if root.is_dir():
+            try:
+                payload_candidates.extend(p for p in root.rglob("payload.bin") if p.is_file())
+            except Exception:
+                pass
+
+    seen: set[str] = set()
+    unique_payloads = [p for p in payload_candidates if not seen.__contains__(str(p)) and not seen.add(str(p))]  # type: ignore[func-returns-value]
+
+    if not unique_payloads:
+        log("[SUPER] No payload.bin found for dynamic partition metadata recovery.")
+        return None
+
+    for payload_path in unique_payloads:
+        try:
+            log(f"[SUPER] Reading dynamic partition metadata from: {payload_path}")
+            with payload_path.open("rb") as f:
+                manifest = init_payload_info(f)
+
+            dpm = getattr(manifest, "dynamic_partition_metadata", None)
+            if dpm is None or not dpm.groups:
+                log("[SUPER] Payload manifest has no dynamic_partition_metadata; cannot recover super layout.")
+                continue
+
+            # Find the primary (largest) non-default group
+            main_group = None
+            for g in dpm.groups:
+                if not g.name or g.name == "default":
+                    continue
+                if main_group is None or g.size > main_group.size:
+                    main_group = g
+
+            if main_group is None or main_group.size <= 0:
+                log("[SUPER] Payload manifest: no valid group with size found.")
+                continue
+
+            group_name = main_group.name
+            group_size = int(main_group.size)
+            part_names = list(main_group.partition_names) if main_group.partition_names else []
+
+            log(f"[SUPER] Payload manifest: group='{group_name}' size={group_size} partitions={part_names}")
+
+            if not part_names:
+                log("[SUPER] Payload manifest group has no partition names; cannot recover partition table.")
+                continue
+
+            # Build a super_info dict compatible with derive_super_layout().
+            # metadata_slot_count=3 forces super_type=2 (VAB).
+            # Partition names get _a suffix so derive_super_layout identifies the slot type.
+            # group_size is the verified per-slot ROM value — not invented.
+            super_info: dict = {
+                "metadata_slot_count": 3,
+                "block_devices": [
+                    {"name": "super", "size": group_size}
+                ],
+                "group_table": [
+                    {"name": f"{group_name}_a"},
+                    {"name": f"{group_name}_b"},
+                ],
+                "partition_table": [
+                    {"name": f"{p}_a"} for p in part_names
+                ],
+            }
+            log(f"[SUPER] Recovered super_info from payload manifest for group '{group_name}'.")
+            return super_info
+
+        except Exception as exc:
+            log(f"[SUPER] Could not parse payload manifest ({payload_path.name}): {exc}")
+            continue
+
+    return None
+
+
 def _save_super_config(project_dir: Path, super_info: dict) -> None:
     """Persist super_info to config/super and inject into config/parts_info."""
     config_dir = project_dir / "config"
@@ -7171,22 +7266,79 @@ def load_super_info(project_dir: Path) -> dict:
             _save_super_config(project_dir, info)
             return info
 
-    # Step 5: clear diagnostic failure
+    # Step 5: recover dynamic partition layout from payload.bin manifest (MTK / payload builds)
+    payload_info = _load_super_info_from_payload_manifest(project_dir)
+    if payload_info is not None:
+        _save_super_config(project_dir, payload_info)
+        return payload_info
+
+    # Step 6: check registry device profile for verified super metadata (Part C)
+    factory_codename = os.environ.get("DEADZONE_DEVICE_CODENAME", "").strip()
+    factory_soc = os.environ.get("DEADZONE_SOC", "").strip()
+    registry_super_profile_found = False
+    if factory_codename and factory_soc:
+        reg_path = ROOT_DIR.parents[1] / "registry" / "devices" / factory_soc / f"{factory_codename}.yml"
+        if reg_path.is_file():
+            try:
+                import yaml  # type: ignore[import]
+                with reg_path.open("r", encoding="utf-8") as _f:
+                    reg_data = yaml.safe_load(_f)
+                reg_super = reg_data.get("super", {}) if isinstance(reg_data, dict) else {}
+                verified_size = reg_super.get("super_size") or reg_super.get("verified_size")
+                if verified_size and int(verified_size) > 0:
+                    registry_super_profile_found = True
+                    log(f"[SUPER] Registry super profile found for '{factory_codename}'; super_size={verified_size}")
+                    info = {
+                        "metadata_slot_count": 3,
+                        "block_devices": [{"name": "super", "size": int(verified_size)}],
+                        "group_table": [
+                            {"name": f"{reg_super.get('dynamic_group', 'qti_dynamic_partitions')}_a"},
+                            {"name": f"{reg_super.get('dynamic_group', 'qti_dynamic_partitions')}_b"},
+                        ],
+                        "partition_table": [],
+                    }
+                    _save_super_config(project_dir, info)
+                    return info
+            except ImportError:
+                log("[SUPER] yaml not available; skipping registry super profile check.")
+            except Exception as exc:
+                log(f"[SUPER] Registry super profile check failed: {exc}")
+
+    # Step 7: diagnostic failure — all recovery paths exhausted
     config_dir = project_dir / "config"
     config_files = sorted(f.name for f in config_dir.iterdir()) if config_dir.is_dir() else []
-    factory_codename = os.environ.get("DEADZONE_DEVICE_CODENAME", "(not set)")
-    super_config_path = (
-        ROOT_DIR / "SuperConfig" / factory_codename / "super"
-        if factory_codename != "(not set)"
-        else ROOT_DIR / "SuperConfig" / "(device)" / "super"
+    super_files_in_project = sorted(
+        str(p.relative_to(project_dir)) for p in project_dir.glob("*super*") if p.is_file()
     )
+    payload_meta_found = any(
+        (project_dir / "rom").is_dir() and list((project_dir / "rom").rglob("payload.bin"))
+    )
+
+    super_config_dir = ROOT_DIR / "SuperConfig" / (factory_codename or "(device)")
+    registry_hint = (
+        f"registry/devices/{factory_soc}/{factory_codename}.yml has no verified super_size"
+        if factory_codename and factory_soc and not registry_super_profile_found
+        else "(not checked — DEADZONE_DEVICE_CODENAME or DEADZONE_SOC not set)"
+    )
+
+    build_prop_device = _q_fix_read_ro_product_odm_device(project_dir) or "(not found)"
+
     raise RuntimeError(
-        "super_info not found — cannot repack super.img.\n"
-        f"  Expected config/super       : {super_config} (exists={super_config.exists()})\n"
-        f"  Expected SuperConfig path   : {super_config_path} (exists={super_config_path.exists()})\n"
-        f"  super_raw.img exists        : {(project_dir / 'super_raw.img').exists()}\n"
-        f"  super.img exists            : {(project_dir / 'super.img').exists()}\n"
-        f"  Files in config/            : {config_files}"
+        "\n[SUPER INFO ERROR] Cannot rebuild super.img — dynamic partition metadata is missing.\n"
+        f"  Device                 : {factory_codename or '(not set)'}\n"
+        f"  Factory override       : {factory_codename or '(not set)'}\n"
+        f"  build.prop device      : {build_prop_device}\n"
+        f"  config/super           : exists={super_config.exists()}\n"
+        f"  parts_info super_info  : False\n"
+        f"  super_raw.img          : {(project_dir / 'super_raw.img').exists()}\n"
+        f"  super.img              : {(project_dir / 'super.img').exists()}\n"
+        f"  payload metadata found : {payload_meta_found}\n"
+        f"  Registry super profile : {registry_super_profile_found} ({registry_hint})\n"
+        f"  SuperConfig path       : {super_config_dir / 'super'} (exists={( super_config_dir / 'super').exists()})\n"
+        f"  config/ contains       : {config_files}\n"
+        f"  *super* in project_dir : {super_files_in_project or ['(none)']}\n"
+        f"\n  To fix: provide the stock super.img from fastboot, or add a verified\n"
+        f"  super_size to registry/devices/{factory_soc or '<soc>'}/{factory_codename or '<device>'}.yml"
     )
 
 
@@ -7444,8 +7596,22 @@ def sync_super_config_for_device(project_dir: Path) -> None:
 
         # sync parts_info
         if config_parts_info_path.is_file():
-            shutil.copy2(config_parts_info_path, device_parts_info_path)
-            log(f"[SuperConfig] Saved config/parts_info -> {device_parts_info_path}")
+            # Guard: do not save parts_info that is missing super_info — it is
+            # incomplete and would give the false impression that a working
+            # SuperConfig exists for this device.
+            try:
+                _pi = JsonEdit(str(config_parts_info_path)).read()
+                if isinstance(_pi, dict) and "super_info" not in _pi:
+                    log(
+                        f"[SuperConfig] parts_info exists but super_info is missing; "
+                        f"not enough to rebuild super.img. Skipping SuperConfig save."
+                    )
+                    _pi = None
+            except Exception:
+                _pi = None
+            if _pi is not None:
+                shutil.copy2(config_parts_info_path, device_parts_info_path)
+                log(f"[SuperConfig] Saved config/parts_info -> {device_parts_info_path}")
         elif device_parts_info_path.is_file():
             config_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(device_parts_info_path, config_parts_info_path)
