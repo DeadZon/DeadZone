@@ -72,10 +72,10 @@ Git-ignored. Contains build artifacts, images, logs. Never committed.
 
 ## SoC Tracks
 
-| ID | Name | Default Engine | Legacy Flash |
+| ID | Name | Default Engine | Flash Scripts |
 |---|---|---|---|
-| `snapdragon` | Qualcomm Snapdragon | `snapdragon_engine` (→ mezo_legacy) | `HyperUR Flash_2.bat` |
-| `mtk` | MediaTek | `mtk_engine` (→ mezo_legacy) | `HyperUR Flash MTK.bat` |
+| `snapdragon` | Qualcomm Snapdragon | `snapdragon_engine` (→ mezo_legacy) | `windows_install_upgrade.bat`, `windows_install_and_format_data.bat`, `windows_format_data_only.bat` |
+| `mtk` | MediaTek | `mtk_engine` (→ mezo_legacy) | `windows_install_upgrade.bat`, `windows_install_and_format_data.bat`, `windows_format_data_only.bat` |
 
 ---
 

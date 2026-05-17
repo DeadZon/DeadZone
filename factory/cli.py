@@ -39,6 +39,44 @@ def cmd_upload_pixeldrain(args):
         sys.exit(1)
 
 
+def cmd_inspect_zip(args):
+    from factory.validators.final_zip_manifest import inspect_zip, write_manifest, print_summary
+    zip_path = Path(args.zip)
+    info = inspect_zip(zip_path)
+    if "error" in info:
+        print(f"[ZIP MANIFEST ERROR] {info['error']}", file=sys.stderr)
+        sys.exit(1)
+    report_path = write_manifest(info)
+    print_summary(info)
+    print(f"\n[ZIP MANIFEST] Report written to: {report_path}")
+
+
+def cmd_validate_final_zip(args):
+    from factory.validators.validate_final_zip_branding import validate_final_zip_branding
+    from factory.validators.final_zip_manifest import inspect_zip, write_manifest, print_summary
+    zip_path = Path(args.zip)
+
+    # Manifest
+    info = inspect_zip(zip_path)
+    if "error" in info:
+        print(f"[VALIDATE ERROR] {info['error']}", file=sys.stderr)
+        sys.exit(1)
+    write_manifest(info)
+    print_summary(info)
+    print()
+
+    # Branding check
+    passed, violations = validate_final_zip_branding(zip_path)
+    if passed:
+        print(f"[BRANDING OK] No forbidden branding in: {zip_path.name}")
+        sys.exit(0)
+    else:
+        print(f"[BRANDING FAIL] {len(violations)} violation(s) in: {zip_path.name}")
+        for v in violations:
+            print(f"  {v}")
+        sys.exit(1)
+
+
 def cmd_run_mezo(args):
     rom_path = Path(args.rom)
     print(f"[INFO] Device  : {args.device}")
@@ -79,6 +117,14 @@ def main():
     p_pd = sub.add_parser("upload-pixeldrain", help="Upload final ROM ZIP to PixelDrain")
     p_pd.add_argument("--file", required=True, help="Path to the final public ROM ZIP")
     p_pd.set_defaults(func=cmd_upload_pixeldrain)
+
+    p_inspect = sub.add_parser("inspect-zip", help="Inspect final ROM ZIP and write manifest")
+    p_inspect.add_argument("--zip", required=True, help="Path to the final ZIP")
+    p_inspect.set_defaults(func=cmd_inspect_zip)
+
+    p_vfz = sub.add_parser("validate-final-zip", help="Validate branding and integrity of final ROM ZIP")
+    p_vfz.add_argument("--zip", required=True, help="Path to the final ZIP")
+    p_vfz.set_defaults(func=cmd_validate_final_zip)
 
     p_run = sub.add_parser(
         "run-mezo",

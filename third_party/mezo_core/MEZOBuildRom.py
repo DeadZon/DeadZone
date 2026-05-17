@@ -594,7 +594,7 @@ def find_and_read_build_props(project_dir: Path) -> tuple[str | None, str | None
         subprocess.run(cmd, check=True, cwd=str(ROOT_DIR / "vbmeta"), env=env)
         shutil.move(str(vbmeta_tmp), str(vbmeta_img))
         log(f"[THANH CONG] Da patch vbmeta: {vbmeta_img.name}")
-        log("[INFO] De flash vao may, hay dua may ve Fastboot va chay lenh:")
+        log("[INFO] To flash to device, boot into Fastboot and run:")
         log(f"       fastboot flash vbmeta {images_dir / 'vbmeta.img'}")
     except subprocess.CalledProcessError as exc:
         log(f"[ERROR] Error patching vbmeta (exit code {exc.returncode}).")
@@ -735,7 +735,7 @@ def export_and_decompile_miui_systemui(project_dir: Path, work_dir: Path | None 
         if apk_editor_dst.exists():
             remove_path_force(apk_editor_dst)
         shutil.copy2(apk_editor_src, apk_editor_dst)
-        log(f"    Da copy {APK_EDITOR_JAR_NAME} -> {apk_editor_dst}")
+        log(f"    Copied {APK_EDITOR_JAR_NAME} -> {apk_editor_dst}")
     except Exception as exc:
         log(f"    Error copying {APK_EDITOR_JAR_NAME}: {exc}")
         return
@@ -900,7 +900,7 @@ def export_and_decompile_provision(project_dir: Path, work_dir: Path | None = No
         if apk_editor_dst.exists():
             remove_path_force(apk_editor_dst)
         shutil.copy2(apk_editor_src, apk_editor_dst)
-        log(f"    Da copy {APK_EDITOR_JAR_NAME} -> {apk_editor_dst}")
+        log(f"    Copied {APK_EDITOR_JAR_NAME} -> {apk_editor_dst}")
     except Exception as exc:
         log(f"    Error copying {APK_EDITOR_JAR_NAME}: {exc}")
         return False
@@ -1366,7 +1366,7 @@ def disable_private_chip(work_dir: Path) -> None:
 def change_clock_format(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de doi dinh dang dong ho.")
+        log(f"Source directory not found: {apk_src_dir} (clock format)")
         return
 
     settings_helper_source = _mezo_ui_dir() / "SettingsHelper.smali"
@@ -1477,10 +1477,10 @@ def icon_style(work_dir: Path) -> None:
     public_xml_path = icon_style_target_dir / "values" / "public.xml"
 
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de xu ly icon style.")
+        log(f"Source directory not found: {apk_src_dir} (icon style)")
         return
     if not icon_style_source_dir.is_dir():
-        log(f"Khong tim thay thu muc nguon iconStyle: {icon_style_source_dir}")
+        log(f"iconStyle source directory not found: {icon_style_source_dir}")
         return
 
     copy_tasks = [
@@ -1500,7 +1500,7 @@ def icon_style(work_dir: Path) -> None:
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
-            log(f"    Da copy {src.name} -> {dst}")
+            log(f"    Copied {src.name} -> {dst}")
         except Exception as exc:
             log(f"    Loi khi copy {src.name}: {exc}")
 
@@ -1524,7 +1524,7 @@ def pill_gesture(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
     navigation_handle_dir = _mezo_ui_dir() / "NavigationHandle"
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de xu ly pill gesture.")
+        log(f"Source directory not found: {apk_src_dir} (pill gesture)")
         return
     if not navigation_handle_dir.is_dir():
         log(f"Khong tim thay NavigationHandle: {navigation_handle_dir}")
@@ -1552,7 +1552,7 @@ def pill_gesture(work_dir: Path) -> None:
                 continue
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
-            log(f"    Da copy {src.name} -> {dst}")
+            log(f"    Copied {src.name} -> {dst}")
         except Exception as exc:
             log(f"    Loi khi copy {src.name}: {exc}")
 
@@ -1561,10 +1561,10 @@ def clock_style(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
     clock_style_dir = _mezo_ui_dir() / "clockStyle"
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de xu ly clock style.")
+        log(f"Source directory not found: {apk_src_dir} (clock style)")
         return
     if not clock_style_dir.is_dir():
-        log(f"Khong tim thay thu muc clockStyle: {clock_style_dir}")
+        log(f"Khong tim thay clockStyle directory: {clock_style_dir}")
         return
 
     helper_source = clock_style_dir / "helper.smali"
@@ -1890,7 +1890,7 @@ def clock_style(work_dir: Path) -> None:
                 drawable_target_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(file_path, drawable_target_dir / file_path.name)
                 drawable_files.append(file_path.stem)
-                log(f"    Da copy drawable: {file_path.name}")
+                log(f"    Copied drawable: {file_path.name}")
             except Exception as exc:
                 log(f"    Loi khi copy drawable {file_path.name}: {exc}")
 
@@ -1902,7 +1902,7 @@ def clock_style(work_dir: Path) -> None:
                 layout_target_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(file_path, layout_target_dir / file_path.name)
                 layout_files.append(file_path.stem)
-                log(f"    Da copy layout: {file_path.name}")
+                log(f"    Copied layout: {file_path.name}")
             except Exception as exc:
                 log(f"    Loi khi copy layout {file_path.name}: {exc}")
 
@@ -1926,7 +1926,7 @@ def clock_style(work_dir: Path) -> None:
 def fix_earlier_notification(work_dir: Path) -> None:
     apk_src_dir = _miui_systemui_src_dir(work_dir)
     if not apk_src_dir.is_dir():
-        log(f"Khong tim thay thu muc source {apk_src_dir} de fix earlier notification.")
+        log(f"Source directory not found: {apk_src_dir} (earlier notification fix)")
         return
 
     fold_coordinator_file = (
@@ -1992,7 +1992,7 @@ def apply_miui_systemui_mods_android15(work_dir: Path) -> None:
     #icon_style(work_dir)
     #pill_gesture(work_dir)
     #clock_style(work_dir)
-    log("Hoan thanh mod MiuiSystemUI cho Android 15.")
+    log("MiuiSystemUI mod complete for Android 15.")
 
 def apply_miui_systemui_mods_android16(work_dir: Path) -> None:
     log("Applying MiuiSystemUI mod for Android 16...")
@@ -2003,7 +2003,7 @@ def apply_miui_systemui_mods_android16(work_dir: Path) -> None:
     #icon_style(work_dir)
     #pill_gesture(work_dir)
     #clock_style(work_dir)
-    log("Hoan thanh mod MiuiSystemUI cho Android 16.")
+    log("MiuiSystemUI mod complete for Android 16.")
 
 
 def fix_specific_smali_file(smali_file: Path) -> bool:
@@ -2145,7 +2145,7 @@ def fix_bootloop_a15(work_dir: Path) -> None:
             else:
                 log(f"    ℹ️  Khong co method nao can sua")
     
-    log(f"\n🎉 Hoan tat fix bootloop!")
+    log(f"\n🎉 Bootloop fix complete!")
     log(f"📊 Tong so file da xu ly: {total_files_processed}")
 
 
@@ -3783,7 +3783,7 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
     log("\n📁 Copying SettingsHelper.smali (smali_classes6)...")
     if copy_settings_helper_a16(work_dir):
         total_files_processed += 1
-        log("    ✅ Da copy SettingsHelper.smali thanh cong")
+        log("    ✅ SettingsHelper.smali copied successfully")
     else:
         log("    ❌ Loi khi copy SettingsHelper.smali")
 
@@ -3887,7 +3887,7 @@ def disable_flag_secure_a16(work_dir: Path) -> None:
     else:
         log("    ⚠️  File WindowState.smali khong tim thay")
 
-    log(f"\n🎉 Hoan tat Disable Flag Secure A16!")
+    log(f"\n🎉 Disable Flag Secure A16 complete!")
     log(f"📊 Tong so file da xu ly: {total_files_processed}")
 
 
@@ -3902,7 +3902,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
     log("\n📁 Copying SettingsHelper.smali...")
     if copy_settings_helper(work_dir):
         total_files_processed += 1
-        log("    ✅ Da copy SettingsHelper.smali thanh cong")
+        log("    ✅ SettingsHelper.smali copied successfully")
     else:
         log("    ❌ Loi khi copy SettingsHelper.smali")
     
@@ -3966,7 +3966,7 @@ def disable_flag_secure_a14_15(work_dir: Path) -> None:
     else:
         log("    ⚠️  File WindowState.smali khong tim thay")
     
-    log(f"\n🎉 Hoan tat Disable Flag Secure!")
+    log(f"\n🎉 Disable Flag Secure complete!")
     log(f"📊 Tong so file da xu ly: {total_files_processed}")
 
 
@@ -4815,7 +4815,7 @@ def enhanced_keyboard(work_dir: Path) -> None:
             else:
                 log(f"  ⚠️ Khong tim thay {filename}")
     else:
-        log("  ⚠️ Khong tim thay thu muc miui_services_unpacked")
+        log("  ⚠️ miui_services_unpacked directory not found")
     
     # Xu ly miui_framework_unpacked
     log("\n📁 Xu ly miui_framework_unpacked...")
@@ -4854,9 +4854,9 @@ def enhanced_keyboard(work_dir: Path) -> None:
             else:
                 log(f"  ⚠️ Khong tim thay {filename}")
     else:
-        log("  ⚠️ Khong tim thay thu muc miui_framework_unpacked")
+        log("  ⚠️ miui_framework_unpacked directory not found")
     
-    log(f"\n🎉 Hoan tat Enhanced Keyboard!")
+    log(f"\n🎉 Enhanced Keyboard complete!")
     log(f"📊 Tong so file da xu ly: {total_files_processed}")
     log(f"📊 Tong so lan thay the: {total_replacements}")
 
@@ -4952,7 +4952,7 @@ def enable_floating_window_all_app(work_dir: Path) -> None:
         log(f"❌ Loi khi chinh sua MiuiMultiWindowAdapter.smali: {e}")
         return
     
-    log(f"\n🎉 Hoan tat Enable Floating Window All App!")
+    log(f"\n🎉 Enable Floating Window All App complete!")
 
 
 def increase_number_of_floating_windows(work_dir: Path) -> None:
@@ -5127,7 +5127,7 @@ def fix_notification(work_dir: Path) -> None:
     else:
         log(f"  ⚠️  File PolicyManager.smali khong ton tai tai: {policy_manager_path}")
     
-    log(f"\n🎉 Hoan tat fix notification!")
+    log(f"\n🎉 Notification fix complete!")
     log(f"📊 Tong so file da xu ly: {total_files_processed}")
     log(f"📊 Tong so dong da sua: {total_lines_fixed}")
 
@@ -5192,7 +5192,7 @@ def copy_tree_contents(src_dir: Path, dest_dir: Path, label: str) -> None:
         return
 
     dest_dir.mkdir(parents=True, exist_ok=True)
-    log(f"Copy thu muc {label} vao {dest_dir} ...")
+    log(f"Copying directory {label} to {dest_dir} ...")
 
     try:
         for root, _dirnames, filenames in os.walk(src_dir):
@@ -5204,7 +5204,7 @@ def copy_tree_contents(src_dir: Path, dest_dir: Path, label: str) -> None:
                 src_file = Path(root) / filename
                 dst_file = target_root / filename
                 shutil.copy2(src_file, dst_file)
-                log(f"    Da copy: {src_file.relative_to(src_dir)}")
+                log(f"    Copied: {src_file.relative_to(src_dir)}")
     except Exception as exc:
         log(f"    Loi khi copy {label}: {exc}")
 
@@ -5212,14 +5212,14 @@ def copy_tree_contents(src_dir: Path, dest_dir: Path, label: str) -> None:
 def move_product_data_app_to_app(project_dir: Path) -> None:
     product_root = resolve_partition_root(project_dir, "product")
     if product_root is None:
-        log("Khong tim thay thu muc partition product de chuyen data-app sang app.")
+        log("Product partition not found for data-app to app migration.")
         return
 
     data_app_dir = product_root / "data-app"
     app_dir = product_root / "app"
 
     if not data_app_dir.is_dir():
-        log(f"Khong tim thay thu muc can chuyen: {data_app_dir}")
+        log(f"Directory to move not found: {data_app_dir}")
         return
 
     entries = sorted(data_app_dir.iterdir(), key=lambda item: item.name.lower())
@@ -5253,13 +5253,13 @@ def fix_nfc(project_dir: Path) -> None:
     dest_dir = project_dir / "system" / "system" / "app"
 
     if not src_dir.is_dir():
-        log(f"Khong tim thay thu muc nguon NFC: {src_dir}")
+        log(f"NFC source directory not found: {src_dir}")
         return
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     entries = sorted(src_dir.iterdir(), key=lambda item: item.name.lower())
     if not entries:
-        log("Khong co ung dung nao trong thu muc nguon NFC de chuyen.")
+        log("No applications in NFC source directory to move.")
         return
 
     moved_count = 0
@@ -5288,12 +5288,12 @@ def copy_mezo_app_product(project_dir: Path) -> None:
     src_dir = script_dir / "MEZO_APP" / "product"
 
     if not src_dir.is_dir():
-        log(f"Khong tim thay thu muc nguon: {src_dir}")
+        log(f"Source directory not found: {src_dir}")
         return
 
     product_root = resolve_partition_root(project_dir, "product")
     if product_root is None:
-        log("Khong tim thay thu muc partition product de copy MEZO_APP/product.")
+        log("Product partition not found for MEZO_APP/product copy.")
         return
 
     copy_tree_contents(src_dir, product_root, "MEZO_APP/product")
@@ -5305,7 +5305,7 @@ def copy_mezo_app_product(project_dir: Path) -> None:
 
     vendor_root = resolve_partition_root(project_dir, "vendor")
     if vendor_root is None:
-        log("Khong tim thay thu muc partition vendor de sua thermallevel_to_fps.xml.")
+        log("Vendor partition not found for thermallevel_to_fps.xml edit.")
         return
 
     thermal_dst = vendor_root / "etc" / "display" / "thermallevel_to_fps.xml"
@@ -5325,12 +5325,12 @@ def copy_mezo_app_mod(project_dir: Path) -> None:
     script_dir = Path(__file__).parent
     app_mod_root = script_dir / "MEZO_APP" / "appMod"
     if not app_mod_root.is_dir():
-        log(f"Khong tim thay thu muc nguon app mod: {app_mod_root}")
+        log(f"App mod source directory not found: {app_mod_root}")
         return
 
     product_root = resolve_partition_root(project_dir, "product")
     if product_root is None:
-        log("Khong tim thay thu muc partition product de ap dung app mod.")
+        log("Product partition not found for app mod application.")
         return
 
     mod_dirs = sorted(
@@ -5338,7 +5338,7 @@ def copy_mezo_app_mod(project_dir: Path) -> None:
         key=lambda p: p.name.lower(),
     )
     if not mod_dirs:
-        log(f"Khong co thu muc mod nao trong: {app_mod_root}")
+        log(f"No mod directories in: {app_mod_root}")
         return
 
     log("Applying app mods from MEZO_APP/appMod ...")
@@ -5347,22 +5347,22 @@ def copy_mezo_app_mod(project_dir: Path) -> None:
     for mod_dir in mod_dirs:
         targets = [p for p in product_root.rglob(mod_dir.name) if p.is_dir()]
         if not targets:
-            log(f"    Khong tim thay thu muc '{mod_dir.name}' trong product de thay the")
+            log(f"    Directory '{mod_dir.name}' not found in product to replace")
             continue
 
         for target_dir in targets:
             try:
                 if not remove_path_force(target_dir):
-                    log(f"    Canh bao: khong xoa duoc thu muc dich: {target_dir}")
+                    log(f"    Warning: could not remove target directory: {target_dir}")
                     continue
                 shutil.copytree(mod_dir, target_dir)
                 replaced_count += 1
-                log(f"    Da thay the thu muc: {target_dir}")
+                log(f"    Replaced directory: {target_dir}")
             except Exception as exc:
                 log(f"    Loi khi thay the thu muc '{target_dir}' bang '{mod_dir}': {exc}")
 
     if replaced_count == 0:
-        log("    Khong thay the duoc thu muc nao tu MEZO_APP/appMod.")
+        log("    No directories replaced from MEZO_APP/appMod.")
 
 
 def copy_mezo_app_system(project_dir: Path) -> None:
@@ -5372,7 +5372,7 @@ def copy_mezo_app_system(project_dir: Path) -> None:
     script_dir = Path(__file__).parent
     src_dir = script_dir / "MEZO_APP" / "system"
     if not src_dir.is_dir():
-        log(f"Khong tim thay thu muc nguon: {src_dir}")
+        log(f"Source directory not found: {src_dir}")
         return
 
     # Theo yeu cau cua ban: project_dir\system\system
@@ -5484,19 +5484,19 @@ def q_fix(project_dir: Path) -> None:
             dst = bin_dir / src.name
             shutil.copy2(src, dst)
             copied = 1
-            log(f"    Da copy {src.name} -> {dst}")
+            log(f"    Copied {src.name} -> {dst}")
         elif src.is_dir():
             for item in sorted(src.iterdir(), key=lambda p: p.name.lower()):
                 if item.is_file():
                     dst = bin_dir / item.name
                     shutil.copy2(item, dst)
                     copied += 1
-                    log(f"    Da copy {item.name} -> {dst}")
+                    log(f"    Copied {item.name} -> {dst}")
         else:
-            log("q_fix: bo qua — MEZO/q_fix khong phai file hoac thu muc")
+            log("q_fix: skipped — MEZO/q_fix is not a file or directory")
             return
     except OSError as exc:
-        log(f"q_fix: loi khi copy: {exc}")
+        log(f"q_fix: error copying: {exc}")
         return
 
     if copied == 0:
@@ -5523,7 +5523,7 @@ def q_fix(project_dir: Path) -> None:
             contexts_path.write_text(Q_FIX_SELINUX_LINE + "\n", encoding="utf-8")
             log(f"    Da tao {contexts_path} voi dong q_fix")
     except OSError as exc:
-        log(f"q_fix: loi khi sua system_file_contexts: {exc}")
+        log(f"q_fix: error patching system_file_contexts: {exc}")
     normalize_unix_newlines(contexts_path)
 
     # plat_file_contexts: chèn sau dòng *cuối cùng* có chứa "/system/bin/"
@@ -5552,7 +5552,7 @@ def q_fix(project_dir: Path) -> None:
                     plat_fc_path.write_text("".join(new_plat), encoding="utf-8")
                     log(f"    Da chen dong q_fix sau dong thu {last_idx + 1} trong {plat_fc_path.name}")
     except OSError as exc:
-        log(f"q_fix: loi khi sua plat_file_contexts: {exc}")
+        log(f"q_fix: error patching plat_file_contexts: {exc}")
     normalize_unix_newlines(plat_fc_path)
 
     
@@ -5585,10 +5585,10 @@ def q_fix(project_dir: Path) -> None:
                         rc_handle.write("\n")
                 log(f"    Da append khoi q_fix vao {init_rc_path}")
     except OSError as exc:
-        log(f"q_fix: loi khi sua init.rc: {exc}")
+        log(f"q_fix: error patching init.rc: {exc}")
     normalize_unix_newlines(init_rc_path)
 
-    log("🎉 Hoan tat q_fix.")
+    log("🎉 q_fix complete.")
 
 
 def clean_system_framework_arch_dirs(project_dir: Path) -> None:
@@ -5599,7 +5599,7 @@ def clean_system_framework_arch_dirs(project_dir: Path) -> None:
 
     framework_dir = system_root / "framework"
     if not framework_dir.is_dir():
-        log(f"Khong tim thay thu muc framework: {framework_dir}")
+        log(f"Framework directory not found: {framework_dir}")
         return
 
     removed_any = False
@@ -5609,13 +5609,13 @@ def clean_system_framework_arch_dirs(project_dir: Path) -> None:
             continue
 
         if remove_path_force(target_dir):
-            log(f"    Da xoa thu muc framework/{dir_name}")
+            log(f"    Removed framework/{dir_name}")
             removed_any = True
         else:
-            log(f"    Canh bao: khong xoa duoc thu muc {target_dir}")
+            log(f"    Warning: could not remove directory {target_dir}")
 
     if not removed_any:
-        log("    Khong co thu muc arm/arm64/oat trong system/framework de xoa.")
+        log("    No arm/arm64/oat directories in system/framework to remove.")
 
 
 def resolve_tool_jar(tool_name: str) -> Path | None:
@@ -5641,7 +5641,7 @@ def prepare_smali_tools(work_dir: Path) -> tuple[Path | None, Path | None]:
         try:
             if not dst.exists():
                 shutil.copy2(src, dst)
-                log(f"    Da copy {label} vao {work_dir}")
+                log(f"    Copied {label} to {work_dir}")
         except Exception as exc:
             log(f"    Loi khi copy {label}: {exc}")
 
@@ -5658,7 +5658,7 @@ def prepare_auxiliary_work_files(work_dir: Path) -> None:
         try:
             if not dex_redivision_dst.exists():
                 shutil.copy2(dex_redivision_src, dex_redivision_dst)
-                log(f"    Da copy DexRedivision.txt vao {work_dir}")
+                log(f"    Copied DexRedivision.txt to {work_dir}")
         except Exception as exc:
             log(f"    Loi khi copy DexRedivision.txt: {exc}")
 
@@ -5707,7 +5707,7 @@ def dex_redivision(work_dir: Path) -> None:
             log(f"  ⚠️  Khong tim thay {dir_name}")
 
     if not source_dirs:
-        log("    ❌ Khong tim thay thu muc smali_classes … smali_classes5")
+        log("    ❌ smali_classes ... smali_classes5 not found")
         return
 
     target_dir = framework_unpacked_dir / "smali_classes6"
@@ -5778,7 +5778,7 @@ def dex_redivision(work_dir: Path) -> None:
         total_smali = len(list(target_dir.rglob("*.smali")))
         log(f"\n📁 Tong so file .smali trong smali_classes6: {total_smali}")
 
-    log("\n🎉 Hoan tat Dex redivision!")
+    log("\n🎉 Dex redivision complete!")
 
 
 def move_framework_jars_to_cwd(project_dir: Path, work_dir: Path | None = None) -> None:
@@ -5791,7 +5791,7 @@ def move_framework_jars_to_cwd(project_dir: Path, work_dir: Path | None = None) 
         (resolve_partition_file(project_dir, "system_ext", "framework", "miui-services.jar"), "miui-services.jar"),
     ]
 
-    log(f"Xuat cac file framework/services jar ra thu muc: {dest_dir}")
+    log(f"Exporting framework/services jar files to: {dest_dir}")
 
     for src, label in tasks:
         try:
@@ -5935,9 +5935,9 @@ def restore_repacked_jars_to_project(project_dir: Path, work_dir: Path | None = 
             if not root_path.exists():
                 continue
             if remove_path_force(root_path):
-                log(f"    Da xoa file jar con sot lai o thu muc goc: {root_path}")
+                log(f"    Removed leftover jar from root directory: {root_path}")
             else:
-                log(f"    Canh bao: khong xoa duoc file jar con sot lai o thu muc goc: {root_path}")
+                log(f"    Warning: could not remove leftover jar at root: {root_path}")
 
 
 def repack_all_classes(work_dir: Path | None = None) -> None:
@@ -5963,7 +5963,7 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
                 unpacked_dirs.append(item)
 
     if not unpacked_dirs:
-        log("Khong tim thay thu muc smali_classes nao de repack.")
+        log("No smali_classes directory found to repack.")
         return
 
     for dir_path in unpacked_dirs:
@@ -5986,9 +5986,9 @@ def repack_all_classes(work_dir: Path | None = None) -> None:
             if result.returncode == 0:
                 log(f"    Repack thanh cong -> {output_file}")
                 if remove_path_force(dir_path):
-                    log(f"    Da xoa thu muc {dir_path}")
+                    log(f"    Removed directory {dir_path}")
                 else:
-                    log(f"    Canh bao: khong xoa duoc thu muc {dir_path}")
+                    log(f"    Warning: could not remove directory {dir_path}")
             else:
                 log(f"    Loi khi repack {dir_path.name}: {(result.stderr or '').strip()}")
         except Exception as exc:
@@ -6018,16 +6018,16 @@ def repack_all_jar_files(work_dir: Path | None = None) -> None:
             if result.returncode == 0:
                 log(f"    Repack thanh cong -> {jar_name}")
                 if remove_path_force(dir_path):
-                    log(f"    Da xoa thu muc {dir_path}")
+                    log(f"    Removed directory {dir_path}")
                 else:
-                    log(f"    Canh bao: khong xoa duoc thu muc {dir_path}")
+                    log(f"    Warning: could not remove directory {dir_path}")
             else:
                 log(f"    Loi khi repack {dir_path.name}: {(result.stderr or '').strip()}")
         except Exception as exc:
             log(f"    Loi khi repack {dir_path.name}: {exc}")
 
     if not found_any:
-        log("Khong tim thay thu muc unpacked nao de repack.")
+        log("No unpacked directory found to repack.")
 
 
 def apply_language_overlay(project_dir: Path, mi_incremental: str) -> None:
@@ -6051,7 +6051,7 @@ def apply_language_overlay(project_dir: Path, mi_incremental: str) -> None:
 
     dest_dir = resolve_partition_file(project_dir, "vendor", "overlay")
     if dest_dir is None:
-        log("Khong tim thay thu muc partition vendor/overlay de them overlay.")
+        log("Vendor/overlay partition not found for overlay addition.")
         return
 
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -6698,38 +6698,43 @@ def zip_output_folder(images_output_dir: Path) -> Path | None:
     zip_dest = ROOT_DIR / zip_name
 
     if not deadzone_dir.is_dir():
-        log(f"[ZIP] Khong tim thay thu muc can nen: {deadzone_dir}")
+        log(f"[ZIP] Source directory not found: {deadzone_dir}")
         return None
 
     if zip_path.exists():
         try:
             remove_path_force(zip_path)
-            log(f"    Da xoa file zip cu: {zip_path}")
+            log(f"    Removed old zip file: {zip_path}")
         except Exception as exc:
-            log(f"[ZIP] Khong the xoa file zip cu: {exc}")
+            log(f"[ZIP] Could not delete old zip file: {exc}")
             return None
 
-    log(f"[ZIP] Compressing {deadzone_dir.name} into {zip_name}...")
-    log(f"       Thu muc nguon: {deadzone_dir}")
+    # HyperUR legacy scripts must never appear in the final ZIP
+    _EXCLUDED_FILENAMES = {"HyperUR Flash_2.bat", "HyperUR Flash MTK.bat"}
+
+    log(f"[ZIP] Compressing {deadzone_dir.name} into {zip_name} (DEFLATE level 9)...")
+    log(f"      Source directory: {deadzone_dir}")
 
     try:
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=1) as zf:
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
             file_count = 0
             for root, _, files in os.walk(deadzone_dir):
                 for name in files:
-                    file_path = Path(root) / name
-                    # Bo qua file zip dang duoc tao ra trong cung thu muc
                     if name.endswith(".zip"):
                         continue
+                    if name in _EXCLUDED_FILENAMES:
+                        log(f"[ZIP] Excluded from final ZIP: {name}")
+                        continue
+                    file_path = Path(root) / name
                     arcname = file_path.relative_to(deadzone_dir)
                     zf.write(file_path, arcname)
                     file_count += 1
                     if file_count % 100 == 0:
-                        log(f"    Da nen {file_count} file...")
+                        log(f"    Compressed {file_count} files so far...")
 
         zip_size = zip_path.stat().st_size
         zip_size_mb = zip_size / (1024 * 1024)
-        log(f"[ZIP] Hoan thanh! Da nen {file_count} file -> {zip_path} ({zip_size_mb:.2f} MB)")
+        log(f"[ZIP] Complete. Compressed {file_count} files -> {zip_path} ({zip_size_mb:.2f} MB)")
 
         # Di chuyen file zip ra ROOT_DIR
         if zip_dest.exists():
@@ -7271,9 +7276,9 @@ def cleanup_after_repack(project_dir: Path) -> None:
         folder_path = project_dir / folder_name
         if folder_path.exists():
             if remove_path_force(folder_path):
-                log(f"Da xoa thu muc: {folder_path}")
+                log(f"Removed directory: {folder_path}")
             else:
-                log(f"Canh bao: khong xoa duoc thu muc: {folder_path}")
+                log(f"Warning: could not remove directory: {folder_path}")
 
 
 def repack_project(project_dir: Path, rom_path: Path | None = None, output_dir: Path | None = None) -> Path:
@@ -7358,7 +7363,7 @@ def sync_super_config_for_device(project_dir: Path) -> None:
                 "Canh bao: khong co file parts_info o project/config va SuperConfig cho device nay."
             )
     except Exception as exc:
-        log(f"Canh bao: loi khi dong bo SuperConfig cho device '{device_name}': {exc}")
+        log(f"Warning: error syncing SuperConfig for device '{device_name}': {exc}")
 
 
 def main() -> int:
@@ -7385,7 +7390,7 @@ def main() -> int:
         if is_repack_project(input_path):
             sync_super_config_for_device(input_path)
             final_super_img = repack_project(input_path)
-            log(f"Hoan tat repack. Super.img nam o: {final_super_img}")
+            log(f"Repack complete. super.img at: {final_super_img}")
             return 0
 
         output_dir = build_output_dir(input_path)
@@ -7483,12 +7488,14 @@ def main() -> int:
         images_output_dir = build_repack_output_dir(output_dir)
         final_super_img = repack_project(output_dir, input_path, images_output_dir)
         if super_out_dir is not None:
-            log(f"Hoan tat. Cac file tu super.img nam o: {super_out_dir}")
+            log(f"Done. super.img files at: {super_out_dir}")
         else:
-            log("Hoan tat. Partition da duoc repack lai (khong su dung super_img goc).")
-        log(f"Super.img da duoc repack tai: {final_super_img}")
+            log("Done. Partitions repacked (no original super.img).")
+        log(f"super.img repacked at: {final_super_img}")
 
-        # Copy flash folder vao thu muc cha cua images (cung cap script flash cung voi super.img)
+        # Copy flash folder into the output parent (provides flash scripts alongside super.img)
+        # Legacy HyperUR scripts are excluded — only DeadZone-branded scripts are copied.
+        _EXCLUDED_FLASH = {"HyperUR Flash_2.bat", "HyperUR Flash MTK.bat"}
         flash_src = ROOT_DIR / "flash"
         flash_dest_parent = images_output_dir.parent
         if flash_src.is_dir():
@@ -7496,6 +7503,9 @@ def main() -> int:
                 copy_count = 0
                 for flash_item in flash_src.rglob("*"):
                     if flash_item.is_file():
+                        if flash_item.name in _EXCLUDED_FLASH:
+                            log(f"[FLASH] Excluded legacy script: {flash_item.name}")
+                            continue
                         rel = flash_item.relative_to(flash_src)
                         dest = flash_dest_parent / rel
                         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -7503,16 +7513,16 @@ def main() -> int:
                             shutil.copy2(flash_item, dest)
                             copy_count += 1
                 if copy_count > 0:
-                    log(f"Da copy {copy_count} file tu thu muc flash vao {flash_dest_parent}")
+                    log(f"[FLASH] Copied {copy_count} file(s) from flash/ to {flash_dest_parent}")
             except Exception as exc:
-                log(f"Error copying flash directory: {exc}")
+                log(f"[FLASH] Error copying flash directory: {exc}")
 
         # Nen thu muc DeadZone_* thanh file zip
         zip_output_folder(images_output_dir)
 
         return 0
     except Exception as exc:
-        log(f"Loi: {exc}")
+        log(f"Error: {exc}")
         return 1
     finally:
         pause_if_needed()
