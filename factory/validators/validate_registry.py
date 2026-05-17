@@ -114,6 +114,38 @@ def validate_registry() -> bool:
             else:
                 print(f"  [OK] {p.name} -> required_images: complete")
 
+    print("[5] Checking device_groups files (optional)...")
+    LIVE_STATUSES = {"golden", "ready"}
+    for group_name in ["snapdragon", "mtk"]:
+        gp = REGISTRY_ROOT / "device_groups" / f"{group_name}.yml"
+        if not gp.exists():
+            print(f"  [WARN] device_groups/{group_name}.yml not found — skipping")
+            continue
+        gdata = _load(gp)
+        if gdata is None:
+            ok = False
+            continue
+        print(f"  [OK] device_groups/{group_name}.yml")
+        group_soc = gdata.get("soc", "")
+        for entry in gdata.get("devices", []):
+            codename = entry.get("codename", "?")
+            status = entry.get("status", "unknown")
+            if status not in LIVE_STATUSES:
+                print(f"  [SKIP] {codename} status={status} — not a live device")
+                continue
+            reg_file = entry.get("registry_file")
+            if reg_file:
+                reg_path = REGISTRY_ROOT.parent / reg_file
+                if not reg_path.exists():
+                    print(f"  [FAIL] {codename}: registry_file not found: {reg_file}")
+                    ok = False
+                else:
+                    print(f"  [OK] {codename}: registry_file exists")
+            entry_soc = entry.get("soc") or group_soc
+            if entry_soc and entry_soc != group_soc:
+                print(f"  [FAIL] {codename}: soc '{entry_soc}' != group soc '{group_soc}'")
+                ok = False
+
     if ok:
         print("\n[PASS] Registry is valid.")
     else:
