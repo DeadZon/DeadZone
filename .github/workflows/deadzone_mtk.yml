@@ -49,6 +49,21 @@ on:
         type: boolean
         default: false
 
+      upload_target:
+        description: "Where to upload final ROM ZIP"
+        required: true
+        type: choice
+        default: pixeldrain
+        options:
+          - pixeldrain
+          - none
+
+      upload_debug_artifacts:
+        description: "Upload debug logs/artifacts to GitHub Actions (disabled by default)"
+        required: false
+        type: boolean
+        default: false
+
 env:
   TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
   TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
@@ -279,6 +294,72 @@ jobs:
           echo "ROM files:"
           ls -lah _input_roms
 
+      # ── Device / ROM mismatch guard ──────────────────────────────────────────
+
+      - name: Device/ROM mismatch guard
+        if: inputs.execute_build == true
+        run: |
+          python - <<'PY'
+          import sys
+          import yaml
+          from pathlib import Path
+
+          device = "${{ steps.parse_device.outputs.codename }}".lower().strip()
+
+          rom_files = [f for f in Path("_input_roms").iterdir() if f.is_file()]
+          if not rom_files:
+              print("[DEVICE GUARD] No ROM file found — guard skipped.")
+              sys.exit(0)
+
+          rom_filename = rom_files[0].name.lower()
+          print(f"[DEVICE GUARD] Selected device : {device}")
+          print(f"[DEVICE GUARD] ROM filename    : {rom_filename}")
+
+          from factory.core.paths import REGISTRY_ROOT
+          group_yml = REGISTRY_ROOT / "device_groups" / "mtk.yml"
+          known = set()
+          if group_yml.exists():
+              with group_yml.open() as fh:
+                  data = yaml.safe_load(fh)
+              for entry in data.get("devices", []):
+                  c = entry.get("codename", "")
+                  if c:
+                      known.add(c.lower())
+
+          detected = None
+          for codename in known:
+              if (
+                  rom_filename.startswith(f"{codename}-")
+                  or rom_filename.startswith(f"{codename}_")
+                  or f"_{codename}-" in rom_filename
+                  or f"_{codename}_" in rom_filename
+                  or f"-{codename}-" in rom_filename
+              ):
+                  detected = codename
+                  break
+
+          if detected is None:
+              print("[DEVICE GUARD] Could not detect codename from ROM filename — warning only, continuing.")
+              sys.exit(0)
+
+          print(f"[DEVICE GUARD] Detected ROM device: {detected}")
+
+          if detected != device:
+              print(f"[DEVICE GUARD] Selected device: {device}")
+              print(f"[DEVICE GUARD] ROM filename device: {detected}")
+              print("[DEVICE GUARD] Refusing to build mismatched ROM.")
+              try:
+                  from factory.reports.build_summary import format_device_mismatch
+                  from factory.services.telegram_notify import send_mtk_message
+                  run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  send_mtk_message(format_device_mismatch(device, detected, "mtk", run_url))
+              except Exception as exc:
+                  print(f"[DEVICE GUARD] Warning: Telegram notification failed: {exc}")
+              sys.exit(1)
+
+          print(f"[DEVICE GUARD] Device match confirmed: {device}")
+          PY
+
       - name: Run MEZO via factory CLI
         if: inputs.execute_build == true
         run: |
@@ -314,7 +395,7 @@ jobs:
           df -h
 
       - name: Upload artifacts
-        if: always() && inputs.execute_build == true
+        if: always() && inputs.execute_build == true && inputs.upload_debug_artifacts == true
         uses: actions/upload-artifact@v4
         with:
           name: "DeadZone-mtk-${{ steps.parse_device.outputs.codename }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
@@ -323,7 +404,7 @@ jobs:
           retention-days: 7
 
       - name: Upload EROFS diagnostic logs
-        if: always() && inputs.execute_build == true
+        if: always() && inputs.execute_build == true && inputs.upload_debug_artifacts == true
         uses: actions/upload-artifact@v4
         with:
           name: "erofs-logs-mtk-${{ steps.parse_device.outputs.codename }}-${{ github.run_number }}"
@@ -358,7 +439,7 @@ jobs:
 
       - name: Find and upload final ROM to PixelDrain
         id: pixeldrain
-        if: success() && inputs.execute_build == true
+        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain'
         continue-on-error: true
         run: |
           python - <<'PY'
@@ -411,7 +492,7 @@ jobs:
           PY
 
       - name: Notify upload success
-        if: success() && inputs.execute_build == true && steps.pixeldrain.outputs.pd_found == 'true' && steps.pixeldrain.outputs.pd_link != ''
+        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain' && steps.pixeldrain.outputs.pd_found == 'true' && steps.pixeldrain.outputs.pd_link != ''
         continue-on-error: true
         run: |
           python - <<'PY'
@@ -425,6 +506,26 @@ jobs:
               platform="${{ inputs.platform }}",
               flavor="${{ inputs.flavor }}",
               pixeldrain_link=link,
+              run_url=run_url,
+          )
+          send_mtk_message(msg)
+          PY
+
+      # ── Notify build succeeded with no upload ────────────────────────────────
+
+      - name: Notify build succeeded (upload skipped)
+        if: success() && inputs.execute_build == true && inputs.upload_target == 'none'
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from factory.reports.build_summary import format_build_success_no_upload
+          from factory.services.telegram_notify import send_mtk_message
+          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          msg = format_build_success_no_upload(
+              device="${{ steps.parse_device.outputs.codename }}",
+              soc="mtk",
+              platform="${{ inputs.platform }}",
+              flavor="${{ inputs.flavor }}",
               run_url=run_url,
           )
           send_mtk_message(msg)

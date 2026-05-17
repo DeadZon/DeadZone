@@ -47,6 +47,42 @@ def format_build_failure(
     return "\n".join(lines)
 
 
+def format_device_mismatch(
+    selected: str,
+    detected: str,
+    soc: str,
+    run_url: str = None,
+) -> str:
+    lines = [
+        f"⚠️ DeadZone {_soc_label(soc)} build aborted — device mismatch",
+        f"Selected device : {selected}",
+        f"ROM filename device: {detected}",
+        "Refusing to build mismatched ROM.",
+    ]
+    if run_url:
+        lines.append(f"Run: {run_url}")
+    return "\n".join(lines)
+
+
+def format_build_success_no_upload(
+    device: str,
+    soc: str,
+    platform: str,
+    flavor: str,
+    run_url: str = None,
+) -> str:
+    lines = [
+        f"✅ DeadZone {_soc_label(soc)} build succeeded",
+        f"Device: {device}",
+        f"Platform: {platform}",
+        f"Flavor: {flavor}",
+        "Upload: none (skipped by request)",
+    ]
+    if run_url:
+        lines.append(f"Run: {run_url}")
+    return "\n".join(lines)
+
+
 def format_upload_success(
     device: str,
     soc: str,
