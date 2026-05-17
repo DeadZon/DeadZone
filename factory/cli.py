@@ -90,7 +90,13 @@ def cmd_run_mezo(args):
         print("[DRY RUN] Pass --execute to actually run the build.")
         return
     from factory.engines.mezo_legacy_engine import run_mezo_legacy_engine
-    run_mezo_legacy_engine(rom_path)
+    run_mezo_legacy_engine(
+        rom_path,
+        device=args.device,
+        soc=args.soc,
+        platform=args.platform,
+        flavor=args.flavor,
+    )
 
 
 def main():

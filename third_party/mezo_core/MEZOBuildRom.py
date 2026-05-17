@@ -6438,10 +6438,10 @@ def convert_sparse_super_to_raw(super_img: Path, output_dir: Path) -> Path:
     with open(super_img, "rb") as fd:
         sparse = SparseImage(fd)
         if not sparse.check():
-            log("super.img khong phai sparse, bo qua buoc convert.")
+            log("super.img is not sparse; skipping conversion.")
             return super_img
 
-    log("[3/4] super.img dang o dang sparse, tien hanh convert sang raw...")
+    log("[3/4] super.img is sparse; converting to raw...")
     if raw_super.exists():
         raw_super.unlink()
 
@@ -6450,7 +6450,7 @@ def convert_sparse_super_to_raw(super_img: Path, output_dir: Path) -> Path:
         converted_path = Path(sparse.unsparse())
 
     shutil.move(str(converted_path), str(raw_super))
-    log(f"Da convert super.img sang raw: {raw_super}")
+    log(f"Converted sparse super.img to raw: {raw_super}")
     return raw_super
 
 
@@ -6464,7 +6464,7 @@ def unpack_super(super_img: Path, output_dir: Path) -> Path:
     temp_raw_super = output_dir / "super_raw.img"
     if raw_super_img == temp_raw_super and temp_raw_super.exists():
         temp_raw_super.unlink()
-        log(f"Da xoa file tam: {temp_raw_super}")
+        log(f"Removed temporary raw super: {temp_raw_super}")
     return super_out_dir
 
 
@@ -7106,12 +7106,39 @@ def repack_single_partition(project_dir: Path, super_dir: Path, part_name: str) 
     return output_img
 
 
+def _save_super_config(project_dir: Path, super_info: dict) -> None:
+    """Persist super_info to config/super and inject into config/parts_info."""
+    config_dir = project_dir / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    super_config_path = config_dir / "super"
+    try:
+        with open(super_config_path, "w", encoding="utf-8", newline="\n") as f:
+            json.dump(super_info, f, indent=4, ensure_ascii=False)
+        log(f"[SUPER] Wrote super metadata to config/super")
+    except Exception as exc:
+        log(f"[SUPER] Warning: could not write config/super: {exc}")
+
+    parts_info_path = config_dir / "parts_info"
+    try:
+        existing = JsonEdit(str(parts_info_path)).read()
+        if not isinstance(existing, dict):
+            existing = {}
+        if "super_info" not in existing:
+            existing["super_info"] = super_info
+            JsonEdit(str(parts_info_path)).write(existing)
+            log(f"[SUPER] Injected super_info into config/parts_info")
+    except Exception as exc:
+        log(f"[SUPER] Warning: could not update parts_info with super_info: {exc}")
+
+
 def load_super_info(project_dir: Path) -> dict:
+    # Step 1: parts_info["super_info"]
     parts_info = JsonEdit(str(project_dir / "config" / "parts_info")).read()
     super_info = parts_info.get("super_info")
     if isinstance(super_info, dict):
         return super_info
 
+    # Step 2: config/super JSON file
     super_config = project_dir / "config" / "super"
     if super_config.exists():
         try:
@@ -7122,11 +7149,45 @@ def load_super_info(project_dir: Path) -> dict:
         except Exception:
             pass
 
+    # Step 3: super_raw.img or super.img directly in project_dir
     for candidate in [project_dir / "super_raw.img", project_dir / "super.img"]:
         if candidate.exists():
-            return lpunpack_get_info(str(candidate))
+            log(f"[SUPER] Loading super metadata from: {candidate.name}")
+            info = lpunpack_get_info(str(candidate))
+            _save_super_config(project_dir, info)
+            return info
 
-    raise RuntimeError("Khong tim thay super_info de repack super.img")
+    # Step 4: super.img in the ROM extraction directory (project_dir/rom) or nearby
+    for search_dir in [
+        project_dir / "rom",
+        project_dir / "rom" / "payload_extracted",
+    ]:
+        if not search_dir.is_dir():
+            continue
+        found = find_super_img(search_dir)
+        if found and found.is_file() and found.stat().st_size > 0:
+            log(f"[SUPER] Found super.img in extraction dir: {found}")
+            info = lpunpack_get_info(str(found))
+            _save_super_config(project_dir, info)
+            return info
+
+    # Step 5: clear diagnostic failure
+    config_dir = project_dir / "config"
+    config_files = sorted(f.name for f in config_dir.iterdir()) if config_dir.is_dir() else []
+    factory_codename = os.environ.get("DEADZONE_DEVICE_CODENAME", "(not set)")
+    super_config_path = (
+        ROOT_DIR / "SuperConfig" / factory_codename / "super"
+        if factory_codename != "(not set)"
+        else ROOT_DIR / "SuperConfig" / "(device)" / "super"
+    )
+    raise RuntimeError(
+        "super_info not found — cannot repack super.img.\n"
+        f"  Expected config/super       : {super_config} (exists={super_config.exists()})\n"
+        f"  Expected SuperConfig path   : {super_config_path} (exists={super_config_path.exists()})\n"
+        f"  super_raw.img exists        : {(project_dir / 'super_raw.img').exists()}\n"
+        f"  super.img exists            : {(project_dir / 'super.img').exists()}\n"
+        f"  Files in config/            : {config_files}"
+    )
 
 
 def collect_part_names(project_dir: Path) -> list[str]:
@@ -7210,7 +7271,7 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
         part_names,
     )
     if super_size <= 0:
-        raise RuntimeError("super_info khong co kich thuoc block device hop le")
+        raise RuntimeError("super_info has no valid block device size")
 
     command = [
         'lpmake',
@@ -7224,7 +7285,7 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
         for part_name in selected_parts:
             img_path = super_dir / f"{part_name}_a.img"
             if not img_path.exists():
-                raise RuntimeError(f"Khong tim thay image _a de pack super: {img_path}")
+                raise RuntimeError(f"Required _a image not found for super pack: {img_path}")
             command += [
                 '--partition', f'{part_name}:readonly:{img_path.stat().st_size}:{group_a_name}',
                 '--image', f'{part_name}={img_path}',
@@ -7234,7 +7295,7 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
         for part_name in selected_parts:
             img_path = super_dir / f"{part_name}_a.img"
             if not img_path.exists():
-                raise RuntimeError(f"Khong tim thay image _a de pack super: {img_path}")
+                raise RuntimeError(f"Required _a image not found for super pack: {img_path}")
             command += [
                 '--partition', f'{part_name}_a:readonly:{img_path.stat().st_size}:{group_a_name}',
                 '--image', f'{part_name}_a={img_path}',
@@ -7250,7 +7311,7 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
                 ]
             else:
                 if img_path.exists():
-                    log(f"Bo qua {img_path.name}: file _b khong hop le, se tao partition rong.")
+                    log(f"Skipping {img_path.name}: _b image is invalid; adding empty partition.")
                 command += ['--partition', f'{part_name}_b:readonly:0:{group_b_name}']
         command += ['--virtual-ab']
 
@@ -7268,9 +7329,9 @@ def build_super_image(project_dir: Path, output_dir: Path, super_dir: Path, supe
 def cleanup_after_repack(project_dir: Path) -> None:
     for img_path in sorted(project_dir.glob("*.img")):
         if remove_path_force(img_path):
-            log(f"Da xoa file img goc: {img_path}")
+            log(f"Removed original image: {img_path.name}")
         else:
-            log(f"Canh bao: khong xoa duoc file img goc: {img_path}")
+            log(f"Warning: could not remove original image: {img_path.name}")
 
     for folder_name in ["super", "config"]:
         folder_path = project_dir / folder_name
@@ -7290,7 +7351,7 @@ def repack_project(project_dir: Path, rom_path: Path | None = None, output_dir: 
 
     part_names = collect_part_names(project_dir)
     if not part_names:
-        raise RuntimeError("Khong co partition nao trong config/parts_info de repack.")
+        raise RuntimeError("No partitions found in config/parts_info to repack.")
 
     super_info = load_super_info(project_dir)
     log(f"Repacking project: {project_dir}")
@@ -7304,25 +7365,54 @@ def repack_project(project_dir: Path, rom_path: Path | None = None, output_dir: 
         rom_name = rom_path.name.lower()
         if rom_name.endswith(SUPPORTED_ARCHIVES):
             if remove_path_force(rom_path):
-                log(f"Da xoa file ROM goc: {rom_path}")
+                log(f"Removed original ROM file: {rom_path.name}")
             else:
-                log(f"Canh bao: khong xoa duoc file ROM goc: {rom_path}")
+                log(f"Warning: could not remove original ROM file: {rom_path.name}")
 
-    log(f"Da pack lai super.img: {super_img_out}")
+    log(f"[SUPER] super.img repacked: {super_img_out}")
     return super_img_out
+
+
+# Generic MTK SoC fallback identifiers that must never be used as the SuperConfig folder.
+# When one of these is read from build.prop but DEADZONE_DEVICE_CODENAME is not set,
+# the sync is skipped to avoid creating a pointless directory under SuperConfig/.
+_GENERIC_DEVICE_NAMES = frozenset({
+    "mgvi_64_armv82",
+    "armv82",
+    "generic",
+    "unknown",
+})
 
 
 def sync_super_config_for_device(project_dir: Path) -> None:
     """
-    Dong bo file `project_dir/config/super` va `project_dir/config/parts_info`
-    voi `ROOT_DIR/SuperConfig/<ro.product.odm.device>/`.
+    Sync project_dir/config/super and project_dir/config/parts_info
+    with ROOT_DIR/SuperConfig/<device>/.
 
-    - Neu file trong `project_dir/config` ton tai: copy sang `SuperConfig/<device>/`
-    - Neu khong ton tai: copy nguoc tu `SuperConfig/<device>/` ve `project_dir/config`
+    Device name priority:
+      1. DEADZONE_DEVICE_CODENAME env var (set by the Factory for the selected device)
+      2. ro.product.odm.device from build.prop, unless it is a known generic SoC fallback name
     """
-    device_name = _q_fix_read_ro_product_odm_device(project_dir)
-    if not device_name:
-        log("Canh bao: khong doc duoc ro.product.odm.device, bo qua dong bo SuperConfig.")
+    factory_codename = os.environ.get("DEADZONE_DEVICE_CODENAME", "").strip()
+    build_prop_name = _q_fix_read_ro_product_odm_device(project_dir)
+
+    if factory_codename:
+        device_name = factory_codename
+        if build_prop_name and build_prop_name != factory_codename:
+            log(f"[DEVICE] Factory device override: {device_name}  (build.prop had: '{build_prop_name}')")
+        else:
+            log(f"[DEVICE] Factory device override: {device_name}")
+    elif build_prop_name and build_prop_name.lower() not in _GENERIC_DEVICE_NAMES:
+        device_name = build_prop_name
+        log(f"[DEVICE] Device codename from build.prop: {device_name}")
+    else:
+        if build_prop_name:
+            log(
+                f"Warning: build.prop device '{build_prop_name}' is a generic SoC identifier; "
+                f"set DEADZONE_DEVICE_CODENAME to override. Skipping SuperConfig sync."
+            )
+        else:
+            log("Warning: could not read ro.product.odm.device from build.prop; skipping SuperConfig sync.")
         return
 
     config_dir = project_dir / "config"
@@ -7340,28 +7430,28 @@ def sync_super_config_for_device(project_dir: Path) -> None:
         # sync super
         if config_super_path.is_file():
             shutil.copy2(config_super_path, device_super_path)
-            log(f"Da dong bo config/super -> {device_super_path}")
+            log(f"[SuperConfig] Saved config/super -> {device_super_path}")
         elif device_super_path.is_file():
             config_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(device_super_path, config_super_path)
-            log(f"Da khoi phuc config/super tu {device_super_path}")
+            log(f"[SuperConfig] Restored config/super from {device_super_path}")
         else:
             log(
-                f"Canh bao: khong co file super o ca '{config_super_path}' va '{device_super_path}'."
+                f"Warning: no super file found in:\n"
+                f"  - project config/super\n"
+                f"  - {device_super_path}"
             )
 
         # sync parts_info
         if config_parts_info_path.is_file():
             shutil.copy2(config_parts_info_path, device_parts_info_path)
-            log(f"Da dong bo config/parts_info -> {device_parts_info_path}")
+            log(f"[SuperConfig] Saved config/parts_info -> {device_parts_info_path}")
         elif device_parts_info_path.is_file():
             config_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(device_parts_info_path, config_parts_info_path)
-            log(f"Da khoi phuc config/parts_info tu {device_parts_info_path}")
+            log(f"[SuperConfig] Restored config/parts_info from {device_parts_info_path}")
         else:
-            log(
-                "Canh bao: khong co file parts_info o project/config va SuperConfig cho device nay."
-            )
+            log("Warning: no parts_info found in project/config or SuperConfig for this device.")
     except Exception as exc:
         log(f"Warning: error syncing SuperConfig for device '{device_name}': {exc}")
 
