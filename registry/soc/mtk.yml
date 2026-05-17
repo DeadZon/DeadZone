@@ -9,7 +9,10 @@ default_vbmeta_policy: binary_flags_3
 engine:
   name: mtk_engine
   base: mezo_legacy_engine
-  legacy_flash_source: "third_party/mezo_core/flash/HyperUR Flash MTK.bat"
+  flash_scripts:
+    - "third_party/mezo_core/flash/windows_install_upgrade.bat"
+    - "third_party/mezo_core/flash/windows_install_and_format_data.bat"
+    - "third_party/mezo_core/flash/windows_format_data_only.bat"
 
 required_images:
   - boot.img

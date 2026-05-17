@@ -435,6 +435,75 @@ jobs:
           send_mtk_message(msg)
           PY
 
+      # ── Validate final ROM ZIP before upload ─────────────────────────────────
+
+      - name: Validate final ROM ZIP (branding + manifest)
+        id: validate_zip
+        if: success() && inputs.execute_build == true
+        env:
+          GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
+        run: |
+          import os, sys
+          from pathlib import Path
+
+          EXCLUDE_DIRS = {"_input_roms", "_asset_downloads", "_factory_outputs", "MEZO_APP"}
+          EXCLUDE_SUFFIXES = ("_logs.zip", "_diagnostic.zip")
+
+          search_roots = [Path("output"), Path("output/final")]
+          search_roots += sorted(Path("third_party/mezo_core").glob("DeadZone*"))
+          search_roots += [Path("third_party/mezo_core")]
+
+          seen = set()
+          candidates = []
+          for root in search_roots:
+              if not root.exists():
+                  continue
+              for f in root.rglob("*.zip"):
+                  if f in seen:
+                      continue
+                  seen.add(f)
+                  if EXCLUDE_DIRS & set(f.parts):
+                      continue
+                  if any(f.name.endswith(s) for s in EXCLUDE_SUFFIXES):
+                      continue
+                  if "DeadZone" in f.name or "output" in str(f):
+                      candidates.append(f)
+
+          if not candidates:
+              print("[VALIDATE] No final ROM ZIP found — skipping validation.")
+              gho = os.environ.get("GITHUB_OUTPUT", "")
+              if gho:
+                  with open(gho, "a") as out:
+                      out.write("final_zip=\n")
+              sys.exit(0)
+
+          candidates.sort(key=lambda p: (p.stat().st_mtime, p.stat().st_size), reverse=True)
+          final_zip = candidates[0]
+          print(f"[VALIDATE] Validating: {final_zip}")
+
+          gho = os.environ.get("GITHUB_OUTPUT", "")
+          if gho:
+              with open(gho, "a") as out:
+                  out.write(f"final_zip={final_zip}\n")
+
+          import subprocess
+          r1 = subprocess.run(
+              [sys.executable, "-m", "factory.cli", "inspect-zip", "--zip", str(final_zip)],
+              check=False,
+          )
+
+          r2 = subprocess.run(
+              [sys.executable, "-m", "factory.cli", "validate-final-zip", "--zip", str(final_zip)],
+              check=False,
+          )
+
+          if r2.returncode != 0:
+              print("[VALIDATE] Branding validation FAILED — PixelDrain upload will be skipped.", file=sys.stderr)
+              sys.exit(1)
+
+          print("[VALIDATE] ZIP validation passed.")
+        shell: python
+
       # ── Find final ROM ZIP and upload to PixelDrain ──────────────────────────
 
       - name: Find and upload final ROM to PixelDrain
