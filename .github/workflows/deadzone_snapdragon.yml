@@ -167,6 +167,22 @@ jobs:
           echo "codename=$DEVICE" >> "$GITHUB_OUTPUT"
           echo "[INFO] Parsed codename: $DEVICE"
 
+      # ── Live card: start ─────────────────────────────────────────────────────
+
+      - name: Live card start
+        if: inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          mkdir -p output/runtime
+          python scripts/telegram_live_notify.py start \
+            --device "${{ steps.parse_device.outputs.codename }}" \
+            --soc snapdragon \
+            --platform "${{ inputs.platform }}" \
+            --flavor "${{ inputs.flavor }}"
+
       # ── Notify build started (execute_build only) ────────────────────────────
 
       - name: Notify build started
@@ -311,6 +327,18 @@ jobs:
           mkdir -p MEZO_APP/OS3_A16 MEZO_APP/OS3_A15 MEZO_APP/OS2_A15
           mkdir -p MEZO_APP/OS2_A14 MEZO_APP/OS1_A14
 
+      # ── Live card: download ROM ──────────────────────────────────────────────
+
+      - name: Live card - download ROM
+        if: inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage download_rom --status running --message "Downloading ROM"
+
       - name: Download ROM
         if: inputs.execute_build == true
         run: |
@@ -355,6 +383,16 @@ jobs:
           PY
           echo "ROM files:"
           ls -lah _input_roms
+
+      - name: Live card - download ROM done
+        if: inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage download_rom --status pass --message "ROM downloaded"
 
       # ── Device / ROM mismatch guard ──────────────────────────────────────────
 
@@ -422,6 +460,18 @@ jobs:
           print(f"[DEVICE GUARD] Device match confirmed: {device}")
           PY
 
+      # ── Live card: ROM build ─────────────────────────────────────────────────
+
+      - name: Live card - ROM build
+        if: inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage rebuild_super --status running --message "Building ROM"
+
       - name: Run MEZO via factory CLI
         if: inputs.execute_build == true
         run: |
@@ -438,6 +488,16 @@ jobs:
             --platform "${{ inputs.platform }}" \
             --flavor   "${{ inputs.flavor }}" \
             --execute
+
+      - name: Live card - ROM build done
+        if: success() && inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage rebuild_super --status pass --message "ROM built"
 
       - name: Collect outputs
         if: always() && inputs.execute_build == true
@@ -498,6 +558,18 @@ jobs:
           PY
 
       # ── Validate final ROM ZIP before upload ─────────────────────────────────
+
+      # ── Live card: validate ZIP ──────────────────────────────────────────────
+
+      - name: Live card - validate ZIP
+        if: success() && inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage validate_zip --status running --message "Validating ROM ZIP"
 
       - name: Validate final ROM ZIP (branding + manifest)
         id: validate_zip
@@ -568,6 +640,28 @@ jobs:
           print("[VALIDATE] ZIP validation passed.")
         shell: python
 
+      - name: Live card - validate ZIP done
+        if: success() && inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage validate_zip --status pass --message "ZIP validated"
+
+      # ── Live card: PixelDrain upload ─────────────────────────────────────────
+
+      - name: Live card - PixelDrain upload
+        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain'
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage upload_pixeldrain --status running --message "Uploading to PixelDrain"
+
       # ── Find final ROM ZIP and upload to PixelDrain ──────────────────────────
 
       - name: Find and upload final ROM to PixelDrain
@@ -624,6 +718,16 @@ jobs:
                       out.write(f"pd_link={link}\npd_found=true\n")
           PY
 
+      - name: Live card - PixelDrain done
+        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain'
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py update \
+            --stage upload_pixeldrain --status pass --message "Uploaded to PixelDrain"
+
       - name: Notify upload success
         if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain' && steps.pixeldrain.outputs.pd_found == 'true' && steps.pixeldrain.outputs.pd_link != ''
         continue-on-error: true
@@ -663,3 +767,27 @@ jobs:
           )
           send_snapdragon_message(msg)
           PY
+
+      # ── Live card: final summary ─────────────────────────────────────────────
+
+      - name: Live card final (success)
+        if: success() && inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py final \
+            --result success \
+            --message "Build completed successfully"
+
+      - name: Live card final (failure)
+        if: failure() && inputs.execute_build == true
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+        run: |
+          python scripts/telegram_live_notify.py final \
+            --result failure \
+            --message "Build failed"
