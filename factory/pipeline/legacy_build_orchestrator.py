@@ -15,25 +15,6 @@ from factory.pipeline.pipeline_report import write_legacy_build_pipeline_report
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LEGEND_FLAVORS = {"legend", "deadzone_legend"}
 
-# Images packed inside super.img — deleted from workspace after validation to free disk.
-# Must stay in sync with DYNAMIC_PARTITION_IMAGES in factory/output/final_zip_legacy.py.
-_DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
-    "system.img",
-    "system_ext.img",
-    "system_dlkm.img",
-    "product.img",
-    "vendor.img",
-    "vendor_dlkm.img",
-    "odm.img",
-    "odm_dlkm.img",
-    "mi_ext.img",
-    "my_product.img",
-    "my_engineering.img",
-    "my_stock.img",
-    "my_heytap.img",
-    "my_region.img",
-})
-
 
 def _is_legend(flavor: str) -> bool:
     return flavor.lower().replace("-", "_") in _LEGEND_FLAVORS
@@ -130,26 +111,6 @@ def _workspace_images_size_mib(images_dir: Path) -> float | None:
         return None
 
 
-def _delete_dynamic_images(images_dir: Path, warnings: list) -> list[str]:
-    """Delete dynamic partition images after super.img validation to free disk space.
-
-    Returns the list of filenames that were actually deleted.
-    Dynamic images are already excluded from the final ZIP; this deletion is an
-    optional disk-saving step that must only happen after super.img is validated.
-    """
-    deleted: list[str] = []
-    for name in sorted(_DYNAMIC_PARTITION_IMAGES):
-        path = images_dir / name
-        if path.is_file():
-            try:
-                path.unlink()
-                deleted.append(name)
-            except OSError as exc:
-                warnings.append(f"Could not delete dynamic image {name} from workspace: {exc}")
-    if deleted:
-        print(f"[legacy_pipeline] dynamic_images_deleted_from_workspace={', '.join(deleted)}")
-    return deleted
-
 
 def _run_stage(
     stage: dict,
@@ -217,6 +178,10 @@ def apply_legacy_build_pipeline(
 ) -> dict:
     output_dir = (Path(output_dir) if output_dir is not None else (_REPO_ROOT / "output")).resolve()
     images_dir = output_dir / "images"
+    # MEZOBuildRom-style: dynamic partition EROFS images land in this temporary
+    # directory, never in output/images/.  Super build reads from here, writes
+    # super.img to output/images/super.img, then deletes this dir on success.
+    partition_staging_dir = output_dir / "work" / "super_partitions"
     final_output_dir = output_dir / "final"
     final_zip: str | None = None
     warnings: list[str] = []
@@ -451,6 +416,7 @@ def apply_legacy_build_pipeline(
             return apply_erofs_repack_legacy_stage(
                 project_dir=project_dir,
                 images_dir=images_dir,
+                staging_dir=partition_staging_dir,
                 flavor=flavor,
                 execute=execute,
             )
@@ -468,6 +434,7 @@ def apply_legacy_build_pipeline(
                 project_dir=project_dir,
                 images_dir=images_dir,
                 output_super=images_dir / "super.img",
+                partition_staging_dir=partition_staging_dir,
                 flavor=flavor,
                 device=device,
                 soc=soc,
@@ -479,15 +446,15 @@ def apply_legacy_build_pipeline(
         stage_reports[super_stage["id"]] = report
         stopped = stop_if_needed(super_stage, failed)
 
-    # ── Post-super-build: measure workspace, delete dynamic images ───────────
-    # These steps run only when the super build stage succeeded.  The dynamic
-    # images must still be present in images_dir when final_zip runs so that
-    # the ZIP report correctly lists what was excluded; deletion happens after.
+    # ── Post-super-build: measure final images workspace ─────────────────────
+    # The partition staging dir (output/work/super_partitions/) has already
+    # been deleted by pipeline_super_legacy.py after super.img validation.
+    # output/images/ now contains only super.img + standalone images, matching
+    # MEZOBuildRom's images_output_dir layout.
     super_img_validated: bool = (
         stage_reports.get("super_build", {}).get("validation_status") == "PASSED"
     )
     workspace_images_size_mib: float | None = None
-    dynamic_images_deleted: list[str] = []
 
     if not stopped and images_dir.is_dir():
         workspace_images_size_mib = _workspace_images_size_mib(images_dir)
@@ -497,6 +464,7 @@ def apply_legacy_build_pipeline(
                 f"{workspace_images_size_mib} MiB"
             )
         print(f"[legacy_pipeline] super_img_validated={super_img_validated}")
+        print(f"[legacy_pipeline] partition_staging_dir={partition_staging_dir}")
 
     if not stopped:
         final_stage = stages[9]
@@ -523,17 +491,8 @@ def apply_legacy_build_pipeline(
         dynamic_images_excluded_from_final_zip: list[str] = fz.get("images_excluded_dynamic", [])
         final_zip_image_list: list[str] = fz.get("images_included", [])
         final_zip_size_mib: float | None = fz.get("zip_size_mib")
-        print(
-            f"[legacy_pipeline] dynamic_images_excluded_from_final_zip="
-            f"{dynamic_images_excluded_from_final_zip}"
-        )
         print(f"[legacy_pipeline] final_zip_image_list={final_zip_image_list}")
         print(f"[legacy_pipeline] final_zip_size_mib={final_zip_size_mib}")
-
-        # ── Delete dynamic partition images now that the ZIP is complete ─────
-        # super.img validation must have passed; ZIP stage must have succeeded.
-        if execute and super_img_validated and not failed:
-            dynamic_images_deleted = _delete_dynamic_images(images_dir, warnings)
     else:
         dynamic_images_excluded_from_final_zip = []
         final_zip_image_list = []
@@ -571,11 +530,11 @@ def apply_legacy_build_pipeline(
         "project_dir": str(project_dir) if project_dir is not None else None,
         "rom_path": str(rom_path) if rom_path is not None else None,
         "images_dir": str(images_dir),
+        "partition_staging_dir": str(partition_staging_dir),
         "output_dir": str(output_dir),
         "final_zip": final_zip,
         "workspace_images_size_before_final_packaging_mib": workspace_images_size_mib,
         "super_img_validated": super_img_validated,
-        "dynamic_images_deleted_from_workspace": dynamic_images_deleted,
         "dynamic_images_excluded_from_final_zip": dynamic_images_excluded_from_final_zip,
         "final_zip_image_list": final_zip_image_list,
         "final_zip_size_mib": final_zip_size_mib,

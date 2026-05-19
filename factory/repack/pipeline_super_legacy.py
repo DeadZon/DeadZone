@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 
@@ -87,24 +88,59 @@ def _merge_lists(*values: object) -> list:
     return result
 
 
+def _delete_partition_staging_dir(staging_dir: Path, warnings: list[str]) -> bool:
+    """Delete the temporary partition staging directory.
+
+    This mirrors MEZOBuildRom's cleanup_after_repack() — it is called only
+    after super.img has been validated so that the workspace is clean before
+    the final ZIP is assembled.  Returns True if deletion succeeded.
+    """
+    if not staging_dir.is_dir():
+        return True
+    try:
+        shutil.rmtree(staging_dir)
+        print(f"[super_build] partition_staging_dir_deleted={staging_dir}")
+        return True
+    except Exception as exc:
+        warnings.append(f"Could not delete partition staging dir {staging_dir}: {exc}")
+        return False
+
+
 def apply_super_build_legacy_stage(
     project_dir: Path,
     images_dir: Path,
     output_super: Path | None = None,
+    partition_staging_dir: Path | None = None,
     flavor: str = "legend",
     device: str | None = None,
     soc: str | None = None,
     platform: str | None = None,
     execute: bool = False,
 ) -> dict:
-    """Run the legacy lpmake super.img build stage."""
+    """Run the legacy lpmake super.img build stage.
+
+    partition_staging_dir — temporary directory holding the EROFS-repacked
+                            dynamic partition images (MEZOBuildRom-style staging).
+                            When provided, lpmake reads partition images from here
+                            and writes super.img to output_super (output/images/).
+                            On successful super.img validation the staging dir is
+                            deleted so that output/images/ never contains individual
+                            dynamic partition images.
+                            When omitted, images_dir is used as the source (old
+                            behavior, kept for backward-compatibility).
+    """
     project_dir = Path(project_dir).resolve()
     images_dir = Path(images_dir).resolve()
     output_super = Path(output_super).resolve() if output_super is not None else (images_dir / "super.img").resolve()
+    partition_staging_dir = Path(partition_staging_dir).resolve() if partition_staging_dir is not None else None
     reports_dir = _OUTPUT_ROOT / "reports"
+
+    # Partition images live in staging dir (new) or fall back to images_dir (old).
+    partition_source = partition_staging_dir if partition_staging_dir is not None else images_dir
 
     print(f"[super_build] mode={'EXECUTE' if execute else 'DRY-RUN'} flavor={flavor} project={project_dir}")
     print(f"[super_build] images_dir={images_dir}")
+    print(f"[super_build] partition_staging_dir={partition_staging_dir}")
     print(f"[super_build] output_super={output_super}")
 
     sync_report = sync_super_config_for_device_legacy(
@@ -124,15 +160,16 @@ def apply_super_build_legacy_stage(
         execute=execute,
     )
     super_info_source = super_info.get("_super_info_source", "missing")
-    part_names = collect_part_names_legacy(images_dir, super_info)
+    part_names = collect_part_names_legacy(partition_source, super_info)
 
     lpmake_path = resolve_lpmake_binary_legacy()
     if super_info_source != "missing":
-        layout = derive_super_layout_legacy(images_dir, super_info)
+        layout = derive_super_layout_legacy(partition_source, super_info)
         build_report = build_super_image_legacy(
             images_dir=images_dir,
             output_super=output_super,
             super_info=super_info,
+            partition_images_dir=partition_staging_dir,
             device=device,
             execute=execute,
         )
@@ -161,22 +198,33 @@ def apply_super_build_legacy_stage(
 
     # ── Validate super.img after successful build ────────────────────────────
     validation_errors: list[str] = []
+    staging_deleted = False
     if execute and build_report.get("super_img_created"):
         validation_status, validation_errors = _validate_super_img(output_super)
         print(f"[super_build] super_img_validated={validation_status}")
         if validation_status == "FAILED":
             print(f"[super_build] validation errors: {validation_errors}")
+        elif validation_status == "PASSED" and partition_staging_dir is not None:
+            # Mirroring MEZOBuildRom cleanup_after_repack(): once super.img is
+            # validated, the temporary partition images are no longer needed.
+            # Deleting them ensures output/images/ holds only super.img and
+            # standalone boot/vbmeta/dtbo images — so the final ZIP is correct.
+            _warnings_for_staging: list[str] = []
+            staging_deleted = _delete_partition_staging_dir(partition_staging_dir, _warnings_for_staging)
+            if _warnings_for_staging:
+                validation_errors.extend(_warnings_for_staging)
     elif not execute:
         validation_status = "DRY_RUN"
     else:
         # Build did not produce the file — validation cannot proceed.
         validation_status = "NOT_BUILT"
 
+    # Check partition presence in partition_source (staging or images_dir).
     requested = list(layout.get("selected_parts") or part_names)
     found = [
         part
         for part in requested
-        if (images_dir / f"{part}.img").is_file() or (images_dir / f"{part}_a.img").is_file()
+        if (partition_source / f"{part}.img").is_file() or (partition_source / f"{part}_a.img").is_file()
     ]
     missing = [part for part in requested if part not in found]
 
@@ -196,6 +244,8 @@ def apply_super_build_legacy_stage(
         "dry_run": not execute,
         "project_dir": str(project_dir),
         "images_dir": str(images_dir),
+        "partition_staging_dir": str(partition_staging_dir) if partition_staging_dir else None,
+        "partition_staging_dir_deleted": staging_deleted,
         "output_super": str(output_super),
         "device": device,
         "soc": soc,
@@ -237,7 +287,9 @@ def apply_super_build_legacy_stage(
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="DeadZone legacy super.img lpmake build stage")
     parser.add_argument("--project", required=True, help="Path to unpacked project")
-    parser.add_argument("--images-dir", required=True, help="Images directory with rebuilt partition images")
+    parser.add_argument("--images-dir", required=True, help="Final fastboot images directory (output/images/)")
+    parser.add_argument("--partition-staging-dir", default=None,
+                        help="Temporary directory containing EROFS partition images for lpmake input")
     parser.add_argument("--output-super", default=None, help="Output super.img path")
     parser.add_argument("--flavor", default="legend", help="ROM flavor")
     parser.add_argument("--device", default=None, help="Factory device codename")
@@ -264,6 +316,7 @@ def _main(argv: list[str] | None = None) -> int:
         project_dir=project_dir,
         images_dir=images_dir,
         output_super=Path(args.output_super).resolve() if args.output_super else None,
+        partition_staging_dir=Path(args.partition_staging_dir).resolve() if args.partition_staging_dir else None,
         flavor=args.flavor,
         device=args.device,
         soc=args.soc,

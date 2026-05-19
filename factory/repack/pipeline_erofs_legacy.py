@@ -36,19 +36,35 @@ def _detect_partitions(project_dir: Path) -> list[str]:
 def apply_erofs_repack_legacy_stage(
     project_dir: Path,
     images_dir: Path | None = None,
+    staging_dir: Path | None = None,
     flavor: str = "legend",
     partitions: list[str] | None = None,
     execute: bool = False,
 ) -> dict:
-    """Run the legacy EROFS partition repack stage."""
+    """Run the legacy EROFS partition repack stage.
+
+    staging_dir — temporary directory where EROFS-repacked dynamic partition
+                  images (system.img, vendor.img, …) are written.  This mirrors
+                  MEZOBuildRom's project_dir/super/ staging area: partition images
+                  never land in the final output/images/ directory.  The super
+                  build stage reads from here; after super.img is validated the
+                  staging dir is deleted.
+                  When omitted, images_dir is used (backward-compatible fallback).
+    images_dir  — final fastboot images directory (output/images/).  Not used for
+                  EROFS output when staging_dir is provided.
+    """
     project_dir = Path(project_dir).resolve()
     images_dir = _default_images_dir(images_dir).resolve()
+    # EROFS partition images go to the staging dir when provided; otherwise fall
+    # back to images_dir for backward-compatibility.
+    erofs_output_dir = Path(staging_dir).resolve() if staging_dir is not None else images_dir
     reports_dir = _OUTPUT_ROOT / "reports"
     requested = partitions or _detect_partitions(project_dir)
     mkfs_path = resolve_mkfs_erofs_binary_legacy()
 
     print(f"[erofs_repack] mode={'EXECUTE' if execute else 'DRY-RUN'} flavor={flavor} project={project_dir}")
     print(f"[erofs_repack] images_dir={images_dir}")
+    print(f"[erofs_repack] partition_staging_dir={erofs_output_dir}")
 
     warnings: list[str] = []
     errors: list[str] = []
@@ -61,7 +77,7 @@ def apply_erofs_repack_legacy_stage(
     partition_reports: list[dict] = []
 
     if execute:
-        images_dir.mkdir(parents=True, exist_ok=True)
+        erofs_output_dir.mkdir(parents=True, exist_ok=True)
 
     for partition in requested:
         if resolve_partition_root_legacy(project_dir, partition) is None:
@@ -71,7 +87,7 @@ def apply_erofs_repack_legacy_stage(
 
         result = repack_single_partition_legacy(
             project_dir=project_dir,
-            images_dir=images_dir,
+            images_dir=erofs_output_dir,
             partition_name=partition,
             root_dir=None,
             execute=execute,
@@ -103,6 +119,7 @@ def apply_erofs_repack_legacy_stage(
         "dry_run": not execute,
         "project_dir": str(project_dir),
         "images_dir": str(images_dir),
+        "partition_staging_dir": str(erofs_output_dir),
         "flavor": flavor,
         "partitions_requested": requested,
         "partitions_found": partitions_found,
@@ -128,7 +145,9 @@ def _build_parser() -> argparse.ArgumentParser:
         description="DeadZone legacy EROFS partition repack stage",
     )
     parser.add_argument("--project", required=True, help="Path to unpacked project")
-    parser.add_argument("--images-dir", default=None, help="Images directory")
+    parser.add_argument("--images-dir", default=None, help="Final fastboot images directory (output/images/)")
+    parser.add_argument("--partition-staging-dir", default=None,
+                        help="Temporary staging directory for EROFS partition images (MEZOBuildRom-style)")
     parser.add_argument("--flavor", default="legend", help="ROM flavor")
     parser.add_argument("--partitions", default=None, help="Comma-separated partition names")
     parser.add_argument("--execute", action="store_true", help="Apply changes")
@@ -147,6 +166,7 @@ def _main(argv: list[str] | None = None) -> int:
     report = apply_erofs_repack_legacy_stage(
         project_dir=project_dir,
         images_dir=Path(args.images_dir).resolve() if args.images_dir else None,
+        staging_dir=Path(args.partition_staging_dir).resolve() if args.partition_staging_dir else None,
         flavor=args.flavor,
         partitions=_parse_partitions(args.partitions),
         execute=args.execute,

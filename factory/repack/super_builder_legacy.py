@@ -89,7 +89,12 @@ def collect_part_names_legacy(
     images_dir: Path,
     super_info: dict[str, Any] | None = None,
 ) -> list[str]:
-    """Collect partition image names from images_dir, ordered like legacy metadata."""
+    """Collect partition image names from a directory, ordered like legacy metadata.
+
+    Pass partition_staging_dir here when EROFS images live in a separate staging
+    directory (MEZOBuildRom-style separation).  The default images_dir path is
+    kept for backward-compatibility with callers that haven't been updated yet.
+    """
     images_dir = Path(images_dir).resolve()
     found = {
         _base_partition_name(path.stem)
@@ -212,12 +217,18 @@ def can_use_slot_image_legacy(
 
 
 def _build_lpmake_command(
-    images_dir: Path,
+    partition_images_dir: Path,
     output_super: Path,
     super_info: dict[str, Any],
     lpmake_path: Path | None,
 ) -> tuple[list[str], dict[str, Any], list[str], list[str]]:
-    layout = derive_super_layout_legacy(images_dir, super_info)
+    """Build the lpmake argument list.
+
+    partition_images_dir — directory containing the EROFS-repacked *.img files
+                           (may be a separate staging dir, never the final images dir).
+    output_super         — path where lpmake must write super.img (output/images/super.img).
+    """
+    layout = derive_super_layout_legacy(partition_images_dir, super_info)
     warnings: list[str] = []
     errors: list[str] = []
     super_size = int(layout["super_size"] or 0)
@@ -238,7 +249,7 @@ def _build_lpmake_command(
             "--group", f"{layout['group_a_name']}:{super_size}",
         ]
         for part_name in selected_parts:
-            img_path = _image_for_partition(images_dir, part_name, "a")
+            img_path = _image_for_partition(partition_images_dir, part_name, "a")
             if not img_path.exists():
                 errors.append(f"Required image not found for super pack: {img_path}")
                 continue
@@ -252,7 +263,7 @@ def _build_lpmake_command(
             "--group", f"{layout['group_a_name']}:{super_size}",
         ]
         for part_name in selected_parts:
-            img_path = _image_for_partition(images_dir, part_name, "a")
+            img_path = _image_for_partition(partition_images_dir, part_name, "a")
             if not img_path.exists():
                 errors.append(f"Required _a image not found for super pack: {img_path}")
                 continue
@@ -262,7 +273,7 @@ def _build_lpmake_command(
             ]
         command += ["--group", f"{layout['group_b_name']}:{super_size}"]
         for part_name in selected_parts:
-            img_path = images_dir / f"{part_name}_b.img"
+            img_path = partition_images_dir / f"{part_name}_b.img"
             if can_use_slot_image_legacy(part_name, img_path, layout["slot_mode"]):
                 command += [
                     "--partition", f"{part_name}_b:readonly:{img_path.stat().st_size}:{layout['group_b_name']}",
@@ -282,15 +293,30 @@ def build_super_image_legacy(
     images_dir: Path,
     output_super: Path,
     super_info: dict[str, Any],
+    partition_images_dir: Path | None = None,
     device: str | None = None,
     execute: bool = False,
 ) -> dict[str, Any]:
-    """Plan or execute the legacy lpmake super.img build."""
+    """Plan or execute the legacy lpmake super.img build.
+
+    partition_images_dir — directory that holds the EROFS-repacked dynamic
+                           partition images (system.img, vendor.img, …).
+                           When provided this is the MEZOBuildRom-style
+                           temporary staging directory, separate from the
+                           final output/images/ directory.  When omitted,
+                           images_dir is used as a backward-compatible default.
+    images_dir           — the final fastboot images directory (output/images/).
+                           super.img is written to output_super, which is
+                           normally output/images/super.img.
+    """
+    partition_images_dir = Path(partition_images_dir).resolve() if partition_images_dir else Path(images_dir).resolve()
     images_dir = Path(images_dir).resolve()
     output_super = Path(output_super).resolve()
     device = device
     lpmake_path = resolve_lpmake_binary_legacy()
-    command, layout, warnings, errors = _build_lpmake_command(images_dir, output_super, super_info, lpmake_path)
+    command, layout, warnings, errors = _build_lpmake_command(
+        partition_images_dir, output_super, super_info, lpmake_path
+    )
     skipped_items: list[dict[str, str]] = []
     lpmake_executed = False
     super_img_created = False
@@ -308,6 +334,7 @@ def build_super_image_legacy(
         return {
             "dry_run": True,
             "status": status,
+            "partition_images_dir": str(partition_images_dir),
             "images_dir": str(images_dir),
             "output_super": str(output_super),
             "layout": layout,
@@ -328,6 +355,7 @@ def build_super_image_legacy(
         return {
             "dry_run": False,
             "status": "FAILED",
+            "partition_images_dir": str(partition_images_dir),
             "images_dir": str(images_dir),
             "output_super": str(output_super),
             "layout": layout,
@@ -371,6 +399,7 @@ def build_super_image_legacy(
     return {
         "dry_run": False,
         "status": "APPLIED" if not errors else "FAILED",
+        "partition_images_dir": str(partition_images_dir),
         "images_dir": str(images_dir),
         "output_super": str(output_super),
         "layout": layout,
