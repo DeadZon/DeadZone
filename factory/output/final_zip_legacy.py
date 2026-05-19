@@ -36,6 +36,14 @@ DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
     "my_region.img",
 })
 
+REQUIRED_FINAL_IMAGES = [
+    "super.img",
+    "boot.img",
+    "init_boot.img",
+    "vendor_boot.img",
+    "vbmeta.img",
+]
+
 SIDECARE_FILES_EXCLUDED = [
     "sha256sums.txt",
     "build_info.txt",
@@ -164,6 +172,7 @@ def _report_base(
         "images_excluded_dynamic": [],
         "dynamic_images_excluded_from_final_zip": [],
         "forbidden_dynamic_images_in_output_images": [],
+        "missing_final_required_images": [],
         "final_zip_image_list": [],
         "zip_size_mib": None,
         "final_zip_size_mib": None,
@@ -227,6 +236,21 @@ def build_final_fastboot_zip(
     report["images_excluded_dynamic"] = excluded_dynamic
     report["dynamic_images_excluded_from_final_zip"] = excluded_dynamic
     report["images_missing"] = [name for name in KNOWN_IMAGE_ORDER if not (images_dir / name).is_file()]
+
+    # Hard-fail: required final images must all be present before packaging.
+    missing_final_required = [name for name in REQUIRED_FINAL_IMAGES if not (images_dir / name).is_file()]
+    report["missing_final_required_images"] = missing_final_required
+    if missing_final_required:
+        msg = (
+            f"missing_final_required_images: {', '.join(missing_final_required)} — "
+            f"final_zip_image_list={[p.name for p in image_files]}"
+        )
+        report["errors"].append(msg)
+        report["validation_status"] = "FAILED"
+        report["final_status"] = "FAILED"
+        print(f"[final_zip] ERROR: {msg}")
+        report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
+        return report
 
     print(f"[final_zip] super_img_detected={has_super}")
     print(f"[final_zip] compression_mode=ZIP_DEFLATED compresslevel=9")

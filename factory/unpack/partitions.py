@@ -22,6 +22,7 @@ _DYNAMIC_PARTITION_NAMES = frozenset({
     "vendor_dlkm",
     "product",
     "odm",
+    "odm_dlkm",
     "mi_ext",
 })
 

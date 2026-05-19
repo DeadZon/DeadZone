@@ -103,6 +103,10 @@ def _candidate_roots(project_dir: Path, images_dir: Path) -> list[Path]:
         project_dir / "rom",
         project_dir / "rom" / "images",
         project_dir / "images",
+        project_dir.parent / "rom",
+        project_dir.parent / "rom" / "payload_extracted",
+        project_dir.parent / "rom" / "images",
+        project_dir.parent / "rom" / "firmware-update",
     ]
     seen: set[str] = set()
     result: list[Path] = []
@@ -139,7 +143,10 @@ def collect_required_images_legacy(
     project_dir = Path(project_dir)
     images_dir = Path(images_dir)
     partition_staging_dir = Path(partition_staging_dir) if partition_staging_dir is not None else None
-    payload_extracted_dir = project_dir / "rom" / "payload_extracted"
+    payload_extracted_dirs = [
+        project_dir / "rom" / "payload_extracted",
+        project_dir.parent / "rom" / "payload_extracted",
+    ]
 
     copied_images: list[str] = []
     moved_images: list[str] = []
@@ -159,17 +166,19 @@ def collect_required_images_legacy(
             missing_required.append(required)
             warnings.append(f"required image missing: {required}")
 
-    payload_entries: list[Path] = []
-    if payload_extracted_dir.is_dir():
+    # Collect entries from all payload_extracted candidate dirs (deduplicated by name).
+    _seen_payload_names: dict[str, Path] = {}
+    for _pe_dir in payload_extracted_dirs:
+        if not _pe_dir.is_dir():
+            skipped_items.append(f"payload_extracted not found: {_pe_dir}")
+            continue
         try:
-            payload_entries = sorted(
-                [entry for entry in payload_extracted_dir.iterdir() if entry.is_file()],
-                key=lambda item: item.name.lower(),
-            )
+            for _entry in _pe_dir.iterdir():
+                if _entry.is_file() and _entry.name not in _seen_payload_names:
+                    _seen_payload_names[_entry.name] = _entry
         except Exception as exc:
-            errors.append(f"payload_extracted scan: {exc}")
-    else:
-        skipped_items.append(f"payload_extracted not found: {payload_extracted_dir}")
+            errors.append(f"payload_extracted scan ({_pe_dir}): {exc}")
+    payload_entries: list[Path] = sorted(_seen_payload_names.values(), key=lambda item: item.name.lower())
 
     def _base_report() -> dict:
         return {
@@ -243,13 +252,19 @@ def collect_required_images_legacy(
             print(f"[images] Skipped unknown payload image: {entry.name}")
 
     if moved_count > 0:
-        try:
-            shutil.rmtree(payload_extracted_dir.parent, ignore_errors=True)
-            print(f"[images] Moved {moved_count} file(s) from payload_extracted and removed rom directory.")
-        except Exception as exc:
-            warnings.append(f"could not remove rom directory: {exc}")
-    elif payload_extracted_dir.is_dir():
-        print("[images] No files to move from payload_extracted.")
+        # Remove each payload_extracted dir that was actually scanned.
+        for _pe_dir in payload_extracted_dirs:
+            if _pe_dir.is_dir():
+                try:
+                    shutil.rmtree(_pe_dir.parent, ignore_errors=True)
+                except Exception as exc:
+                    warnings.append(f"could not remove rom directory ({_pe_dir.parent}): {exc}")
+        print(f"[images] Moved {moved_count} file(s) from payload_extracted and removed rom directory.")
+    else:
+        if not any(d.is_dir() for d in payload_extracted_dirs):
+            pass  # already reported as skipped above
+        else:
+            print("[images] No files to move from payload_extracted.")
 
     sources = _find_image_sources(project_dir, images_dir)
     for image_name, src in sorted(sources.items()):
@@ -263,6 +278,17 @@ def collect_required_images_legacy(
             print(f"[images] Copied {src.name} -> {images_dir}")
         except Exception as exc:
             errors.append(f"copy {src}: {exc}")
+
+    # Hard-fail: required standalone images must be present in images_dir after all moves/copies.
+    _REQUIRED_STANDALONE = ("boot.img", "init_boot.img", "vendor_boot.img", "vbmeta.img")
+    missing_standalone = [name for name in _REQUIRED_STANDALONE if not (images_dir / name).is_file()]
+    if missing_standalone:
+        msg = (
+            f"missing required standalone images in {images_dir}: "
+            f"{', '.join(missing_standalone)} — final ZIP cannot be created with only super.img"
+        )
+        errors.append(msg)
+        print(f"[images] ERROR: {msg}")
 
     status = "FAILED" if errors else "APPLIED"
     return {"status": status, **_base_report()}

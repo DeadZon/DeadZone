@@ -335,6 +335,7 @@ def try_extract_super_from_payload(
     required_imgs = [
         "mi_ext.img",
         "odm.img",
+        "odm_dlkm.img",
         "product.img",
         "system.img",
         "system_dlkm.img",
