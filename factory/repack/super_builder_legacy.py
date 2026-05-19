@@ -30,6 +30,7 @@ KNOWN_PARTITIONS = [
     "vendor_dlkm",
     "system_dlkm",
     "odm",
+    "odm_dlkm",
     "mi_ext",
 ]
 
