@@ -303,3 +303,50 @@ def backup_and_restore_jar(
 def unpack_dir_for(work_dir: Path, jar_name: str) -> Path:
     """Return the unpack directory path for a given jar_name."""
     return work_dir / _UNPACK_DIR_NAME.get(jar_name, jar_name.replace(".", "_") + "_unpacked")
+
+
+def restore_rebuilt_jar_no_backup(
+    rebuilt_jar: Path,
+    target_jar: Path,
+) -> JarRestoreResult:
+    """
+    Replace *target_jar* with *rebuilt_jar* directly, without creating a backup.
+
+    Rules:
+    - rebuilt_jar must exist and be > 0 bytes.
+    - target_jar parent directory must exist.
+    - Copies rebuilt_jar over target_jar atomically via a temp file + rename.
+    - If replacement fails, target_jar is NOT touched (temp file is cleaned up).
+    - Does NOT create .bak files or output/backups entries.
+    """
+    jar_name = rebuilt_jar.name
+
+    if not rebuilt_jar.is_file():
+        return JarRestoreResult(
+            jar_name=jar_name, success=False,
+            error="rebuilt JAR is missing",
+        )
+    if rebuilt_jar.stat().st_size == 0:
+        return JarRestoreResult(
+            jar_name=jar_name, success=False,
+            error="rebuilt JAR is zero bytes",
+        )
+    if not target_jar.parent.is_dir():
+        return JarRestoreResult(
+            jar_name=jar_name, success=False,
+            error=f"target parent directory does not exist: {target_jar.parent}",
+        )
+
+    tmp = target_jar.with_suffix(".tmp_replace")
+    try:
+        shutil.copy2(rebuilt_jar, tmp)
+        tmp.replace(target_jar)
+        print(f"[jar_workspace] Replaced (no backup): {jar_name} -> {target_jar}")
+        return JarRestoreResult(jar_name=jar_name, success=True, backup_path=None)
+    except Exception as exc:
+        try:
+            tmp.unlink(missing_ok=True)
+        except Exception:
+            pass
+        print(f"[jar_workspace] Replace FAILED {jar_name}: {exc}")
+        return JarRestoreResult(jar_name=jar_name, success=False, error=str(exc))

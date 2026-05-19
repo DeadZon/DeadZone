@@ -37,6 +37,8 @@ class JarReport:
     decompile_errors: list[str] = field(default_factory=list)
     repack_ok: bool = False
     repack_errors: list[str] = field(default_factory=list)
+    # restore_ok / restore_error are repurposed as replace_ok / replace_error
+    # (backup_path is always None -- backup is disabled)
     restore_ok: bool = False
     backup_path: Optional[Path] = None
     restore_error: str = ""
@@ -49,12 +51,18 @@ class PatchSession:
     project_dir: Path
     work_dir: Path
     patch_dir: Path
+    android_major: int | None = None
     jar_reports: list[JarReport] = field(default_factory=list)
+    # Optional pipeline stages -- set to a status dict after each stage runs.
+    # Format: {"module": str, "status": str, "warnings": list, "errors": list}
+    signature_bypass_stage: dict | None = None
+    jar_misc_legacy_stage: dict | None = None
+    kaori_legacy_stage: dict | None = None
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
-# ── Serialise ─────────────────────────────────────────────────────────────────
+# -- Serialise -
 def _method_result_to_dict(mr: MethodPatchResult) -> dict:
     return {
         "class": mr.class_name,
@@ -98,28 +106,45 @@ def _jar_report_to_dict(jr: JarReport) -> dict:
         "decompile_errors": jr.decompile_errors,
         "repack_ok": jr.repack_ok,
         "repack_errors": jr.repack_errors,
-        "restore_ok": jr.restore_ok,
-        "backup_path": str(jr.backup_path) if jr.backup_path else None,
-        "restore_error": jr.restore_error,
+        "replace_ok": jr.restore_ok,       # backup disabled -- repurposed as replace
+        "replace_error": jr.restore_error, # backup disabled -- repurposed as replace
+        "backup_path": None,               # always None; backup is disabled
         "add_dex": [_add_dex_result_to_dict(a) for a in jr.add_dex_reports],
         "mtcr_packs": [_mtcr_report_to_dict(m) for m in jr.mtcr_reports],
     }
 
 
+def _session_final_status(session: PatchSession) -> str:
+    _legend = {"legend", "deadzone_legend"}
+    if session.flavor.lower().replace("-", "_") not in _legend:
+        return "SKIPPED_NON_LEGEND"
+    if session.dry_run:
+        return "DRY_RUN"
+    if session.errors:
+        return "FAILED"
+    return "APPLIED"
+
+
 def session_to_dict(session: PatchSession) -> dict:
     return {
         "flavor": session.flavor,
+        "android_major": session.android_major,
         "dry_run": session.dry_run,
-        "project_dir": str(session.project_dir),
+        "backup_policy": "disabled",
+        "project_path": str(session.project_dir),
         "work_dir": str(session.work_dir),
         "patch_dir": str(session.patch_dir),
-        "jars": [_jar_report_to_dict(jr) for jr in session.jar_reports],
+        "target_jars": [_jar_report_to_dict(jr) for jr in session.jar_reports],
+        "signature_bypass_stage": session.signature_bypass_stage,
+        "jar_misc_legacy_stage": session.jar_misc_legacy_stage,
+        "kaori_legacy_stage": session.kaori_legacy_stage,
         "warnings": session.warnings,
         "errors": session.errors,
+        "final_status": _session_final_status(session),
     }
 
 
-# ── Text format ───────────────────────────────────────────────────────────────
+# -- Text format -
 _STATUS_ICONS: dict[str, str] = {
     # exact patcher statuses
     "APPLIED_EXACT_METHOD":       "OK",
@@ -150,69 +175,86 @@ def _fmt_method_result(mr: MethodPatchResult, indent: str = "      ") -> str:
     return f"{indent}[{icon}] {sig}{msg}"
 
 
+def _fmt_stage(label: str, stage: dict | None) -> list[str]:
+    lines: list[str] = [f"  {label}:"]
+    if stage is None:
+        lines.append("    (not set)")
+        return lines
+    lines.append(f"    Status  : {stage.get('status', '?')}")
+    lines.append(f"    Module  : {stage.get('module', '?')}")
+    for w in stage.get("warnings", []):
+        lines.append(f"    ! {w}")
+    for e in stage.get("errors", []):
+        lines.append(f"    X {e}")
+    return lines
+
+
 def format_text_report(session: PatchSession) -> str:
     mode = "DRY RUN" if session.dry_run else "EXECUTE"
     lines: list[str] = [
         f"DeadZone Legend JAR Patch Report  [{mode}]",
         "=" * 60,
-        f"Flavor:       {session.flavor}",
-        f"Dry run:      {session.dry_run}",
-        f"Project:      {session.project_dir}",
-        f"Work dir:     {session.work_dir}",
-        f"Patch dir:    {session.patch_dir}",
+        f"Final status  : {_session_final_status(session)}",
+        f"Flavor        : {session.flavor}",
+        f"Android major : {session.android_major if session.android_major is not None else '(not specified)'}",
+        f"Dry run       : {session.dry_run}",
+        f"Backup policy : disabled",
+        f"Project       : {session.project_dir}",
+        f"Work dir      : {session.work_dir}",
+        f"Patch dir     : {session.patch_dir}",
         "",
+        "Target JARs:",
     ]
 
     for jr in session.jar_reports:
         found_str = "FOUND" if jr.found else "NOT FOUND"
-        lines.append(f"JAR: {jr.jar_name}  [{found_str}]")
-        lines.append(f"  Partition path: {jr.jar_partition_path}")
+        lines.append(f"  JAR: {jr.jar_name}  [{found_str}]")
+        lines.append(f"    Partition path : {jr.jar_partition_path}")
 
         if jr.found:
-            lines.append(f"  Decompile: {'OK' if jr.decompile_ok else 'FAILED'}")
+            lines.append(f"    Decompile      : {'OK' if jr.decompile_ok else 'FAILED'}")
             for e in jr.decompile_errors:
-                lines.append(f"    ! {e}")
+                lines.append(f"      ! {e}")
 
-            # add.dex results
             for adr in jr.add_dex_reports:
                 dex_name = Path(adr.dex_path).name
-                lines.append(f"  add.dex: {dex_name}  ->  {adr.target_jar}")
-                lines.append(f"    Valid DEX:  {adr.dex_valid}")
-                lines.append(f"    Decompiled: {adr.decompiled}")
-                lines.append(f"    Classes:    {adr.class_count}  "
-                              f"Merged: {adr.merged_count}  "
-                              f"Conflicts: {adr.conflict_count}")
+                lines.append(f"    add.dex: {dex_name}  ->  {adr.target_jar}")
+                lines.append(f"      Valid DEX  : {adr.dex_valid}")
+                lines.append(f"      Decompiled : {adr.decompiled}")
+                lines.append(f"      Classes    : {adr.class_count}  Merged: {adr.merged_count}  Conflicts: {adr.conflict_count}")
                 if adr.smali_root:
-                    lines.append(f"    Smali root: {adr.smali_root}")
+                    lines.append(f"      Smali root : {adr.smali_root}")
                 for r in adr.class_results:
-                    lines.append(_fmt_method_result(r, indent="    "))
+                    lines.append(_fmt_method_result(r, indent="      "))
                 for e in adr.errors:
-                    lines.append(f"    ! {e}")
+                    lines.append(f"      ! {e}")
 
-            # MTCR results
             for mr in jr.mtcr_reports:
-                lines.append(f"  MTCR pack: {mr.mtcr_name}")
-                # Group by class for readability
+                lines.append(f"    MTCR pack: {mr.mtcr_name}")
                 current_class: str | None = None
                 for res in mr.method_results:
                     if res.class_name != current_class:
                         current_class = res.class_name
-                        lines.append(f"    Class: {current_class}")
-                    lines.append(_fmt_method_result(res, indent="      "))
+                        lines.append(f"      Class: {current_class}")
+                    lines.append(_fmt_method_result(res, indent="        "))
 
-            lines.append(f"  Repack:    {'OK' if jr.repack_ok else 'FAILED'}")
+            lines.append(f"    Repack         : {'OK' if jr.repack_ok else 'FAILED'}")
             for e in jr.repack_errors:
-                lines.append(f"    ! {e}")
+                lines.append(f"      ! {e}")
 
             if not session.dry_run:
-                lines.append(f"  Restore:   {'OK' if jr.restore_ok else 'FAILED'}")
-                if jr.backup_path:
-                    lines.append(f"  Backup:    {jr.backup_path}")
+                lines.append(f"    Replace (no bak): {'OK' if jr.restore_ok else 'FAILED'}")
                 if jr.restore_error:
-                    lines.append(f"    ! {jr.restore_error}")
+                    lines.append(f"      ! {jr.restore_error}")
 
         lines.append("")
 
+    lines.append("Cross-JAR stages:")
+    lines.extend(_fmt_stage("Signature bypass", session.signature_bypass_stage))
+    lines.extend(_fmt_stage("JAR misc legacy", session.jar_misc_legacy_stage))
+    lines.extend(_fmt_stage("Kaori legacy", session.kaori_legacy_stage))
+
+    lines.append("")
     lines.append("Warnings:")
     if session.warnings:
         for w in session.warnings:
@@ -232,7 +274,7 @@ def format_text_report(session: PatchSession) -> str:
     return "\n".join(lines)
 
 
-# ── Write ─────────────────────────────────────────────────────────────────────
+# -- Write -
 def write_reports(session: PatchSession, reports_dir: Path) -> tuple[Path, Path]:
     reports_dir.mkdir(parents=True, exist_ok=True)
 
