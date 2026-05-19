@@ -1,4 +1,4 @@
-name: DeadZone Modular Pipeline Test Deprecated
+name: DeadZone MTK Modular Factory
 
 on:
   workflow_dispatch:
@@ -10,10 +10,6 @@ on:
         description: Device codename
         required: true
         default: zircon
-      soc:
-        description: SoC family
-        required: true
-        default: mtk
       platform:
         description: Platform identifier
         required: true
@@ -56,11 +52,12 @@ permissions:
   contents: read
 
 jobs:
-  modular-pipeline-test:
-    name: Modular pipeline test (${{ inputs.device }} / ${{ inputs.mode }})
+  deadzone-mtk-modular-factory:
+    name: MTK modular factory (${{ inputs.device }} / ${{ inputs.mode }})
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
+      TEMPLATE_PATH: third_party/mezo_core/templates/deadzone_fastboot
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
@@ -88,47 +85,13 @@ jobs:
             lz4 \
             python3
 
-      - name: Print repo state
-        run: |
-          set -euo pipefail
-          git log --oneline -5
-          git status --short
-
       - name: Compile factory
         run: python -m compileall factory
 
       - name: Prepare directories
         run: |
           set -euo pipefail
-          mkdir -p _input_roms output/reports output/images output/final _templates
-
-      - name: Download ROM
-        run: |
-          set -euo pipefail
-          curl --fail --location --retry 5 --retry-delay 10 --retry-all-errors \
-            --output _input_roms/input_rom.zip \
-            "${{ inputs.rom_url }}"
-
-      - name: Prepare DeadZone Fastboot Script template
-        id: template
-        run: |
-          set -euo pipefail
-          template_path="third_party/mezo_core/templates/deadzone_fastboot"
-          missing=false
-          for file in \
-            "$template_path/bin/windows/fastboot.exe" \
-            "$template_path/bin/windows/AdbWinApi.dll" \
-            "$template_path/bin/windows/AdbWinUsbApi.dll"; do
-            if [ ! -f "$file" ]; then
-              missing=true
-            fi
-          done
-          if [ "$missing" = "true" ]; then
-            echo "Missing canonical fastboot template files" >&2
-            exit 1
-          fi
-          echo "template_path=$template_path" >> "$GITHUB_OUTPUT"
-          echo "Template source: $template_path"
+          mkdir -p _input_roms output/reports output/images output/final
 
       - name: Prepare Telegram flag
         id: telegram
@@ -147,16 +110,54 @@ jobs:
             echo "Telegram notifications disabled"
           fi
 
-      - name: Unpack ROM for preflight
+      - name: Verify canonical fastboot template
+        run: |
+          set -euo pipefail
+          missing=false
+          for file in \
+            "$TEMPLATE_PATH/bin/windows/fastboot.exe" \
+            "$TEMPLATE_PATH/bin/windows/AdbWinApi.dll" \
+            "$TEMPLATE_PATH/bin/windows/AdbWinUsbApi.dll"; do
+            if [ ! -f "$file" ]; then
+              missing=true
+            fi
+          done
+          if [ "$missing" = "true" ]; then
+            if [ "${{ inputs.notify_telegram }}" = "true" ] && \
+               [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && \
+               [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+              thread_id="${TELEGRAM_MESSAGE_THREAD_ID:-${TELEGRAM_THREAD_ID:-}}"
+              data=(-d "chat_id=${TELEGRAM_CHAT_ID}" -d "text=DeadZone MTK Modular Factory failed before pipeline: missing fastboot template")
+              if [ -n "$thread_id" ]; then
+                data+=(-d "message_thread_id=${thread_id}")
+              fi
+              curl --fail --silent --request POST "${data[@]}" \
+                "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" >/dev/null || true
+            fi
+            echo "Missing canonical fastboot template files" >&2
+            exit 1
+          fi
+          echo "Template source: $TEMPLATE_PATH"
+
+      - name: Download ROM
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-delay 10 --retry-all-errors \
+            --output _input_roms/input_rom.zip \
+            "${{ inputs.rom_url }}"
+
+      - name: Unpack ROM for dry-run
+        if: ${{ inputs.mode == 'dry_run' }}
         run: |
           set -euo pipefail
           python -m factory.unpack.pipeline \
             --rom "_input_roms/input_rom.zip" \
             --device "${{ inputs.device }}" \
-            --soc "${{ inputs.soc }}" \
+            --soc "mtk" \
             --platform "${{ inputs.platform }}"
 
       - name: Resolve unpacked project
+        if: ${{ inputs.mode == 'dry_run' }}
         id: project
         run: |
           set -euo pipefail
@@ -168,22 +169,6 @@ jobs:
           echo "project_dir=$project_dir" >> "$GITHUB_OUTPUT"
           echo "Project directory: $project_dir"
 
-      - name: Run integration preflight
-        run: |
-          set -euo pipefail
-          python -m factory.pipeline.integration_preflight \
-            --project "${{ steps.project.outputs.project_dir }}" \
-            --output-dir "output" \
-            --build-name "${{ inputs.build_name }}" \
-            --device "${{ inputs.device }}" \
-            --soc "${{ inputs.soc }}" \
-            --platform "${{ inputs.platform }}" \
-            --flavor "${{ inputs.flavor }}" \
-            --android-version "${{ inputs.android_version }}" \
-            --mi-version "${{ inputs.mi_version }}" \
-            --vbmeta-mode "${{ inputs.vbmeta_mode }}" \
-            --template-zip "${{ steps.template.outputs.template_path }}"
-
       - name: Run modular pipeline dry-run
         if: ${{ inputs.mode == 'dry_run' }}
         run: |
@@ -193,13 +178,13 @@ jobs:
             --output-dir "output"
             --build-name "${{ inputs.build_name }}"
             --device "${{ inputs.device }}"
-            --soc "${{ inputs.soc }}"
+            --soc "mtk"
             --platform "${{ inputs.platform }}"
             --flavor "${{ inputs.flavor }}"
             --android-version "${{ inputs.android_version }}"
             --mi-version "${{ inputs.mi_version }}"
             --vbmeta-mode "${{ inputs.vbmeta_mode }}"
-            --template-zip "${{ steps.template.outputs.template_path }}"
+            --template-zip "$TEMPLATE_PATH"
           )
           if [ "${{ steps.telegram.outputs.telegram_flag }}" = "--telegram" ]; then
             args+=(--telegram)
@@ -215,13 +200,13 @@ jobs:
             --output-dir "output"
             --build-name "${{ inputs.build_name }}"
             --device "${{ inputs.device }}"
-            --soc "${{ inputs.soc }}"
+            --soc "mtk"
             --platform "${{ inputs.platform }}"
             --flavor "${{ inputs.flavor }}"
             --android-version "${{ inputs.android_version }}"
             --mi-version "${{ inputs.mi_version }}"
             --vbmeta-mode "${{ inputs.vbmeta_mode }}"
-            --template-zip "${{ steps.template.outputs.template_path }}"
+            --template-zip "$TEMPLATE_PATH"
             --execute
           )
           if [ "${{ steps.telegram.outputs.telegram_flag }}" = "--telegram" ]; then
@@ -229,33 +214,11 @@ jobs:
           fi
           python -m factory.pipeline.legacy_build_orchestrator "${args[@]}"
 
-      - name: Print report summaries
-        if: ${{ always() }}
-        run: |
-          set -euo pipefail
-          reports=(
-            "output/reports/17_integration_preflight_report.txt"
-            "output/reports/16_legacy_build_pipeline_report.txt"
-            "output/reports/10_legend_systemui_apk_report.txt"
-            "output/reports/14_super_build_legacy_report.txt"
-            "output/reports/15_final_fastboot_zip_report.txt"
-          )
-          for report in "${reports[@]}"; do
-            if [ -f "$report" ]; then
-              echo ""
-              echo "===== $report ====="
-              sed -n '1,220p' "$report"
-            else
-              echo ""
-              echo "Report not present: $report"
-            fi
-          done
-
       - name: Upload reports artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: deadzone-modular-reports-${{ inputs.device }}-${{ inputs.mode }}
+          name: deadzone-mtk-modular-reports-${{ inputs.device }}-${{ inputs.mode }}
           path: output/reports/**
           if-no-files-found: warn
 
@@ -276,7 +239,7 @@ jobs:
         if: ${{ always() && steps.final_artifacts.outputs.has_final == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: deadzone-modular-final-${{ inputs.device }}-${{ inputs.mode }}
+          name: deadzone-mtk-modular-final-${{ inputs.device }}-${{ inputs.mode }}
           path: |
             output/final/**
             output/images/super.img

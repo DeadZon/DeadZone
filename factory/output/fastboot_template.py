@@ -19,16 +19,11 @@ def _repo_root() -> Path:
 def _find_default_template_dir() -> Path | None:
     root = _repo_root()
     candidates = [
-        root / "DeadZone Fastboot Script",
-        root / "templates" / "DeadZone Fastboot Script",
-        root / "templates" / "fastboot",
+        root / "third_party" / "mezo_core" / "templates" / "deadzone_fastboot",
     ]
     for candidate in candidates:
         if all((candidate / "bin" / "windows" / name).is_file() for name in REQUIRED_BIN_FILES):
             return candidate
-    legacy = root / "third_party" / "mezo_core" / "flash"
-    if all((legacy / "META-INF" / "windows" / name).is_file() for name in REQUIRED_BIN_FILES):
-        return legacy
     return None
 
 
@@ -130,4 +125,3 @@ def prepare_fastboot_template(
         "warnings": warnings,
         "errors": errors,
     }
-

@@ -254,7 +254,7 @@ def _check_references(report: dict[str, Any], template_zip: Path | None) -> dict
     legacy_root = _REPO_ROOT / "third_party" / "mezo_core"
     canonical_systemui = legacy_root / "MEZO_LEGEND" / "MiuiSystemUI"
     fallback_systemui = _REPO_ROOT / "Legend" / "MiuiSystemUI"
-    template_dir = _REPO_ROOT / "DeadZone Fastboot Script"
+    template_dir = legacy_root / "templates" / "deadzone_fastboot"
     template_zip_path = template_zip.resolve() if template_zip else None
 
     references: dict[str, Any] = {
@@ -288,7 +288,7 @@ def _check_references(report: dict[str, Any], template_zip: Path | None) -> dict
     if references["legend_systemui_effective"]["status"] != "OK":
         _append_problem(report, "warning", "MiuiSystemUI reference missing from canonical and fallback locations")
     if references["fastboot_template_effective"]["status"] != "OK":
-        _append_problem(report, "error", "DeadZone Fastboot Script template folder or ZIP missing")
+        _append_problem(report, "error", "Canonical DeadZone fastboot template folder or ZIP missing")
     return references
 
 
