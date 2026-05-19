@@ -18,6 +18,24 @@ REQUIRED_PUBLIC_FILES = [
     *SCRIPT_NAMES,
 ]
 
+# Images packed inside super.img — excluded from the public ZIP when super.img is present.
+DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
+    "system.img",
+    "system_ext.img",
+    "system_dlkm.img",
+    "product.img",
+    "vendor.img",
+    "vendor_dlkm.img",
+    "odm.img",
+    "odm_dlkm.img",
+    "mi_ext.img",
+    "my_product.img",
+    "my_engineering.img",
+    "my_stock.img",
+    "my_heytap.img",
+    "my_region.img",
+})
+
 SIDECARE_FILES_EXCLUDED = [
     "sha256sums.txt",
     "build_info.txt",
@@ -94,11 +112,20 @@ def _iter_staging_files(staging_dir: Path) -> list[Path]:
     return sorted(path for path in staging_dir.rglob("*") if path.is_file())
 
 
-def _collect_image_files(images_dir: Path) -> list[Path]:
+def _collect_image_files(
+    images_dir: Path,
+    exclude: frozenset[str] | None = None,
+) -> tuple[list[Path], list[str]]:
     images = {path.name: path for path in Path(images_dir).glob("*.img") if path.is_file()}
+    excluded_names: list[str] = []
+    if exclude:
+        for name in list(images.keys()):
+            if name in exclude:
+                excluded_names.append(name)
+                del images[name]
     ordered = [images.pop(name) for name in KNOWN_IMAGE_ORDER if name in images]
     ordered.extend(images[name] for name in sorted(images))
-    return ordered
+    return ordered, sorted(excluded_names)
 
 
 def _report_base(
@@ -133,6 +160,9 @@ def _report_base(
         "warnings": [],
         "errors": [],
         "compression_mode": "ZIP_DEFLATED compresslevel=9",
+        "super_img_detected": False,
+        "images_excluded_dynamic": [],
+        "zip_size_mib": None,
         "final_status": "DRY_RUN" if not execute else "FAILED",
     }
 
@@ -161,9 +191,20 @@ def build_final_fastboot_zip(
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
-    image_files = _collect_image_files(images_dir)
+    has_super = (images_dir / "super.img").is_file()
+    report["super_img_detected"] = has_super
+    exclude = DYNAMIC_PARTITION_IMAGES if has_super else frozenset()
+
+    image_files, excluded_dynamic = _collect_image_files(images_dir, exclude=exclude)
     report["images_included"] = [path.name for path in image_files]
+    report["images_excluded_dynamic"] = excluded_dynamic
     report["images_missing"] = [name for name in KNOWN_IMAGE_ORDER if not (images_dir / name).is_file()]
+
+    print(f"[final_zip] super_img_detected={has_super}")
+    print(f"[final_zip] compression_mode=ZIP_DEFLATED compresslevel=9")
+    print(f"[final_zip] images_included ({len(image_files)}): {', '.join(p.name for p in image_files)}")
+    if excluded_dynamic:
+        print(f"[final_zip] images_excluded_dynamic ({len(excluded_dynamic)}): {', '.join(excluded_dynamic)}")
 
     template_result = prepare_fastboot_template(staging_dir, template_zip=template_zip, execute=False)
     report["template_source"] = template_result.get("template_source")
@@ -191,6 +232,8 @@ def build_final_fastboot_zip(
         report["final_status"] = "DRY_RUN" if validation_status == "PASSED" else "FAILED"
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
+
+    # ── execute path continues below ────────────────────────────────────────────
 
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
@@ -231,6 +274,15 @@ def build_final_fastboot_zip(
         for path in _iter_staging_files(staging_dir):
             arcname = _normalize_entry(str(path.relative_to(staging_dir)))
             zf.write(path, arcname)
+
+    zip_size_bytes = final_zip.stat().st_size
+    zip_size_mib = zip_size_bytes / (1024 * 1024)
+    report["zip_size_mib"] = round(zip_size_mib, 1)
+    print(f"[final_zip] zip_size_mib={zip_size_mib:.1f}")
+    if zip_size_mib > 6000:
+        msg = f"Final ZIP size {zip_size_mib:.1f} MiB exceeds 6000 MiB — verify no duplicate images were included"
+        report["warnings"].append(msg)
+        print(f"[final_zip] WARNING: {msg}")
 
     with zipfile.ZipFile(final_zip, "r") as zf:
         zip_entries = [_normalize_entry(name) for name in zf.namelist()]

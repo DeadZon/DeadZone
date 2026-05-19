@@ -17,6 +17,10 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
 
     json_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
+    zip_size_mib = report.get("zip_size_mib")
+    zip_size_str = f"{zip_size_mib} MiB" if zip_size_mib is not None else "N/A (dry-run)"
+    size_warn = zip_size_mib is not None and zip_size_mib > 6000
+
     lines = [
         "DeadZone Final Fastboot ZIP Report",
         "==================================",
@@ -30,10 +34,21 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
         f"staging_dir: {report.get('staging_dir')}",
         f"final_zip: {report.get('final_zip')}",
         f"validation_status: {report.get('validation_status')}",
+        f"compression_mode: {report.get('compression_mode', 'ZIP_DEFLATED compresslevel=9')}",
+        f"super_img_detected: {report.get('super_img_detected', False)}",
+        f"zip_size_mib: {zip_size_str}",
+        *([f"WARNING: ZIP size {zip_size_mib} MiB exceeds 6000 MiB — check for duplicate images"] if size_warn else []),
         "",
         "Images included:",
     ]
     lines.extend(f"- {name}" for name in report.get("images_included", []))
+    lines.append("")
+    lines.append("Images excluded (dynamic, packed in super.img):")
+    excluded = report.get("images_excluded_dynamic", [])
+    if excluded:
+        lines.extend(f"- {name}" for name in excluded)
+    else:
+        lines.append("  (none — super.img not detected or no dynamic images present)")
     lines.append("")
     lines.append("Images missing:")
     lines.extend(f"- {name}" for name in report.get("images_missing", []))
