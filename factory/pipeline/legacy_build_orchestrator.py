@@ -15,6 +15,25 @@ from factory.pipeline.pipeline_report import write_legacy_build_pipeline_report
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LEGEND_FLAVORS = {"legend", "deadzone_legend"}
 
+# Images packed inside super.img — deleted from workspace after validation to free disk.
+# Must stay in sync with DYNAMIC_PARTITION_IMAGES in factory/output/final_zip_legacy.py.
+_DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
+    "system.img",
+    "system_ext.img",
+    "system_dlkm.img",
+    "product.img",
+    "vendor.img",
+    "vendor_dlkm.img",
+    "odm.img",
+    "odm_dlkm.img",
+    "mi_ext.img",
+    "my_product.img",
+    "my_engineering.img",
+    "my_stock.img",
+    "my_heytap.img",
+    "my_region.img",
+})
+
 
 def _is_legend(flavor: str) -> bool:
     return flavor.lower().replace("-", "_") in _LEGEND_FLAVORS
@@ -100,6 +119,36 @@ def _skip_stage(stage: dict, reason: str) -> dict:
         "warnings": [reason],
         "errors": [],
     }
+
+
+def _workspace_images_size_mib(images_dir: Path) -> float | None:
+    """Return total size of output/images in MiB, or None on error."""
+    try:
+        total = sum(f.stat().st_size for f in images_dir.rglob("*") if f.is_file())
+        return round(total / (1024 * 1024), 1)
+    except Exception:
+        return None
+
+
+def _delete_dynamic_images(images_dir: Path, warnings: list) -> list[str]:
+    """Delete dynamic partition images after super.img validation to free disk space.
+
+    Returns the list of filenames that were actually deleted.
+    Dynamic images are already excluded from the final ZIP; this deletion is an
+    optional disk-saving step that must only happen after super.img is validated.
+    """
+    deleted: list[str] = []
+    for name in sorted(_DYNAMIC_PARTITION_IMAGES):
+        path = images_dir / name
+        if path.is_file():
+            try:
+                path.unlink()
+                deleted.append(name)
+            except OSError as exc:
+                warnings.append(f"Could not delete dynamic image {name} from workspace: {exc}")
+    if deleted:
+        print(f"[legacy_pipeline] dynamic_images_deleted_from_workspace={', '.join(deleted)}")
+    return deleted
 
 
 def _run_stage(
@@ -430,6 +479,25 @@ def apply_legacy_build_pipeline(
         stage_reports[super_stage["id"]] = report
         stopped = stop_if_needed(super_stage, failed)
 
+    # ── Post-super-build: measure workspace, delete dynamic images ───────────
+    # These steps run only when the super build stage succeeded.  The dynamic
+    # images must still be present in images_dir when final_zip runs so that
+    # the ZIP report correctly lists what was excluded; deletion happens after.
+    super_img_validated: bool = (
+        stage_reports.get("super_build", {}).get("validation_status") == "PASSED"
+    )
+    workspace_images_size_mib: float | None = None
+    dynamic_images_deleted: list[str] = []
+
+    if not stopped and images_dir.is_dir():
+        workspace_images_size_mib = _workspace_images_size_mib(images_dir)
+        if workspace_images_size_mib is not None:
+            print(
+                f"[legacy_pipeline] workspace_images_size_before_final_packaging="
+                f"{workspace_images_size_mib} MiB"
+            )
+        print(f"[legacy_pipeline] super_img_validated={super_img_validated}")
+
     if not stopped:
         final_stage = stages[9]
 
@@ -449,6 +517,27 @@ def apply_legacy_build_pipeline(
         stage_reports[final_stage["id"]] = report
         final_zip = report.get("final_zip")
         stopped = stop_if_needed(final_stage, failed)
+
+        # ── Extract final packaging metrics from the ZIP report ──────────────
+        fz = stage_reports.get("final_zip", {})
+        dynamic_images_excluded_from_final_zip: list[str] = fz.get("images_excluded_dynamic", [])
+        final_zip_image_list: list[str] = fz.get("images_included", [])
+        final_zip_size_mib: float | None = fz.get("zip_size_mib")
+        print(
+            f"[legacy_pipeline] dynamic_images_excluded_from_final_zip="
+            f"{dynamic_images_excluded_from_final_zip}"
+        )
+        print(f"[legacy_pipeline] final_zip_image_list={final_zip_image_list}")
+        print(f"[legacy_pipeline] final_zip_size_mib={final_zip_size_mib}")
+
+        # ── Delete dynamic partition images now that the ZIP is complete ─────
+        # super.img validation must have passed; ZIP stage must have succeeded.
+        if execute and super_img_validated and not failed:
+            dynamic_images_deleted = _delete_dynamic_images(images_dir, warnings)
+    else:
+        dynamic_images_excluded_from_final_zip = []
+        final_zip_image_list = []
+        final_zip_size_mib = None
 
     if stopped:
         for stage in stages:
@@ -484,6 +573,12 @@ def apply_legacy_build_pipeline(
         "images_dir": str(images_dir),
         "output_dir": str(output_dir),
         "final_zip": final_zip,
+        "workspace_images_size_before_final_packaging_mib": workspace_images_size_mib,
+        "super_img_validated": super_img_validated,
+        "dynamic_images_deleted_from_workspace": dynamic_images_deleted,
+        "dynamic_images_excluded_from_final_zip": dynamic_images_excluded_from_final_zip,
+        "final_zip_image_list": final_zip_image_list,
+        "final_zip_size_mib": final_zip_size_mib,
         "telegram_enabled": bool(telegram),
         "telegram_message_id": live.message_id,
         "telegram_status": telegram_state,

@@ -162,7 +162,10 @@ def _report_base(
         "compression_mode": "ZIP_DEFLATED compresslevel=9",
         "super_img_detected": False,
         "images_excluded_dynamic": [],
+        "dynamic_images_excluded_from_final_zip": [],
+        "final_zip_image_list": [],
         "zip_size_mib": None,
+        "final_zip_size_mib": None,
         "final_status": "DRY_RUN" if not execute else "FAILED",
     }
 
@@ -197,14 +200,22 @@ def build_final_fastboot_zip(
 
     image_files, excluded_dynamic = _collect_image_files(images_dir, exclude=exclude)
     report["images_included"] = [path.name for path in image_files]
+    report["final_zip_image_list"] = report["images_included"]
     report["images_excluded_dynamic"] = excluded_dynamic
+    report["dynamic_images_excluded_from_final_zip"] = excluded_dynamic
     report["images_missing"] = [name for name in KNOWN_IMAGE_ORDER if not (images_dir / name).is_file()]
 
     print(f"[final_zip] super_img_detected={has_super}")
     print(f"[final_zip] compression_mode=ZIP_DEFLATED compresslevel=9")
+    print(f"[final_zip] final_zip_image_list={[p.name for p in image_files]}")
     print(f"[final_zip] images_included ({len(image_files)}): {', '.join(p.name for p in image_files)}")
     if excluded_dynamic:
-        print(f"[final_zip] images_excluded_dynamic ({len(excluded_dynamic)}): {', '.join(excluded_dynamic)}")
+        print(
+            f"[final_zip] dynamic_images_excluded_from_final_zip "
+            f"({len(excluded_dynamic)}): {', '.join(excluded_dynamic)}"
+        )
+    else:
+        print("[final_zip] dynamic_images_excluded_from_final_zip=(none)")
 
     template_result = prepare_fastboot_template(staging_dir, template_zip=template_zip, execute=False)
     report["template_source"] = template_result.get("template_source")
@@ -278,7 +289,9 @@ def build_final_fastboot_zip(
     zip_size_bytes = final_zip.stat().st_size
     zip_size_mib = zip_size_bytes / (1024 * 1024)
     report["zip_size_mib"] = round(zip_size_mib, 1)
+    report["final_zip_size_mib"] = report["zip_size_mib"]
     print(f"[final_zip] zip_size_mib={zip_size_mib:.1f}")
+    print(f"[final_zip] final_zip_size_mib={zip_size_mib:.1f}")
     if zip_size_mib > 6000:
         msg = f"Final ZIP size {zip_size_mib:.1f} MiB exceeds 6000 MiB — verify no duplicate images were included"
         report["warnings"].append(msg)

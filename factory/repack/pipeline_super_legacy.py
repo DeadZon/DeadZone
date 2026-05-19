@@ -18,6 +18,62 @@ from factory.repack.super_report import write_super_build_legacy_reports
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _OUTPUT_ROOT = _REPO_ROOT / "output"
 
+# LP geometry header magic at byte offset 4096 in a raw LP super image ("gDla" LE).
+_LP_GEOMETRY_MAGIC = b"\x67\x44\x6c\x61"
+# Android sparse image magic (simg_header_t.magic = 0xED26FF3A LE).
+_SPARSE_MAGIC = b"\x3a\xff\x26\xed"
+# Absolute minimum size for any real super.img (100 MiB).
+_SUPER_MIN_SIZE_BYTES = 100 * 1024 * 1024
+
+
+def _validate_super_img(super_path: Path) -> tuple[str, list[str]]:
+    """Return ("PASSED", []) or ("FAILED", [reasons]) for the built super.img.
+
+    Checks:
+      1. File exists at expected path.
+      2. Size >= 100 MiB (guards against an empty or truncated output).
+      3. Magic bytes: accepts a sparse image header (offset 0) or a raw LP
+         geometry header (offset 4096).  Either format is a valid lpmake output.
+    """
+    errors: list[str] = []
+    if not super_path.exists():
+        errors.append(f"super.img not found at: {super_path}")
+        return "FAILED", errors
+
+    size = super_path.stat().st_size
+    if size < _SUPER_MIN_SIZE_BYTES:
+        errors.append(
+            f"super.img size {size} bytes is below the 100 MiB sanity threshold "
+            f"— image is likely corrupt or lpmake produced an empty file"
+        )
+        return "FAILED", errors
+
+    try:
+        with super_path.open("rb") as fh:
+            first4 = fh.read(4)
+        if first4 == _SPARSE_MAGIC:
+            # Valid Android sparse image (lpmake --sparse output).
+            pass
+        else:
+            # Expect a raw LP image: geometry header at offset 4096.
+            with super_path.open("rb") as fh:
+                fh.seek(4096)
+                geo4 = fh.read(4)
+            if geo4 != _LP_GEOMETRY_MAGIC:
+                errors.append(
+                    f"super.img header mismatch — "
+                    f"offset-0 bytes: {first4.hex()!r}, "
+                    f"offset-4096 bytes: {geo4.hex()!r}; "
+                    f"expected sparse magic {_SPARSE_MAGIC.hex()!r} "
+                    f"or LP geometry magic {_LP_GEOMETRY_MAGIC.hex()!r}"
+                )
+                return "FAILED", errors
+    except OSError as exc:
+        errors.append(f"Could not read super.img for validation: {exc}")
+        return "FAILED", errors
+
+    return "PASSED", []
+
 
 def _merge_lists(*values: object) -> list:
     result: list = []
@@ -103,6 +159,19 @@ def apply_super_build_legacy_stage(
             "errors": ["Cannot build super.img because dynamic partition metadata is missing"],
         }
 
+    # ── Validate super.img after successful build ────────────────────────────
+    validation_errors: list[str] = []
+    if execute and build_report.get("super_img_created"):
+        validation_status, validation_errors = _validate_super_img(output_super)
+        print(f"[super_build] super_img_validated={validation_status}")
+        if validation_status == "FAILED":
+            print(f"[super_build] validation errors: {validation_errors}")
+    elif not execute:
+        validation_status = "DRY_RUN"
+    else:
+        # Build did not produce the file — validation cannot proceed.
+        validation_status = "NOT_BUILT"
+
     requested = list(layout.get("selected_parts") or part_names)
     found = [
         part
@@ -112,12 +181,12 @@ def apply_super_build_legacy_stage(
     missing = [part for part in requested if part not in found]
 
     warnings = _merge_lists(super_info.get("warnings"), sync_report.get("warnings"), build_report.get("warnings"))
-    errors = _merge_lists(super_info.get("errors"), sync_report.get("errors"), build_report.get("errors"))
+    errors = _merge_lists(super_info.get("errors"), sync_report.get("errors"), build_report.get("errors"), validation_errors)
     skipped = _merge_lists(sync_report.get("skipped_items"), build_report.get("skipped_items"))
 
     if not execute:
         final_status = "DRY_RUN" if not errors else "FAILED"
-    elif errors:
+    elif errors or validation_status not in {"PASSED", "DRY_RUN"}:
         final_status = "FAILED"
     else:
         final_status = "APPLIED"
@@ -149,7 +218,7 @@ def apply_super_build_legacy_stage(
         "lpmake_executed": build_report.get("lpmake_executed", False),
         "super_img_created": build_report.get("super_img_created", False),
         "super_img_size": build_report.get("super_img_size"),
-        "validation_status": None,
+        "validation_status": validation_status,
         "skipped_items": skipped,
         "warnings": warnings,
         "errors": errors,
