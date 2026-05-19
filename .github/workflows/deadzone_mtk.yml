@@ -3,77 +3,96 @@ name: DeadZone MTK Factory
 on:
   workflow_dispatch:
     inputs:
+      rom_url:
+        description: "ROM download URL"
+        required: true
+        type: string
+
       device:
-        description: "MTK device"
+        description: "MTK device codename"
         required: true
         type: choice
+        default: select_device_codename
         options:
+          - select_device_codename
           - "agate | Xiaomi 11T"
           - "aristotle | Xiaomi 13T"
           - "daumier | Xiaomi 12 Pro Dimensity Edition"
           - "plato | Xiaomi 12T"
           - "zircon | Redmi Note 13 Pro+ 5G"
 
-      platform:
-        description: "ROM platform"
+      custom_device:
+        description: "Optional custom codename. If set, overrides the selected device."
+        required: false
+        type: string
+
+      final_name:
+        description: "Final build name (e.g. DeadZone_Legend_V1)"
         required: true
-        type: choice
-        options:
-          - os3_a16
-          - os3_a15
-          - os2_a15
-          - os2_a14
-          - os1_a14
-          - os1_a13
-          - miui_a13
+        type: string
+
+      platform:
+        description: "ROM platform (e.g. os3_a16)"
+        required: true
+        type: string
+        default: os3_a16
 
       flavor:
         description: "DeadZone flavor"
         required: true
         type: choice
+        default: legend
         options:
-          - deadzone
-          - deadzone_gaming
-          - deadzone_epic
-          - deadzone_legend
+          - base
+          - gaming
+          - epic
+          - legend
 
-      rom_url:
-        description: "ROM download URL (required when execute_build is true)"
-        required: false
+      android_version:
+        description: "Android version number"
+        required: true
         type: string
-        default: ""
+        default: "16"
 
-      execute_build:
-        description: "Run MEZOBuildRom.py — false = plan only (safe), true = real build"
-        required: false
-        type: boolean
-        default: false
+      mi_version:
+        description: "MI/OS incremental version string"
+        required: true
+        type: string
+        default: OS3.0.303.0.WNOCNXM
 
-      upload_target:
-        description: "Where to upload final ROM ZIP"
+      vbmeta_mode:
+        description: "vbmeta patch mode"
+        required: true
+        type: string
+        default: "3"
+
+      mode:
+        description: "dry_run = plan only (safe) | execute = real build"
         required: true
         type: choice
-        default: pixeldrain
+        default: dry_run
         options:
-          - pixeldrain
-          - none
+          - dry_run
+          - execute
 
-      upload_debug_artifacts:
-        description: "Upload debug logs/artifacts to GitHub Actions (disabled by default)"
-        required: false
+      notify_telegram:
+        description: "Send Telegram notifications"
+        required: true
         type: boolean
-        default: false
-
-env:
-  TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-  TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-  PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
+        default: true
 
 jobs:
-  mtk-build:
-    name: "MTK | ${{ inputs.device }} | ${{ inputs.platform }} | ${{ inputs.flavor }}"
+  mtk-factory:
+    name: "MTK | ${{ inputs.final_name }} | ${{ inputs.platform }} | ${{ inputs.flavor }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+
+    env:
+      SOC: mtk
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+      TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
 
     steps:
       - name: Checkout repository
@@ -89,141 +108,130 @@ jobs:
           python -m pip install --upgrade pip wheel
           python -m pip install -r requirements.txt
 
-      # ── Always: validate registry ────────────────────────────────────────────
+      # ── Validate canonical fastboot template ────────────────────────────────
+
+      - name: Validate fastboot template
+        run: |
+          TEMPLATE="third_party/mezo_core/templates/deadzone_fastboot"
+          MISSING=0
+          for f in bin/windows/fastboot.exe bin/windows/AdbWinApi.dll bin/windows/AdbWinUsbApi.dll; do
+            if [ ! -f "$TEMPLATE/$f" ]; then
+              echo "[ERROR] Missing template file: $TEMPLATE/$f"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" = "1" ]; then
+            echo "[ERROR] Canonical fastboot template is incomplete: $TEMPLATE"
+            echo "[ERROR] Required files: bin/windows/fastboot.exe  AdbWinApi.dll  AdbWinUsbApi.dll"
+            if [ "${{ inputs.notify_telegram }}" = "true" ] && \
+               [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+              python - <<'PY'
+          import os, urllib.request, json
+          token    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+          chat_id  = os.environ.get("TELEGRAM_CHAT_ID", "")
+          thread_id = (os.environ.get("TELEGRAM_THREAD_ID") or
+                       os.environ.get("TELEGRAM_MESSAGE_THREAD_ID", ""))
+          run_url  = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          text = (
+              "<b>DeadZone MTK Factory — PRE-PIPELINE FAILURE</b>\n"
+              "Reason: Canonical fastboot template files missing.\n"
+              "Build: ${{ inputs.final_name }}\n"
+              f"Run: {run_url}"
+          )
+          payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+          if thread_id:
+              payload["message_thread_id"] = thread_id
+          data = json.dumps(payload).encode()
+          req = urllib.request.Request(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data=data,
+              headers={"Content-Type": "application/json"},
+          )
+          try:
+              urllib.request.urlopen(req, timeout=15)
+              print("[TELEGRAM] Pre-failure notification sent.")
+          except Exception as e:
+              print(f"[TELEGRAM] Notification failed (non-fatal): {e}")
+          PY
+            fi
+            exit 1
+          fi
+          echo "[OK] Fastboot template validated: $TEMPLATE"
+
+      # ── Validate registry ───────────────────────────────────────────────────
 
       - name: Validate registry
         run: python -m factory.cli validate-registry
 
-      # ── Parse codename from "codename | Marketing Name" format ───────────────
+      # ── Resolve device and flavor ───────────────────────────────────────────
 
-      - name: Parse device codename
-        id: parse_device
+      - name: Resolve device and flavor
+        id: resolve
         run: |
-          RAW_DEVICE="${{ inputs.device }}"
-          DEVICE="${RAW_DEVICE%% | *}"
-          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
-          echo "codename=$DEVICE" >> "$GITHUB_OUTPUT"
-          echo "[INFO] Parsed codename: $DEVICE"
+          CUSTOM="${{ inputs.custom_device }}"
+          SELECTED="${{ inputs.device }}"
 
-      # ── Live card: start ─────────────────────────────────────────────────────
+          if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "select_device_codename" ]; then
+            EFFECTIVE_DEVICE="$CUSTOM"
+          else
+            EFFECTIVE_DEVICE="${SELECTED%% | *}"
+          fi
 
-      - name: Live card start
-        if: inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          mkdir -p output/runtime
-          python scripts/telegram_live_notify.py start \
-            --device "${{ steps.parse_device.outputs.codename }}" \
-            --soc mtk \
-            --platform "${{ inputs.platform }}" \
-            --flavor "${{ inputs.flavor }}"
-
-      # ── Notify build started (execute_build only) ────────────────────────────
-
-      - name: Notify build started
-        if: inputs.execute_build == true
-        continue-on-error: true
-        run: |
-          python - <<'PY'
-          from factory.reports.build_summary import format_build_start
-          from factory.services.telegram_notify import send_mtk_message
-          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          msg = format_build_start(
-              device="${{ steps.parse_device.outputs.codename }}",
-              soc="mtk",
-              platform="${{ inputs.platform }}",
-              flavor="${{ inputs.flavor }}",
-              run_url=run_url,
-          )
-          send_mtk_message(msg)
-          PY
-
-      # ── Always: print build plan ─────────────────────────────────────────────
-
-      - name: Show build plan
-        run: |
-          python -m factory.cli plan \
-            --device   "$DEVICE" \
-            --soc      mtk \
-            --platform "${{ inputs.platform }}" \
-            --flavor   "${{ inputs.flavor }}"
-
-      # ── Dry-run complete (execute_build = false) ─────────────────────────────
-
-      - name: Dry-run complete
-        if: inputs.execute_build != true
-        run: |
-          echo "=========================================="
-          echo "  execute_build = false"
-          echo "  Plan validated. No ROM build triggered."
-          echo "  Set execute_build=true + rom_url to build."
-          echo "=========================================="
-
-      # ── Real build path (execute_build = true) ───────────────────────────────
-
-      - name: Require rom_url for real build
-        if: inputs.execute_build == true
-        run: |
-          if [ -z "${{ inputs.rom_url }}" ]; then
-            echo "[ERROR] execute_build is true but rom_url is empty."
-            echo "        Provide a ROM download URL to run a real build."
+          if [ -z "$EFFECTIVE_DEVICE" ] || [ "$EFFECTIVE_DEVICE" = "select_device_codename" ]; then
+            echo "[ERROR] Please select a device codename or provide custom_device."
             exit 1
           fi
 
+          case "${{ inputs.flavor }}" in
+            base)   FLAVOR="deadzone"        ;;
+            gaming) FLAVOR="deadzone_gaming" ;;
+            epic)   FLAVOR="deadzone_epic"   ;;
+            legend) FLAVOR="deadzone_legend" ;;
+            *)      FLAVOR="${{ inputs.flavor }}" ;;
+          esac
+
+          echo "EFFECTIVE_DEVICE=$EFFECTIVE_DEVICE" >> "$GITHUB_ENV"
+          echo "FLAVOR=$FLAVOR"                     >> "$GITHUB_ENV"
+          echo "FINAL_NAME=${{ inputs.final_name }}" >> "$GITHUB_ENV"
+          echo "effective_device=$EFFECTIVE_DEVICE" >> "$GITHUB_OUTPUT"
+          echo "[INFO] device=$EFFECTIVE_DEVICE  flavor=$FLAVOR  build=${{ inputs.final_name }}"
+
+      # ── Free disk space (execute only) ──────────────────────────────────────
+
       - name: Free disk space
-        if: inputs.execute_build == true
+        if: inputs.mode == 'execute'
         run: |
-          echo "Disk before cleanup:"
-          df -h
-          sudo rm -rf /usr/share/dotnet           || true
-          sudo rm -rf /usr/local/lib/android       || true
-          sudo rm -rf /opt/ghc                     || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL  || true
-          docker system prune -af                  || true
-          echo "Disk after cleanup:"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          docker system prune -af || true
           df -h
 
+      # ── Install system dependencies (execute only) ──────────────────────────
+
       - name: Install system dependencies
-        if: inputs.execute_build == true
+        if: inputs.mode == 'execute'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            openjdk-17-jre \
-            zip unzip p7zip-full \
+            openjdk-17-jre zip unzip p7zip-full \
             zstd brotli lz4 \
-            file \
-            ca-certificates curl wget \
-            erofs-utils
+            file ca-certificates curl wget erofs-utils
+
+      # ── Install MEZO requirements (execute only) ────────────────────────────
 
       - name: Install MEZO requirements
-        if: inputs.execute_build == true
+        if: inputs.mode == 'execute'
         run: |
           python - <<'PY'
           from pathlib import Path
-
           src = Path("third_party/mezo_core/requirements.txt")
           dst = Path("third_party/mezo_core/.requirements.ci.txt")
-
           if not src.is_file():
               src.write_text(
-                  "\n".join([
-                      "cryptography>=42.0.0",
-                      "httpx>=0.27.0",
-                      "protobuf>=4.25.0",
-                      "pycryptodome>=3.19.0",
-                      "requests>=2.31.0",
-                      "toml>=0.10.2",
-                      "zstandard>=0.22.0",
-                      "brotli>=1.1.0",
-                      "",
-                  ]),
-                  encoding="utf-8",
-                  newline="\n",
+                  "cryptography>=42.0.0\nhttpx>=0.27.0\nprotobuf>=4.25.0\n"
+                  "pycryptodome>=3.19.0\nrequests>=2.31.0\ntoml>=0.10.2\n"
+                  "zstandard>=0.22.0\nbrotli>=1.1.0\n",
+                  encoding="utf-8", newline="\n",
               )
-
           lines = src.read_text(encoding="utf-8-sig", errors="ignore").splitlines()
           cleaned = []
           found_brotli = False
@@ -233,11 +241,7 @@ jobs:
               if not raw or raw.startswith("#"):
                   cleaned.append(line)
                   continue
-              if low == "lzma" or low.startswith("lzma"):
-                  print("[requirements] skip:", raw)
-                  continue
-              if low == "google" or low.startswith("google"):
-                  print("[requirements] skip:", raw)
+              if low.startswith("lzma") or low.startswith("google"):
                   continue
               if low.startswith("brotli"):
                   found_brotli = True
@@ -245,62 +249,43 @@ jobs:
           if not found_brotli:
               cleaned.append("brotli>=1.1.0")
           dst.write_text("\n".join(cleaned) + "\n", encoding="utf-8", newline="\n")
-          print(dst.read_text(encoding="utf-8"))
           PY
           python -m pip install -r third_party/mezo_core/.requirements.ci.txt
 
+      # ── Prepare MEZO tools (execute only) ───────────────────────────────────
+
       - name: Prepare MEZO tools
-        if: inputs.execute_build == true
+        if: inputs.mode == 'execute'
         working-directory: third_party/mezo_core
         run: |
           find bin -type f -exec chmod +x {} \; || true
           python -m py_compile MEZOBuildRom.py
-          echo "MEZO core ready."
-
-      - name: Prepare MEZO_APP folders
-        if: inputs.execute_build == true
-        working-directory: third_party/mezo_core
-        run: |
           mkdir -p MEZO_APP/product MEZO_APP/system MEZO_APP/appMod
           mkdir -p MEZO_APP/OS3_A16 MEZO_APP/OS3_A15 MEZO_APP/OS2_A15
           mkdir -p MEZO_APP/OS2_A14 MEZO_APP/OS1_A14
+          echo "MEZO core ready."
 
-      # ── Live card: download ROM ──────────────────────────────────────────────
-
-      - name: Live card - download ROM
-        if: inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage download_rom --status running --message "Downloading ROM"
+      # ── Download ROM ────────────────────────────────────────────────────────
 
       - name: Download ROM
-        if: inputs.execute_build == true
         run: |
           mkdir -p _input_roms
           python - <<'PY'
-          import urllib.parse
-          import urllib.request
+          import urllib.parse, urllib.request
           from pathlib import Path
-
           url = "${{ inputs.rom_url }}"
           parsed_name = Path(urllib.parse.urlparse(url).path).name
           name = urllib.parse.unquote(parsed_name) if parsed_name else "input_rom.zip"
           if not name or name in ("/", "."):
               name = "input_rom.zip"
-
           out = Path("_input_roms") / name
           print(f"[ROM] Downloading: {url}", flush=True)
           print(f"[ROM] Saving to  : {out}", flush=True)
-
           req = urllib.request.Request(url, headers={"User-Agent": "DeadZoneFactory/1.0"})
           with urllib.request.urlopen(req, timeout=1800) as resp:
-              total = resp.headers.get("Content-Length")
+              total     = resp.headers.get("Content-Length")
               total_int = int(total) if total and total.isdigit() else 0
-              done = 0
+              done      = 0
               with out.open("wb") as f:
                   while True:
                       chunk = resp.read(1024 * 1024)
@@ -310,11 +295,7 @@ jobs:
                       done += len(chunk)
                       if total_int:
                           pct = done * 100 / total_int
-                          print(
-                              f"[ROM] {done/1024/1024:.1f} MiB / "
-                              f"{total_int/1024/1024:.1f} MiB ({pct:.1f}%)",
-                              flush=True,
-                          )
+                          print(f"[ROM] {done/1024/1024:.1f} MiB / {total_int/1024/1024:.1f} MiB ({pct:.1f}%)", flush=True)
                       else:
                           print(f"[ROM] {done/1024/1024:.1f} MiB downloaded", flush=True)
           print(f"[ROM] Done: {out} ({out.stat().st_size} bytes)", flush=True)
@@ -322,37 +303,22 @@ jobs:
           echo "ROM files:"
           ls -lah _input_roms
 
-      - name: Live card - download ROM done
-        if: inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage download_rom --status pass --message "ROM downloaded"
-
-      # ── Device / ROM mismatch guard ──────────────────────────────────────────
+      # ── Device/ROM mismatch guard (execute only) ─────────────────────────────
 
       - name: Device/ROM mismatch guard
-        if: inputs.execute_build == true
+        if: inputs.mode == 'execute'
         run: |
           python - <<'PY'
-          import sys
-          import yaml
+          import sys, yaml
           from pathlib import Path
-
-          device = "${{ steps.parse_device.outputs.codename }}".lower().strip()
-
+          device = "${{ steps.resolve.outputs.effective_device }}".lower().strip()
           rom_files = [f for f in Path("_input_roms").iterdir() if f.is_file()]
           if not rom_files:
               print("[DEVICE GUARD] No ROM file found — guard skipped.")
               sys.exit(0)
-
           rom_filename = rom_files[0].name.lower()
           print(f"[DEVICE GUARD] Selected device : {device}")
           print(f"[DEVICE GUARD] ROM filename    : {rom_filename}")
-
           from factory.core.paths import REGISTRY_ROOT
           group_yml = REGISTRY_ROOT / "device_groups" / "mtk.yml"
           known = set()
@@ -363,367 +329,101 @@ jobs:
                   c = entry.get("codename", "")
                   if c:
                       known.add(c.lower())
-
           detected = None
           for codename in known:
               if (
-                  rom_filename.startswith(f"{codename}-")
-                  or rom_filename.startswith(f"{codename}_")
-                  or f"_{codename}-" in rom_filename
-                  or f"_{codename}_" in rom_filename
-                  or f"-{codename}-" in rom_filename
+                  rom_filename.startswith(f"{codename}-") or
+                  rom_filename.startswith(f"{codename}_") or
+                  f"_{codename}-" in rom_filename or
+                  f"_{codename}_" in rom_filename or
+                  f"-{codename}-" in rom_filename
               ):
                   detected = codename
                   break
-
           if detected is None:
               print("[DEVICE GUARD] Could not detect codename from ROM filename — warning only, continuing.")
               sys.exit(0)
-
           print(f"[DEVICE GUARD] Detected ROM device: {detected}")
-
           if detected != device:
-              print(f"[DEVICE GUARD] Selected device: {device}")
-              print(f"[DEVICE GUARD] ROM filename device: {detected}")
+              print(f"[DEVICE GUARD] MISMATCH: selected={device}  detected={detected}")
               print("[DEVICE GUARD] Refusing to build mismatched ROM.")
-              try:
-                  from factory.reports.build_summary import format_device_mismatch
-                  from factory.services.telegram_notify import send_mtk_message
-                  run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                  send_mtk_message(format_device_mismatch(device, detected, "mtk", run_url))
-              except Exception as exc:
-                  print(f"[DEVICE GUARD] Warning: Telegram notification failed: {exc}")
               sys.exit(1)
-
           print(f"[DEVICE GUARD] Device match confirmed: {device}")
           PY
 
-      # ── Live card: ROM build ─────────────────────────────────────────────────
+      # ── Build pipeline (dry_run) ─────────────────────────────────────────────
 
-      - name: Live card - ROM build
-        if: inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage rebuild_super --status running --message "Building ROM"
-
-      - name: Run MEZO via factory CLI
-        if: inputs.execute_build == true
+      - name: Build pipeline (dry_run)
+        if: inputs.mode == 'dry_run'
         run: |
           ROM_FILE="$(find _input_roms -type f | head -n 1)"
-          if [ -z "$ROM_FILE" ]; then
-            echo "[ERROR] No ROM file found in _input_roms"
-            exit 1
+          [ -z "$ROM_FILE" ] && { echo "[ERROR] No ROM in _input_roms"; exit 1; }
+          TELEGRAM_FLAG=""
+          if [ "${{ inputs.notify_telegram }}" = "true" ] && \
+             [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            TELEGRAM_FLAG="--telegram"
           fi
-          echo "[INFO] ROM: $ROM_FILE"
-          python -m factory.cli run-mezo \
-            --rom      "$ROM_FILE" \
-            --device   "$DEVICE" \
-            --soc      mtk \
-            --platform "${{ inputs.platform }}" \
-            --flavor   "${{ inputs.flavor }}" \
-            --execute
+          python -m factory.pipeline.legacy_build_orchestrator \
+            --rom           "$ROM_FILE" \
+            --output-dir    output \
+            --build-name    "$FINAL_NAME" \
+            --device        "$EFFECTIVE_DEVICE" \
+            --soc           "$SOC" \
+            --platform      "${{ inputs.platform }}" \
+            --flavor        "$FLAVOR" \
+            --android-version "${{ inputs.android_version }}" \
+            --mi-version    "${{ inputs.mi_version }}" \
+            --vbmeta-mode   "${{ inputs.vbmeta_mode }}" \
+            --template-zip  third_party/mezo_core/templates/deadzone_fastboot \
+            $TELEGRAM_FLAG
 
-      - name: Live card - ROM build done
-        if: success() && inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
+      # ── Build pipeline (execute) ─────────────────────────────────────────────
+
+      - name: Build pipeline (execute)
+        if: inputs.mode == 'execute'
         run: |
-          python scripts/telegram_live_notify.py update \
-            --stage rebuild_super --status pass --message "ROM built"
+          ROM_FILE="$(find _input_roms -type f | head -n 1)"
+          [ -z "$ROM_FILE" ] && { echo "[ERROR] No ROM in _input_roms"; exit 1; }
+          TELEGRAM_FLAG=""
+          if [ "${{ inputs.notify_telegram }}" = "true" ] && \
+             [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            TELEGRAM_FLAG="--telegram"
+          fi
+          python -m factory.pipeline.legacy_build_orchestrator \
+            --rom           "$ROM_FILE" \
+            --output-dir    output \
+            --build-name    "$FINAL_NAME" \
+            --device        "$EFFECTIVE_DEVICE" \
+            --soc           "$SOC" \
+            --platform      "${{ inputs.platform }}" \
+            --flavor        "$FLAVOR" \
+            --android-version "${{ inputs.android_version }}" \
+            --mi-version    "${{ inputs.mi_version }}" \
+            --vbmeta-mode   "${{ inputs.vbmeta_mode }}" \
+            --template-zip  third_party/mezo_core/templates/deadzone_fastboot \
+            --execute \
+            $TELEGRAM_FLAG
 
-      - name: Collect outputs
-        if: always() && inputs.execute_build == true
-        run: |
-          mkdir -p _factory_outputs
-          find third_party/mezo_core -type f -name "*.zip" \
-            -not -path "*/_input_roms/*" \
-            -not -path "*/_asset_downloads/*" \
-            -not -path "*/MEZO_APP/*" \
-            -exec cp -v {} _factory_outputs/ \; || true
-          find third_party/mezo_core -type f \( -name "*.txt" -o -name "*.log" \) \
-            -not -path "*/MEZO_APP/*" \
-            -not -path "*/_asset_downloads/*" \
-            -exec cp -v {} _factory_outputs/ \; || true
-          echo "Collected outputs:"
-          ls -lah _factory_outputs || true
-          df -h
+      # ── Upload pipeline reports (always) ────────────────────────────────────
 
-      - name: Upload artifacts
-        if: always() && inputs.execute_build == true && inputs.upload_debug_artifacts == true
+      - name: Upload pipeline reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: "DeadZone-mtk-${{ steps.parse_device.outputs.codename }}-${{ inputs.platform }}-${{ inputs.flavor }}-${{ github.run_number }}"
-          path: _factory_outputs/*
+          name: "reports-mtk-${{ steps.resolve.outputs.effective_device }}-${{ github.run_number }}"
+          path: output/reports/**
           if-no-files-found: warn
-          retention-days: 7
-
-      - name: Upload EROFS diagnostic logs
-        if: always() && inputs.execute_build == true && inputs.upload_debug_artifacts == true
-        uses: actions/upload-artifact@v4
-        with:
-          name: "erofs-logs-mtk-${{ steps.parse_device.outputs.codename }}-${{ github.run_number }}"
-          path: |
-            third_party/mezo_core/**/logs/mkfs_erofs/**
-            third_party/mezo_core/**/*_fs_config
-            third_party/mezo_core/**/*_file_contexts
-          if-no-files-found: ignore
           retention-days: 14
 
-      # ── Notify build failure ─────────────────────────────────────────────────
+      # ── Upload final output (if present) ────────────────────────────────────
 
-      - name: Notify build failed
-        if: failure() && inputs.execute_build == true
-        continue-on-error: true
-        run: |
-          python - <<'PY'
-          from factory.reports.build_summary import format_build_failure
-          from factory.services.telegram_notify import send_mtk_message
-          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          msg = format_build_failure(
-              device="${{ steps.parse_device.outputs.codename }}",
-              soc="mtk",
-              platform="${{ inputs.platform }}",
-              flavor="${{ inputs.flavor }}",
-              run_url=run_url,
-          )
-          send_mtk_message(msg)
-          PY
-
-      # ── Validate final ROM ZIP before upload ─────────────────────────────────
-
-      # ── Live card: validate ZIP ──────────────────────────────────────────────
-
-      - name: Live card - validate ZIP
-        if: success() && inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage validate_zip --status running --message "Validating ROM ZIP"
-
-      - name: Validate final ROM ZIP (branding + manifest)
-        id: validate_zip
-        if: success() && inputs.execute_build == true
-        env:
-          GITHUB_OUTPUT: ${{ env.GITHUB_OUTPUT }}
-        run: |
-          import os, sys
-          from pathlib import Path
-
-          EXCLUDE_DIRS = {"_input_roms", "_asset_downloads", "_factory_outputs", "MEZO_APP"}
-          EXCLUDE_SUFFIXES = ("_logs.zip", "_diagnostic.zip")
-
-          search_roots = [Path("output"), Path("output/final")]
-          search_roots += sorted(Path("third_party/mezo_core").glob("DeadZone*"))
-          search_roots += [Path("third_party/mezo_core")]
-
-          seen = set()
-          candidates = []
-          for root in search_roots:
-              if not root.exists():
-                  continue
-              for f in root.rglob("*.zip"):
-                  if f in seen:
-                      continue
-                  seen.add(f)
-                  if EXCLUDE_DIRS & set(f.parts):
-                      continue
-                  if any(f.name.endswith(s) for s in EXCLUDE_SUFFIXES):
-                      continue
-                  if "DeadZone" in f.name or "output" in str(f):
-                      candidates.append(f)
-
-          if not candidates:
-              print("[VALIDATE] No final ROM ZIP found — skipping validation.")
-              gho = os.environ.get("GITHUB_OUTPUT", "")
-              if gho:
-                  with open(gho, "a") as out:
-                      out.write("final_zip=\n")
-              sys.exit(0)
-
-          candidates.sort(key=lambda p: (p.stat().st_mtime, p.stat().st_size), reverse=True)
-          final_zip = candidates[0]
-          print(f"[VALIDATE] Validating: {final_zip}")
-
-          gho = os.environ.get("GITHUB_OUTPUT", "")
-          if gho:
-              with open(gho, "a") as out:
-                  out.write(f"final_zip={final_zip}\n")
-
-          import subprocess
-          r1 = subprocess.run(
-              [sys.executable, "-m", "factory.cli", "inspect-zip", "--zip", str(final_zip)],
-              check=False,
-          )
-
-          r2 = subprocess.run(
-              [sys.executable, "-m", "factory.cli", "validate-final-zip", "--zip", str(final_zip)],
-              check=False,
-          )
-
-          if r2.returncode != 0:
-              print("[VALIDATE] Branding validation FAILED — PixelDrain upload will be skipped.", file=sys.stderr)
-              sys.exit(1)
-
-          print("[VALIDATE] ZIP validation passed.")
-        shell: python
-
-      - name: Live card - validate ZIP done
-        if: success() && inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage validate_zip --status pass --message "ZIP validated"
-
-      # ── Live card: PixelDrain upload ─────────────────────────────────────────
-
-      - name: Live card - PixelDrain upload
-        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain'
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage upload_pixeldrain --status running --message "Uploading to PixelDrain"
-
-      # ── Find final ROM ZIP and upload to PixelDrain ──────────────────────────
-
-      - name: Find and upload final ROM to PixelDrain
-        id: pixeldrain
-        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain'
-        continue-on-error: true
-        run: |
-          python - <<'PY'
-          import os
-          from pathlib import Path
-
-          EXCLUDE_DIRS = {"_input_roms", "_asset_downloads", "_factory_outputs", "MEZO_APP"}
-          EXCLUDE_SUFFIXES = ("_logs.zip", "_diagnostic.zip")
-
-          search_roots = [Path("output"), Path("output/final")]
-          search_roots += sorted(Path("third_party/mezo_core").glob("DeadZone*"))
-          search_roots += [Path("third_party/mezo_core")]
-
-          seen = set()
-          candidates = []
-          for root in search_roots:
-              if not root.exists():
-                  continue
-              for f in root.rglob("*.zip"):
-                  if f in seen:
-                      continue
-                  seen.add(f)
-                  if EXCLUDE_DIRS & set(f.parts):
-                      continue
-                  if any(f.name.endswith(s) for s in EXCLUDE_SUFFIXES):
-                      continue
-                  if "DeadZone" in f.name or "output" in str(f):
-                      candidates.append(f)
-
-          gho = os.environ.get("GITHUB_OUTPUT", "")
-          if not candidates:
-              print("[PIXELDRAIN] No final ROM ZIP found — skipping upload.")
-              if gho:
-                  with open(gho, "a") as out:
-                      out.write("pd_link=\npd_found=false\n")
-          else:
-              candidates.sort(key=lambda p: (p.stat().st_mtime, p.stat().st_size), reverse=True)
-              print(f"[PIXELDRAIN] Candidates: {[str(c) for c in candidates]}")
-              final_zip = candidates[0]
-              print(f"[PIXELDRAIN] Selected: {final_zip}")
-
-              from factory.services.pixeldrain_upload import upload_to_pixeldrain, write_sidecar
-              result = upload_to_pixeldrain(str(final_zip))
-              write_sidecar(result)
-
-              link = result.get("link", "")
-              if gho:
-                  with open(gho, "a") as out:
-                      out.write(f"pd_link={link}\npd_found=true\n")
-          PY
-
-      - name: Live card - PixelDrain done
-        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain'
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py update \
-            --stage upload_pixeldrain --status pass --message "Uploaded to PixelDrain"
-
-      - name: Notify upload success
-        if: success() && inputs.execute_build == true && inputs.upload_target == 'pixeldrain' && steps.pixeldrain.outputs.pd_found == 'true' && steps.pixeldrain.outputs.pd_link != ''
-        continue-on-error: true
-        run: |
-          python - <<'PY'
-          from factory.reports.build_summary import format_upload_success
-          from factory.services.telegram_notify import send_mtk_message
-          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          link = "${{ steps.pixeldrain.outputs.pd_link }}"
-          msg = format_upload_success(
-              device="${{ steps.parse_device.outputs.codename }}",
-              soc="mtk",
-              platform="${{ inputs.platform }}",
-              flavor="${{ inputs.flavor }}",
-              pixeldrain_link=link,
-              run_url=run_url,
-          )
-          send_mtk_message(msg)
-          PY
-
-      # ── Notify build succeeded with no upload ────────────────────────────────
-
-      - name: Notify build succeeded (upload skipped)
-        if: success() && inputs.execute_build == true && inputs.upload_target == 'none'
-        continue-on-error: true
-        run: |
-          python - <<'PY'
-          from factory.reports.build_summary import format_build_success_no_upload
-          from factory.services.telegram_notify import send_mtk_message
-          run_url = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          msg = format_build_success_no_upload(
-              device="${{ steps.parse_device.outputs.codename }}",
-              soc="mtk",
-              platform="${{ inputs.platform }}",
-              flavor="${{ inputs.flavor }}",
-              run_url=run_url,
-          )
-          send_mtk_message(msg)
-          PY
-
-      # ── Live card: final summary ─────────────────────────────────────────────
-
-      - name: Live card final (success)
-        if: success() && inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py final \
-            --result success \
-            --message "Build completed successfully"
-
-      - name: Live card final (failure)
-        if: failure() && inputs.execute_build == true
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-        run: |
-          python scripts/telegram_live_notify.py final \
-            --result failure \
-            --message "Build failed"
+      - name: Upload final output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "final-mtk-${{ steps.resolve.outputs.effective_device }}-${{ inputs.final_name }}-${{ github.run_number }}"
+          path: |
+            output/final/**
+            output/images/super.img
+          if-no-files-found: ignore
+          retention-days: 7
