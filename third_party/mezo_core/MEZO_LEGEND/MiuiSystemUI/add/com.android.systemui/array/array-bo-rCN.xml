@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <string-array name="battery_options">
+        <item>ཀུན་བརྒྱ་ཆའི་གྲངས་མངོན་འཆར།</item>
+        <item>གློག་གསོག་སྐབས་བརྒྱ་ཆའི་གྲངས་མངོན་འཆར（སོར་འཇོག）</item>
+        <item>པར་རྟགས་འདི་མངོན་འཆར་མི་བྱེད།</item>
+    </string-array>
+    <string-array name="bluetooth_audio_active_device_summaries">
+        <item></item>
+        <item> | སྤྱོད་བཞིན་ཡོད།</item>
+        <item> | སྤྱོད་བཞིན་ཡོད（སྨྱན་སྦྱོར）</item>
+        <item> | སྤྱོད་བཞིན་ཡོད（ཁ་པར）</item>
+    </string-array>
+    <string-array name="clock_options">
+        <item>ཆུ་ཚོད། སྐར་མ། སྐར་ཆ་མངོན་འཆར།</item>
+        <item>ཆུ་ཚོད་དང་སྐར་མ་མངོན་འཆར（སོར་འཇོག）</item>
+        <item>པར་རྟགས་འདི་མངོན་འཆར་མི་བྱེད།</item>
+    </string-array>
+    <string-array name="nav_bar_buttons">
+        <item>དྲས་སྦྱར་པང་།</item>
+        <item>འཐེབ་ཨང་།</item>
+        <item>ཡང་དག་ངང་སྐོར་བ་དང་མཐེབ་གཞོང་བརྗེ་ཆས།</item>
+        <item>མེད།</item>
+    </string-array>
+    <string-array name="nav_bar_layouts">
+        <item>དཀྱུས་མ།</item>
+        <item>དམ་ཟབ།</item>
+        <item>གཡོན་ཕྱོགས།</item>
+        <item>གཡོན་ལ་ཕྱོགས།</item>
+    </string-array>
+    <string-array name="wifitrackerlib_wifi_status">
+        <item></item>
+        <item>ད་ལྟ་བཤེར་འབེབས་བྱེད་བཞིན་ཡོད།</item>
+        <item>སྦྲེལ་བཞིན་པ།…</item>
+        <item>ཐོབ་ཐང་ལ་ཚོད་ཞིབ་བྱེད་བཞིན་ཡོད།...</item>
+        <item>IP ས་ཚིགས་ཐོབ་ལེན་བྱེད་བཞིན་ཡོད</item>
+        <item>འབྲེལ་ཟིན། </item>
+        <item>མཚམས་འཇོག</item>
+        <item>སྦྲེལ་མཐུད་གཅོད་བཞིན་པ།</item>
+        <item>སྦྲེལ་མཐུད་ཆད་ཟིན།</item>
+        <item>མི་ཐུབ།</item>
+        <item>སྒྲིག་བཀག་བྱས་ཟིན།</item>
+        <item>སྦྲེལ་མཐུད་སྤུས་ཚད་མི་ལེགས་པས། གནས་སྐབས་མཚམས་འཇོག་བྱེད།</item>
+    </string-array>
+</resources>
