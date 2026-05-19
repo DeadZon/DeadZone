@@ -610,6 +610,8 @@ jobs:
           df -h
 
       # ── Upload final ZIP to PixelDrain (execute + success only) ──────────────
+      # Retries 3 times with 25s delay. On all-retries-exhausted the step still
+      # exits 0 so the workflow is marked success; error is saved for Telegram.
 
       - name: Upload to PixelDrain
         if: inputs.mode == 'execute' && success()
@@ -622,27 +624,43 @@ jobs:
             exit 1
           fi
           echo "[PIXELDRAIN] Uploading: $FINAL_ZIP"
-          if ! python -m factory.services.pixeldrain_upload "$FINAL_ZIP"; then
-            python _dz_tg.py edit FAILED "PixelDrain upload failed" || true
-            exit 1
-          fi
           mkdir -p output/reports
-          PD_LINK="$(python - <<'PY'
+          set +e
+          python -m factory.services.pixeldrain_upload "$FINAL_ZIP"
+          PD_EXIT=$?
+          set -e
+          if [ "$PD_EXIT" = "0" ]; then
+            PD_LINK="$(python - <<'PY'
           import json
           from pathlib import Path
           sidecar = Path("output/reports/pixeldrain_upload.json")
           if sidecar.exists():
               data = json.loads(sidecar.read_text(encoding="utf-8"))
-              print(data.get("link", ""))
+              print(data.get("link", ""), end="")
           PY
           )"
-          if [ -n "$PD_LINK" ]; then
-            echo "[PIXELDRAIN] Link: $PD_LINK"
-            echo "$PD_LINK" > output/reports/pixeldrain_link.txt
+            if [ -n "$PD_LINK" ]; then
+              echo "[PIXELDRAIN] Link: $PD_LINK"
+              echo "$PD_LINK" > output/reports/pixeldrain_link.txt
+            fi
+            rm -rf output/images/ output/work/ output/tmp/ _input_roms/ || true
+            find output/final -name '*.zip' -delete 2>/dev/null || true
+            echo "[CLEANUP] Post-upload cleanup complete."
+          else
+            python - <<'PY'
+          import json, sys
+          from pathlib import Path
+          sidecar = Path("output/reports/pixeldrain_upload.json")
+          err = "unknown error"
+          if sidecar.exists():
+              data = json.loads(sidecar.read_text(encoding="utf-8"))
+              err = data.get("error", "unknown error")
+          Path("output/reports").mkdir(parents=True, exist_ok=True)
+          Path("output/reports/pixeldrain_error.txt").write_text(err, encoding="utf-8")
+          print("[PIXELDRAIN] All attempts failed. Error: " + err, file=sys.stderr)
+          PY
           fi
-          rm -rf output/images/ || true
-          find output/final -name '*.zip' -delete 2>/dev/null || true
-          echo "[CLEANUP] Disk usage after PixelDrain upload and image cleanup:"
+          echo "[PIXELDRAIN] Disk usage:"
           df -h
           du -h -d 2 output 2>/dev/null || true
 
@@ -673,6 +691,9 @@ jobs:
           PD_LINK="$(cat output/reports/pixeldrain_link.txt 2>/dev/null || echo "")"
           if [ -n "$PD_LINK" ]; then
             python _dz_tg.py edit DONE "Done. PixelDrain: $PD_LINK" || true
+          elif [ -f output/reports/pixeldrain_error.txt ]; then
+            PD_ERR="$(tr '\n' ' ' < output/reports/pixeldrain_error.txt | cut -c1-200)"
+            python _dz_tg.py edit BUILD_OK "Build succeeded. PixelDrain upload failed: $PD_ERR" || true
           else
             python _dz_tg.py edit DONE "Build complete. Reports uploaded." || true
           fi

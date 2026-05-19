@@ -14,9 +14,13 @@ import base64
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+_MAX_ATTEMPTS = 3
+_RETRY_DELAY = 25  # seconds between attempts
 
 _UPLOAD_URL = "https://pixeldrain.com/api/file"
 _FILE_URL = "https://pixeldrain.com/u"
@@ -69,6 +73,27 @@ def upload_to_pixeldrain(file_path: str, api_key: str | None = None) -> dict:
         return {"success": False, "file": str(path), "id": "", "link": "", "error": str(exc)}
 
 
+def upload_to_pixeldrain_with_retry(
+    file_path: str,
+    api_key: str | None = None,
+    attempts: int = _MAX_ATTEMPTS,
+    delay: int = _RETRY_DELAY,
+) -> dict:
+    """Upload with automatic retry on network/SSL/timeout failures."""
+    last_result: dict = {}
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            print(f"[PIXELDRAIN] Waiting {delay}s before retry {attempt}/{attempts} ...", flush=True)
+            time.sleep(delay)
+        print(f"[PIXELDRAIN] Attempt {attempt}/{attempts}", flush=True)
+        result = upload_to_pixeldrain(file_path, api_key)
+        if result.get("success"):
+            return result
+        last_result = result
+        print(f"[PIXELDRAIN] Attempt {attempt} failed: {result.get('error', '')}", file=sys.stderr)
+    return last_result
+
+
 def write_sidecar(result: dict) -> None:
     out_dir = Path("output") / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -81,11 +106,11 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python -m factory.services.pixeldrain_upload <path/to/final_rom.zip>")
         sys.exit(1)
-    _result = upload_to_pixeldrain(sys.argv[1])
+    _result = upload_to_pixeldrain_with_retry(sys.argv[1])
     write_sidecar(_result)
     if _result.get("success"):
         print(f"[PIXELDRAIN] Link: {_result['link']}")
         sys.exit(0)
     else:
-        print(f"[PIXELDRAIN] Upload failed: {_result.get('error', 'unknown')}", file=sys.stderr)
+        print(f"[PIXELDRAIN] All {_MAX_ATTEMPTS} attempts failed: {_result.get('error', 'unknown')}", file=sys.stderr)
         sys.exit(1)
