@@ -1,3 +1,3 @@
 # factory/patch/apk -- APK patch stage modules.
-# Phase: APK smali patching via APKEditor.jar.
-# Currently includes: Provision.apk legacy patch.
+# Phase: APK smali/resource patching via APKEditor.jar.
+# Modules: provision_legacy, systemui_legend (Legend-only).
