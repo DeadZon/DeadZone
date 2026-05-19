@@ -241,6 +241,12 @@ def build_final_fastboot_zip(
     report["final_status"] = "APPLIED" if zip_validation_status == "PASSED" else "FAILED"
     if zip_validation_status != "PASSED":
         report["errors"].append("ZIP validation failed after creation.")
+    else:
+        try:
+            shutil.rmtree(staging_dir)
+            report["warnings"].append(f"Staging dir removed after successful ZIP: {staging_dir.name}")
+        except Exception as exc:
+            report["warnings"].append(f"Staging dir cleanup failed (non-fatal): {exc}")
 
     report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
     return report

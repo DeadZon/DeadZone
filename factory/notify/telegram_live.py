@@ -49,7 +49,11 @@ class TelegramLiveStatus:
             "TELEGRAM_THREAD_ID",
             "TELEGRAM_MESSAGE_THREAD_ID",
         )
-        self.message_id: int | None = None
+        existing = os.environ.get("DEADZONE_TELEGRAM_MESSAGE_ID", "").strip()
+        try:
+            self.message_id: int | None = int(existing) if existing else None
+        except ValueError:
+            self.message_id = None
         self.started_at = time.monotonic()
         self.warnings: list[str] = []
         self.errors: list[str] = []
@@ -57,7 +61,11 @@ class TelegramLiveStatus:
     def start(self, stages: list[dict]) -> dict:
         if not self._usable():
             return self._result("DISABLED")
-        payload = self._base_payload(self._format_message(stages, final_status="RUNNING"))
+        text = self._format_message(stages, final_status="RUNNING")
+        if self.message_id is not None:
+            # Workflow already sent the initial message; reuse it.
+            return self._edit(text)
+        payload = self._base_payload(text)
         response = self._post("sendMessage", payload)
         if response.get("ok") and isinstance(response.get("result"), dict):
             self.message_id = response["result"].get("message_id")

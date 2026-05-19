@@ -81,18 +81,29 @@ on:
         type: boolean
         default: true
 
+      runner_label:
+        description: "GitHub runner label. Use ubuntu-latest unless a larger runner is configured."
+        required: true
+        type: string
+        default: ubuntu-latest
+
 jobs:
   mtk-factory:
     name: "MTK | ${{ inputs.final_name }} | ${{ inputs.platform }} | ${{ inputs.flavor }}"
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 360
 
     env:
       SOC: mtk
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
-      TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+      PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_MTK_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TELEGRAM_MTK_CHAT_ID }}
+      TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID || secrets.TELEGRAM_MTK_THREAD_ID || secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+      DZ_FACTORY_NAME: DeadZone MTK Factory
+      DZ_MODE: ${{ inputs.mode }}
+      DZ_NOTIFY: ${{ inputs.notify_telegram }}
+      DZ_BUILD: ${{ inputs.final_name }}
+      DZ_DEVICE: ${{ inputs.custom_device || inputs.device }}
 
     steps:
       - name: Checkout repository
@@ -108,10 +119,146 @@ jobs:
           python -m pip install --upgrade pip wheel
           python -m pip install -r requirements.txt
 
-      # ── Validate canonical fastboot template ────────────────────────────────
+      # ── Write Telegram live helper and send initial status ───────────────────
+
+      - name: Telegram live start
+        run: |
+          cat > _dz_tg.py << 'PYEOF'
+          """DeadZone factory Telegram live status helper."""
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          _TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+          _CHAT = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+          _THREAD = (
+              os.environ.get("TELEGRAM_THREAD_ID", "")
+              or os.environ.get("TELEGRAM_MESSAGE_THREAD_ID", "")
+          ).strip()
+          _NOTIFY = os.environ.get("DZ_NOTIFY", "true").strip().lower()
+          _GH_ENV = os.environ.get("GITHUB_ENV", "")
+          _FACTORY = os.environ.get("DZ_FACTORY_NAME", "DeadZone Factory")
+          _MODE = os.environ.get("DZ_MODE", "")
+
+
+          def _usable():
+              if _NOTIFY not in ("true", "1", "yes"):
+                  return False
+              return bool(_TOKEN and _CHAT)
+
+
+          def _post(method, payload):
+              url = f"https://api.telegram.org/bot{_TOKEN}/{method}"
+              data = json.dumps(payload, ensure_ascii=True).encode()
+              req = urllib.request.Request(
+                  url, data=data, headers={"Content-Type": "application/json"}
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      return json.loads(resp.read().decode())
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode(errors="replace")
+                  if "message is not modified" in body.lower():
+                      return {"ok": True}
+                  print(f"[TG] HTTP {exc.code}: {body[:200]}", file=sys.stderr)
+                  return {"ok": False}
+              except Exception as exc:
+                  print(f"[TG] Error: {exc}", file=sys.stderr)
+                  return {"ok": False}
+
+
+          def _make_text(status, current="", extra=""):
+              build = os.environ.get("FINAL_NAME") or os.environ.get("DZ_BUILD", "")
+              device = (
+                  os.environ.get("EFFECTIVE_DEVICE") or os.environ.get("DZ_DEVICE", "")
+              ).split(" | ")[0].strip()
+              mode = os.environ.get("DZ_MODE", _MODE)
+              lines = [
+                  _FACTORY,
+                  f"Build: {build}",
+                  f"Device: {device}",
+                  f"Mode: {mode}",
+                  f"Status: {status}",
+              ]
+              if current:
+                  lines.append(f"Current: {current}")
+              if extra:
+                  lines.append(extra)
+              return "\n".join(lines)
+
+
+          def do_send(text):
+              if not _usable():
+                  print("[TG] Telegram live status disabled")
+                  return
+              payload = {"chat_id": _CHAT, "text": text}
+              if _THREAD:
+                  try:
+                      payload["message_thread_id"] = int(_THREAD)
+                  except ValueError:
+                      pass
+              resp = _post("sendMessage", payload)
+              if resp.get("ok"):
+                  mid = resp.get("result", {}).get("message_id")
+                  print(f"[TG] Message sent (id={mid})")
+                  if mid and _GH_ENV:
+                      with open(_GH_ENV, "a", encoding="utf-8") as fh:
+                          fh.write(f"DEADZONE_TELEGRAM_MESSAGE_ID={mid}\n")
+              else:
+                  print(f"[TG] Send failed (non-fatal): {resp}", file=sys.stderr)
+
+
+          def do_edit(text):
+              if not _usable():
+                  return
+              mid = os.environ.get("DEADZONE_TELEGRAM_MESSAGE_ID", "").strip()
+              if not mid:
+                  print("[TG] Edit skipped: no DEADZONE_TELEGRAM_MESSAGE_ID")
+                  return
+              try:
+                  mid_int = int(mid)
+              except ValueError:
+                  print(f"[TG] Edit skipped: invalid message id: {mid}", file=sys.stderr)
+                  return
+              payload = {"chat_id": _CHAT, "message_id": mid_int, "text": text}
+              if _THREAD:
+                  try:
+                      payload["message_thread_id"] = int(_THREAD)
+                  except ValueError:
+                      pass
+              resp = _post("editMessageText", payload)
+              if resp.get("ok"):
+                  print(f"[TG] Message updated (id={mid})")
+              else:
+                  print(f"[TG] Edit failed (non-fatal): {resp}", file=sys.stderr)
+
+
+          if __name__ == "__main__":
+              if len(sys.argv) < 2:
+                  print("Usage: python _dz_tg.py send|edit STATUS [CURRENT] [EXTRA]")
+                  sys.exit(0)
+              action = sys.argv[1]
+              status = sys.argv[2] if len(sys.argv) > 2 else "UNKNOWN"
+              current = sys.argv[3] if len(sys.argv) > 3 else ""
+              extra = sys.argv[4] if len(sys.argv) > 4 else ""
+              text = _make_text(status, current, extra)
+              if action == "send":
+                  do_send(text)
+              elif action == "edit":
+                  do_edit(text)
+              else:
+                  print(f"[TG] Unknown action: {action}", file=sys.stderr)
+                  sys.exit(1)
+          PYEOF
+          python _dz_tg.py send STARTING "Preparing runner" || true
+
+      # ── Validate canonical fastboot template ─────────────────────────────────
 
       - name: Validate fastboot template
         run: |
+          python _dz_tg.py edit VALIDATING_TEMPLATE "Checking fastboot template" || true
           TEMPLATE="third_party/mezo_core/templates/deadzone_fastboot"
           MISSING=0
           for f in bin/windows/fastboot.exe bin/windows/AdbWinApi.dll bin/windows/AdbWinUsbApi.dll; do
@@ -123,47 +270,19 @@ jobs:
           if [ "$MISSING" = "1" ]; then
             echo "[ERROR] Canonical fastboot template is incomplete: $TEMPLATE"
             echo "[ERROR] Required files: bin/windows/fastboot.exe  AdbWinApi.dll  AdbWinUsbApi.dll"
-            if [ "${{ inputs.notify_telegram }}" = "true" ] && \
-               [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-              python - <<'PY'
-          import os, urllib.request, json
-          token    = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-          chat_id  = os.environ.get("TELEGRAM_CHAT_ID", "")
-          thread_id = (os.environ.get("TELEGRAM_THREAD_ID") or
-                       os.environ.get("TELEGRAM_MESSAGE_THREAD_ID", ""))
-          run_url  = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          text = (
-              "<b>DeadZone MTK Factory — PRE-PIPELINE FAILURE</b>\n"
-              "Reason: Canonical fastboot template files missing.\n"
-              "Build: ${{ inputs.final_name }}\n"
-              f"Run: {run_url}"
-          )
-          payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
-          if thread_id:
-              payload["message_thread_id"] = thread_id
-          data = json.dumps(payload).encode()
-          req = urllib.request.Request(
-              f"https://api.telegram.org/bot{token}/sendMessage",
-              data=data,
-              headers={"Content-Type": "application/json"},
-          )
-          try:
-              urllib.request.urlopen(req, timeout=15)
-              print("[TELEGRAM] Pre-failure notification sent.")
-          except Exception as e:
-              print(f"[TELEGRAM] Notification failed (non-fatal): {e}")
-          PY
-            fi
+            python _dz_tg.py edit FAILED "Fastboot template files missing" || true
             exit 1
           fi
           echo "[OK] Fastboot template validated: $TEMPLATE"
 
-      # ── Validate registry ───────────────────────────────────────────────────
+      # ── Validate registry ────────────────────────────────────────────────────
 
       - name: Validate registry
-        run: python -m factory.cli validate-registry
+        run: |
+          python _dz_tg.py edit VALIDATING_INPUTS "Validating device registry" || true
+          python -m factory.cli validate-registry
 
-      # ── Resolve device and flavor ───────────────────────────────────────────
+      # ── Resolve device and flavor ────────────────────────────────────────────
 
       - name: Resolve device and flavor
         id: resolve
@@ -179,6 +298,7 @@ jobs:
 
           if [ -z "$EFFECTIVE_DEVICE" ] || [ "$EFFECTIVE_DEVICE" = "select_device_codename" ]; then
             echo "[ERROR] Please select a device codename or provide custom_device."
+            python _dz_tg.py edit FAILED "No device codename selected" || true
             exit 1
           fi
 
@@ -195,8 +315,9 @@ jobs:
           echo "FINAL_NAME=${{ inputs.final_name }}" >> "$GITHUB_ENV"
           echo "effective_device=$EFFECTIVE_DEVICE" >> "$GITHUB_OUTPUT"
           echo "[INFO] device=$EFFECTIVE_DEVICE  flavor=$FLAVOR  build=${{ inputs.final_name }}"
+          python _dz_tg.py edit VALIDATING_INPUTS "Inputs resolved: device=$EFFECTIVE_DEVICE" || true
 
-      # ── Free disk space (execute only) ──────────────────────────────────────
+      # ── Free disk space (execute only) ───────────────────────────────────────
 
       - name: Free disk space
         if: inputs.mode == 'execute'
@@ -205,7 +326,7 @@ jobs:
           docker system prune -af || true
           df -h
 
-      # ── Install system dependencies (execute only) ──────────────────────────
+      # ── Install system dependencies (execute only) ───────────────────────────
 
       - name: Install system dependencies
         if: inputs.mode == 'execute'
@@ -216,7 +337,7 @@ jobs:
             zstd brotli lz4 \
             file ca-certificates curl wget erofs-utils
 
-      # ── Install MEZO requirements (execute only) ────────────────────────────
+      # ── Install MEZO requirements (execute only) ─────────────────────────────
 
       - name: Install MEZO requirements
         if: inputs.mode == 'execute'
@@ -252,7 +373,7 @@ jobs:
           PY
           python -m pip install -r third_party/mezo_core/.requirements.ci.txt
 
-      # ── Prepare MEZO tools (execute only) ───────────────────────────────────
+      # ── Prepare MEZO tools (execute only) ────────────────────────────────────
 
       - name: Prepare MEZO tools
         if: inputs.mode == 'execute'
@@ -265,10 +386,11 @@ jobs:
           mkdir -p MEZO_APP/OS2_A14 MEZO_APP/OS1_A14
           echo "MEZO core ready."
 
-      # ── Download ROM ────────────────────────────────────────────────────────
+      # ── Download ROM ──────────────────────────────────────────────────────────
 
       - name: Download ROM
         run: |
+          python _dz_tg.py edit DOWNLOADING_ROM "Downloading ROM" || true
           mkdir -p _input_roms
           python - <<'PY'
           import urllib.parse, urllib.request
@@ -302,12 +424,14 @@ jobs:
           PY
           echo "ROM files:"
           ls -lah _input_roms
+          python _dz_tg.py edit ROM_DOWNLOADED "ROM download complete" || true
 
-      # ── Device/ROM mismatch guard (execute only) ─────────────────────────────
+      # ── Device/ROM mismatch guard (execute only) ──────────────────────────────
 
       - name: Device/ROM mismatch guard
         if: inputs.mode == 'execute'
         run: |
+          python _dz_tg.py edit PREFLIGHT "Running device/ROM mismatch guard" || true
           python - <<'PY'
           import sys, yaml
           from pathlib import Path
@@ -351,7 +475,7 @@ jobs:
           print(f"[DEVICE GUARD] Device match confirmed: {device}")
           PY
 
-      # ── Build pipeline (dry_run) ─────────────────────────────────────────────
+      # ── Build pipeline (dry_run) ──────────────────────────────────────────────
 
       - name: Build pipeline (dry_run)
         if: inputs.mode == 'dry_run'
@@ -363,6 +487,7 @@ jobs:
              [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             TELEGRAM_FLAG="--telegram"
           fi
+          python _dz_tg.py edit RUNNING_PIPELINE "Running dry-run pipeline" || true
           python -m factory.pipeline.legacy_build_orchestrator \
             --rom           "$ROM_FILE" \
             --output-dir    output \
@@ -377,7 +502,7 @@ jobs:
             --template-zip  third_party/mezo_core/templates/deadzone_fastboot \
             $TELEGRAM_FLAG
 
-      # ── Build pipeline (execute) ─────────────────────────────────────────────
+      # ── Build pipeline (execute) ──────────────────────────────────────────────
 
       - name: Build pipeline (execute)
         if: inputs.mode == 'execute'
@@ -389,6 +514,7 @@ jobs:
              [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
             TELEGRAM_FLAG="--telegram"
           fi
+          python _dz_tg.py edit RUNNING_PIPELINE "Running execute pipeline" || true
           python -m factory.pipeline.legacy_build_orchestrator \
             --rom           "$ROM_FILE" \
             --output-dir    output \
@@ -404,26 +530,91 @@ jobs:
             --execute \
             $TELEGRAM_FLAG
 
-      # ── Upload pipeline reports (always) ────────────────────────────────────
+      # ── Cleanup staging and temp files (always) ───────────────────────────────
 
-      - name: Upload pipeline reports
+      - name: Cleanup staging and temp files
+        if: always()
+        run: |
+          python _dz_tg.py edit CLEANING_OUTPUT "Removing staging and temp files" || true
+          echo "[CLEANUP] Disk usage before cleanup:"
+          df -h
+          du -h -d 2 output 2>/dev/null || true
+          du -h -d 1 _input_roms 2>/dev/null || true
+          rm -rf _input_roms/ || true
+          find output -maxdepth 3 -name '*_unpacked' -type d -exec rm -rf {} + 2>/dev/null || true
+          rm -rf output/tmp output/work || true
+          find output/final -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
+          echo "[CLEANUP] Disk usage after staging cleanup:"
+          df -h
+
+      # ── Upload final ZIP to PixelDrain (execute + success only) ──────────────
+
+      - name: Upload to PixelDrain
+        if: inputs.mode == 'execute' && success()
+        run: |
+          python _dz_tg.py edit UPLOADING_PIXELDRAIN "Uploading to PixelDrain" || true
+          FINAL_ZIP="$(find output/final -maxdepth 1 -name '*.zip' -type f 2>/dev/null | head -n 1)"
+          if [ -z "$FINAL_ZIP" ]; then
+            echo "[ERROR] No final ZIP found in output/final after execute pipeline."
+            python _dz_tg.py edit FAILED "PixelDrain upload failed: final ZIP not found" || true
+            exit 1
+          fi
+          echo "[PIXELDRAIN] Uploading: $FINAL_ZIP"
+          if ! python -m factory.services.pixeldrain_upload "$FINAL_ZIP"; then
+            python _dz_tg.py edit FAILED "PixelDrain upload failed" || true
+            exit 1
+          fi
+          mkdir -p output/reports
+          PD_LINK="$(python - <<'PY'
+          import json
+          from pathlib import Path
+          sidecar = Path("output/reports/pixeldrain_upload.json")
+          if sidecar.exists():
+              data = json.loads(sidecar.read_text(encoding="utf-8"))
+              print(data.get("link", ""))
+          PY
+          )"
+          if [ -n "$PD_LINK" ]; then
+            echo "[PIXELDRAIN] Link: $PD_LINK"
+            echo "$PD_LINK" > output/reports/pixeldrain_link.txt
+          fi
+          rm -rf output/images/ || true
+          find output/final -name '*.zip' -delete 2>/dev/null || true
+          echo "[CLEANUP] Disk usage after PixelDrain upload and image cleanup:"
+          df -h
+          du -h -d 2 output 2>/dev/null || true
+
+      # ── Telegram: uploading reports ───────────────────────────────────────────
+
+      - name: Telegram update - uploading reports
+        if: success()
+        run: python _dz_tg.py edit UPLOADING_REPORTS "Uploading reports artifact" || true
+
+      # ── Upload reports artifact (always, reports/logs only) ───────────────────
+
+      - name: Upload reports artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: "reports-mtk-${{ steps.resolve.outputs.effective_device }}-${{ github.run_number }}"
-          path: output/reports/**
+          path: |
+            output/reports/**
+            output/logs/**
           if-no-files-found: warn
           retention-days: 14
 
-      # ── Upload final output (if present) ────────────────────────────────────
+      # ── Telegram: final status ────────────────────────────────────────────────
 
-      - name: Upload final output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: "final-mtk-${{ steps.resolve.outputs.effective_device }}-${{ inputs.final_name }}-${{ github.run_number }}"
-          path: |
-            output/final/**
-            output/images/super.img
-          if-no-files-found: ignore
-          retention-days: 7
+      - name: Telegram final success
+        if: success()
+        run: |
+          PD_LINK="$(cat output/reports/pixeldrain_link.txt 2>/dev/null || echo "")"
+          if [ -n "$PD_LINK" ]; then
+            python _dz_tg.py edit DONE "Done. PixelDrain: $PD_LINK" || true
+          else
+            python _dz_tg.py edit DONE "Build complete. Reports uploaded." || true
+          fi
+
+      - name: Telegram final failure
+        if: failure()
+        run: python _dz_tg.py edit FAILED "Build failed. Check workflow logs." || true
