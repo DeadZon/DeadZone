@@ -1,0 +1,279 @@
+name: DeadZone Modular Pipeline Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: ROM download URL
+        required: true
+      device:
+        description: Device codename
+        required: true
+        default: zircon
+      soc:
+        description: SoC family
+        required: true
+        default: mtk
+      platform:
+        description: Platform identifier
+        required: true
+        default: os3_a16
+      flavor:
+        description: Build flavor
+        required: true
+        default: legend
+      android_version:
+        description: Android version
+        required: true
+        default: "16"
+      mi_version:
+        description: MI/OS version
+        required: true
+        default: OS3.0.303.0.WNOCNXM
+      vbmeta_mode:
+        description: vbmeta patch mode
+        required: true
+        default: "3"
+      build_name:
+        description: Build name
+        required: true
+        default: DeadZone_v1
+      mode:
+        description: Pipeline mode
+        required: true
+        type: choice
+        options:
+          - dry_run
+          - execute
+        default: dry_run
+      notify_telegram:
+        description: Send Telegram pipeline updates when secrets are configured
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  modular-pipeline-test:
+    name: Modular pipeline test (${{ inputs.device }} / ${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+      TELEGRAM_MESSAGE_THREAD_ID: ${{ secrets.TELEGRAM_MESSAGE_THREAD_ID }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            unzip \
+            zip \
+            p7zip-full \
+            openjdk-17-jre-headless \
+            zstd \
+            lz4 \
+            python3
+
+      - name: Print repo state
+        run: |
+          set -euo pipefail
+          git log --oneline -5
+          git status --short
+
+      - name: Compile factory
+        run: python -m compileall factory
+
+      - name: Prepare directories
+        run: |
+          set -euo pipefail
+          mkdir -p _input_roms output/reports output/images output/final _templates
+
+      - name: Download ROM
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-delay 10 --retry-all-errors \
+            --output _input_roms/input_rom.zip \
+            "${{ inputs.rom_url }}"
+
+      - name: Prepare DeadZone Fastboot Script template
+        id: template
+        run: |
+          set -euo pipefail
+          if [ -d "DeadZone Fastboot Script" ]; then
+            template_path="DeadZone Fastboot Script"
+          elif [ -f "DeadZone Fastboot Script.zip" ]; then
+            template_path="DeadZone Fastboot Script.zip"
+          elif [ -f "_templates/DeadZone_Fastboot_Template.zip" ]; then
+            template_path="_templates/DeadZone_Fastboot_Template.zip"
+          else
+            echo "Missing DeadZone Fastboot Script template" >&2
+            exit 1
+          fi
+          echo "template_path=$template_path" >> "$GITHUB_OUTPUT"
+          echo "Template source: $template_path"
+
+      - name: Prepare Telegram flag
+        id: telegram
+        run: |
+          set -euo pipefail
+          telegram_flag=""
+          if [ "${{ inputs.notify_telegram }}" = "true" ] && \
+             [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && \
+             [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
+            telegram_flag="--telegram"
+          fi
+          echo "telegram_flag=$telegram_flag" >> "$GITHUB_OUTPUT"
+          if [ -n "$telegram_flag" ]; then
+            echo "Telegram notifications enabled"
+          else
+            echo "Telegram notifications disabled"
+          fi
+
+      - name: Unpack ROM for preflight
+        run: |
+          set -euo pipefail
+          python -m factory.unpack.pipeline \
+            --rom "_input_roms/input_rom.zip" \
+            --device "${{ inputs.device }}" \
+            --soc "${{ inputs.soc }}" \
+            --platform "${{ inputs.platform }}"
+
+      - name: Resolve unpacked project
+        id: project
+        run: |
+          set -euo pipefail
+          project_dir="$(find output/work -type d -path '*/project' | sort | tail -n 1)"
+          if [ -z "$project_dir" ] || [ ! -d "$project_dir" ]; then
+            echo "Unable to resolve unpacked project directory" >&2
+            exit 1
+          fi
+          echo "project_dir=$project_dir" >> "$GITHUB_OUTPUT"
+          echo "Project directory: $project_dir"
+
+      - name: Run integration preflight
+        run: |
+          set -euo pipefail
+          python -m factory.pipeline.integration_preflight \
+            --project "${{ steps.project.outputs.project_dir }}" \
+            --output-dir "output" \
+            --build-name "${{ inputs.build_name }}" \
+            --device "${{ inputs.device }}" \
+            --soc "${{ inputs.soc }}" \
+            --platform "${{ inputs.platform }}" \
+            --flavor "${{ inputs.flavor }}" \
+            --android-version "${{ inputs.android_version }}" \
+            --mi-version "${{ inputs.mi_version }}" \
+            --vbmeta-mode "${{ inputs.vbmeta_mode }}" \
+            --template-zip "${{ steps.template.outputs.template_path }}"
+
+      - name: Run modular pipeline dry-run
+        if: ${{ inputs.mode == 'dry_run' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --project "${{ steps.project.outputs.project_dir }}"
+            --output-dir "output"
+            --build-name "${{ inputs.build_name }}"
+            --device "${{ inputs.device }}"
+            --soc "${{ inputs.soc }}"
+            --platform "${{ inputs.platform }}"
+            --flavor "${{ inputs.flavor }}"
+            --android-version "${{ inputs.android_version }}"
+            --mi-version "${{ inputs.mi_version }}"
+            --vbmeta-mode "${{ inputs.vbmeta_mode }}"
+            --template-zip "${{ steps.template.outputs.template_path }}"
+          )
+          if [ "${{ steps.telegram.outputs.telegram_flag }}" = "--telegram" ]; then
+            args+=(--telegram)
+          fi
+          python -m factory.pipeline.legacy_build_orchestrator "${args[@]}"
+
+      - name: Run modular pipeline execute
+        if: ${{ inputs.mode == 'execute' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --rom "_input_roms/input_rom.zip"
+            --output-dir "output"
+            --build-name "${{ inputs.build_name }}"
+            --device "${{ inputs.device }}"
+            --soc "${{ inputs.soc }}"
+            --platform "${{ inputs.platform }}"
+            --flavor "${{ inputs.flavor }}"
+            --android-version "${{ inputs.android_version }}"
+            --mi-version "${{ inputs.mi_version }}"
+            --vbmeta-mode "${{ inputs.vbmeta_mode }}"
+            --template-zip "${{ steps.template.outputs.template_path }}"
+            --execute
+          )
+          if [ "${{ steps.telegram.outputs.telegram_flag }}" = "--telegram" ]; then
+            args+=(--telegram)
+          fi
+          python -m factory.pipeline.legacy_build_orchestrator "${args[@]}"
+
+      - name: Print report summaries
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          reports=(
+            "output/reports/17_integration_preflight_report.txt"
+            "output/reports/16_legacy_build_pipeline_report.txt"
+            "output/reports/10_legend_systemui_apk_report.txt"
+            "output/reports/14_super_build_legacy_report.txt"
+            "output/reports/15_final_fastboot_zip_report.txt"
+          )
+          for report in "${reports[@]}"; do
+            if [ -f "$report" ]; then
+              echo ""
+              echo "===== $report ====="
+              sed -n '1,220p' "$report"
+            else
+              echo ""
+              echo "Report not present: $report"
+            fi
+          done
+
+      - name: Upload reports artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadzone-modular-reports-${{ inputs.device }}-${{ inputs.mode }}
+          path: output/reports/**
+          if-no-files-found: warn
+
+      - name: Check final output artifacts
+        if: ${{ always() }}
+        id: final_artifacts
+        run: |
+          set -euo pipefail
+          has_final=false
+          if find output/final -type f -print -quit | grep -q .; then
+            has_final=true
+          elif [ -f "output/images/super.img" ]; then
+            has_final=true
+          fi
+          echo "has_final=$has_final" >> "$GITHUB_OUTPUT"
+
+      - name: Upload final outputs artifact
+        if: ${{ always() && steps.final_artifacts.outputs.has_final == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadzone-modular-final-${{ inputs.device }}-${{ inputs.mode }}
+          path: |
+            output/final/**
+            output/images/super.img
+          if-no-files-found: ignore
