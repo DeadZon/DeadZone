@@ -163,6 +163,7 @@ def _report_base(
         "super_img_detected": False,
         "images_excluded_dynamic": [],
         "dynamic_images_excluded_from_final_zip": [],
+        "forbidden_dynamic_images_in_output_images": [],
         "final_zip_image_list": [],
         "zip_size_mib": None,
         "final_zip_size_mib": None,
@@ -191,6 +192,28 @@ def build_final_fastboot_zip(
         report["errors"].append(f"Images directory not found: {images_dir}")
         report["validation_status"] = "FAILED"
         report["final_status"] = "FAILED"
+        report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
+        return report
+
+    # Hard-fail guard: dynamic partition images must never reach output/images.
+    # They belong in partition_staging_dir and are packed into super.img by lpmake.
+    _FORBIDDEN_DYNAMIC: frozenset[str] = frozenset({
+        "system.img", "product.img", "vendor.img", "system_ext.img",
+        "odm.img", "odm_dlkm.img", "mi_ext.img",
+        "vendor_dlkm.img", "system_dlkm.img",
+    })
+    forbidden_found = sorted(name for name in _FORBIDDEN_DYNAMIC if (images_dir / name).is_file())
+    report["forbidden_dynamic_images_in_output_images"] = forbidden_found
+    if forbidden_found:
+        msg = (
+            f"output/images contains forbidden dynamic partition images that must be "
+            f"in partition_staging_dir, not in the final fastboot directory: "
+            f"{', '.join(forbidden_found)}"
+        )
+        report["errors"].append(msg)
+        report["validation_status"] = "FAILED"
+        report["final_status"] = "FAILED"
+        print(f"[final_zip] ERROR: {msg}")
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 

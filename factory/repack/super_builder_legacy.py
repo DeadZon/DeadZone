@@ -236,12 +236,17 @@ def _build_lpmake_command(
     if super_size <= 0:
         errors.append("super_info has no valid block device size")
 
+    lpmake_sparse_enabled = (layout.get("output_format") or "sparse") == "sparse"
+    layout["lpmake_sparse_enabled"] = lpmake_sparse_enabled
+
     command = [
         str(lpmake_path) if lpmake_path else "lpmake",
         "--metadata-size", "65536",
         "-super-name", str(layout["block_device_name"]),
         "-metadata-slots", "3" if layout["super_type"] == 2 else "2",
     ]
+    if lpmake_sparse_enabled:
+        command.append("--sparse")
 
     selected_parts = list(layout["selected_parts"])
     if layout["super_type"] == 1:
@@ -342,6 +347,7 @@ def build_super_image_legacy(
             "lpmake_path": str(lpmake_path) if lpmake_path else None,
             "lpmake_command": command,
             "lpmake_executed": lpmake_executed,
+            "lpmake_sparse_enabled": layout.get("lpmake_sparse_enabled", False),
             "super_img_created": super_img_created,
             "super_img_size": super_img_size,
             "return_code": return_code,
@@ -363,6 +369,7 @@ def build_super_image_legacy(
             "lpmake_path": str(lpmake_path) if lpmake_path else None,
             "lpmake_command": command,
             "lpmake_executed": lpmake_executed,
+            "lpmake_sparse_enabled": layout.get("lpmake_sparse_enabled", False),
             "super_img_created": super_img_created,
             "super_img_size": super_img_size,
             "return_code": return_code,
@@ -407,6 +414,7 @@ def build_super_image_legacy(
         "lpmake_path": str(lpmake_path) if lpmake_path else None,
         "lpmake_command": command,
         "lpmake_executed": lpmake_executed,
+        "lpmake_sparse_enabled": layout.get("lpmake_sparse_enabled", False),
         "super_img_created": super_img_created,
         "super_img_size": super_img_size,
         "return_code": return_code,

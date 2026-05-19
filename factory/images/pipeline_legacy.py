@@ -73,6 +73,7 @@ def apply_images_vbmeta_legacy_stage(
     project_dir: Path,
     output_dir: Path | None = None,
     images_dir: Path | None = None,
+    partition_staging_dir: Path | None = None,
     flavor: str = "legend",
     device: str | None = None,
     soc: str | None = None,
@@ -113,6 +114,7 @@ def apply_images_vbmeta_legacy_stage(
     collection = collect_required_images_legacy(
         project_dir=project_dir,
         images_dir=images_dir,
+        partition_staging_dir=partition_staging_dir,
         execute=execute,
     )
     vbmeta = apply_vbmeta_legacy_patch(
@@ -149,6 +151,7 @@ def apply_images_vbmeta_legacy_stage(
         "project_dir": str(project_dir),
         "output_dir": str(output_dir),
         "images_dir": str(images_dir),
+        "partition_staging_dir": str(partition_staging_dir) if partition_staging_dir else None,
         "flavor": flavor,
         "device": device,
         "soc": soc,
@@ -169,6 +172,8 @@ def apply_images_vbmeta_legacy_stage(
         "missing_required_images": collection.get("missing_required_images", []),
         "copied_images": collection.get("copied_images", []),
         "moved_images": collection.get("moved_images", []),
+        "dynamic_images_moved_to_staging": collection.get("dynamic_images_moved_to_staging", []),
+        "standalone_images_moved_to_images": collection.get("standalone_images_moved_to_images", []),
         "generated_files": firmware.get("generated_files", []),
         "patched_vbmeta_files": vbmeta.get("patched_vbmeta_files", []),
         "vbmeta_files_found": vbmeta.get("vbmeta_files_found", []),

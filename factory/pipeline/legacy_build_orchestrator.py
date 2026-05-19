@@ -394,6 +394,7 @@ def apply_legacy_build_pipeline(
                 project_dir=project_dir,
                 output_dir=output_dir,
                 images_dir=images_dir,
+                partition_staging_dir=partition_staging_dir,
                 flavor=flavor,
                 device=device,
                 soc=soc,

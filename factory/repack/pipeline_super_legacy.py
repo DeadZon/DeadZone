@@ -266,6 +266,7 @@ def apply_super_build_legacy_stage(
         "lpmake_command": build_report.get("lpmake_command", []),
         "lpmake_output": build_report.get("command_output"),
         "lpmake_executed": build_report.get("lpmake_executed", False),
+        "lpmake_sparse_enabled": build_report.get("lpmake_sparse_enabled", False),
         "super_img_created": build_report.get("super_img_created", False),
         "super_img_size": build_report.get("super_img_size"),
         "validation_status": validation_status,
