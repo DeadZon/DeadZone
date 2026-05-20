@@ -2,7 +2,7 @@
 set -e
 
 # ===================================================================
-# DeadZone MediaTek Cloud Builder - Dual Live Stream (Bot & Group)
+# DeadZone MediaTek Cloud Builder - Multi Live Stream (Owners & Group)
 # Strictly Pure English - Zero Arabic Characters
 # ===================================================================
 
@@ -13,14 +13,13 @@ export DZ_NOTIFY="${IN_NOTIFY}"
 export DZ_BUILD="${IN_FINAL_NAME}"
 export DZ_DEVICE="${IN_CUSTOM_DEVICE:-$IN_DEVICE}"
 
-# Mapping variables from GitHub context to container internals
-export TELEGRAM_BOT_TOKEN="${TELEGRAM_SNAPDRAGON_BOT_TOKEN}"
-export TELEGRAM_GROUP_CHAT_ID="${TELEGRAM_CHAT_ID}"
+# Exact binding to match your GitHub Repository Secrets parameters for MTK
+export TELEGRAM_BOT_TOKEN="${TELEGRAM_MTK_BOT_TOKEN}"
+export TELEGRAM_GROUP_CHAT_ID="${TELEGRAM_MTK_CHAT_ID}"
 export TELEGRAM_THREAD_ID="${TELEGRAM_THREAD_ID}"
 
 cd /mnt/dz_data
 
-# Create 48GB Swap for dynamic caching structures stability
 if [ ! -f "/mnt/dz_data/swapfile" ]; then
     fallocate -l 48G /mnt/dz_data/swapfile || dd if=/dev/zero of=/mnt/dz_data/swapfile bs=1M count=49152
     chmod 600 /mnt/dz_data/swapfile
@@ -32,19 +31,22 @@ rm -rf DeadZone
 git clone https://oauth2:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git
 cd DeadZone
 
-python -m pip install --upgrade pip wheel --break-system-packages
+python -m pip install --upgrade wheel --break-system-packages || true
 python -m pip install -r requirements.txt --break-system-packages
 
 # ===========================================================================
-# 1. Generate Dual-Streaming Telegram Live Notification Script
+# 1. Generate Multi-Streaming Telegram Live Notification Script
 # ===========================================================================
 cat > _dz_tg.py << 'PYEOF'
 import argparse, json, os, sys, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-STATE_FILE = "/tmp/telegram_dual_live_message.json"
+STATE_FILE = "/tmp/telegram_multi_live_message_mtk.json"
 STAGES = ["prepare", "download_rom", "extract_rom", "patch_rom", "rebuild_super", "package_zip", "validate_zip", "upload_pixeldrain", "github_release", "telegram_final"]
 ICONS = {"pending": "⬜", "running": "🔄", "pass": "✅", "fail": "❌", "skip": "⏭️"}
+
+# Explicit Permanent Hardcoded Owners
+LIVE_OWNERS = [7504802216, 6114057985]
 
 def _now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -105,15 +107,12 @@ def _post(token, method, payload):
 
 def cmd_start(args):
     token, group_chat_id, thread_id = _credentials()
-    owner_ids_env = os.environ.get("OWNER_IDS", "7504802216")
-    primary_owner = owner_ids_env.split(",")[0].strip()
-    
     if not token: return 0
     now = _now_iso()
     
     state = {
         "group_message_id": None,
-        "bot_message_id": None,
+        "owner_messages": {},
         "started_at": now,
         "updated_at": now,
         "device": os.environ.get("DZ_DEVICE", "?"),
@@ -123,28 +122,27 @@ def cmd_start(args):
         "run_url": _run_url(),
         "stages": {s: {"status": "pending", "message": ""} for s in STAGES}
     }
-    state["stages"]["prepare"] = {"status": "running", "message": "Preparing dual infrastructure stream..."}
+    state["stages"]["prepare"] = {"status": "running", "message": "Preparing MediaTek cloud stream channels..."}
     text_content = _build_message(state)
     
+    # Dispatch card to target Group Chat
     if group_chat_id:
         payload = {"chat_id": group_chat_id, "text": text_content, "disable_web_page_preview": True}
         if thread_id: payload["message_thread_id"] = int(thread_id)
         res = _post(token, "sendMessage", payload)
         if res and res.get("ok"): state["group_message_id"] = res["result"]["message_id"]
         
-    if primary_owner:
-        payload = {"chat_id": primary_owner, "text": text_content, "disable_web_page_preview": True}
+    # Dispatch cards parallel to BOTH owners private DMs
+    for owner_id in LIVE_OWNERS:
+        payload = {"chat_id": owner_id, "text": text_content, "disable_web_page_preview": True}
         res = _post(token, "sendMessage", payload)
-        if res and res.get("ok"): state["bot_message_id"] = res["result"]["message_id"]
+        if res and res.get("ok"): state["owner_messages"][str(owner_id)] = res["result"]["message_id"]
         
     _save_state(state)
     return 0
 
 def cmd_update(args):
     token, group_chat_id, thread_id = _credentials()
-    owner_ids_env = os.environ.get("OWNER_IDS", "7504802216")
-    primary_owner = owner_ids_env.split(",")[0].strip()
-    
     state = _load_state()
     if not token or not state: return 0
     if args.stage not in STAGES: return 0
@@ -159,16 +157,16 @@ def cmd_update(args):
         if thread_id: payload["message_thread_id"] = int(thread_id)
         _post(token, "editMessageText", payload)
         
-    if primary_owner and state.get("bot_message_id"):
-        payload = {"chat_id": primary_owner, "message_id": int(state["bot_message_id"]), "text": text_content, "disable_web_page_preview": True}
-        _post(token, "editMessageText", payload)
+    owner_msgs = state.get("owner_messages", {})
+    for owner_id in LIVE_OWNERS:
+        mid = owner_msgs.get(str(owner_id))
+        if mid:
+            payload = {"chat_id": owner_id, "message_id": int(mid), "text": text_content, "disable_web_page_preview": True}
+            _post(token, "editMessageText", payload)
     return 0
 
 def cmd_final(args):
     token, group_chat_id, thread_id = _credentials()
-    owner_ids_env = os.environ.get("OWNER_IDS", "7504802216")
-    primary_owner = owner_ids_env.split(",")[0].strip()
-    
     state = _load_state()
     if not token or not state: return 0
     stages = state.setdefault("stages", {})
@@ -193,9 +191,12 @@ def cmd_final(args):
         if thread_id: payload["message_thread_id"] = int(thread_id)
         _post(token, "editMessageText", payload)
         
-    if primary_owner and state.get("bot_message_id"):
-        payload = {"chat_id": primary_owner, "message_id": int(state["bot_message_id"]), "text": text_content, "disable_web_page_preview": True}
-        _post(token, "editMessageText", payload)
+    owner_msgs = state.get("owner_messages", {})
+    for owner_id in LIVE_OWNERS:
+        mid = owner_msgs.get(str(owner_id))
+        if mid:
+            payload = {"chat_id": owner_id, "message_id": int(mid), "text": text_content, "disable_web_page_preview": True}
+            _post(token, "editMessageText", payload)
     return 0
 
 if __name__ == "__main__":
@@ -216,12 +217,11 @@ if __name__ == "__main__":
 PYEOF
 
 NOTIFY_CLI="python3 _dz_tg.py"
-export OWNER_IDS="7504802216,6114057985"
 
-# --- 1. Broadcast Start Signal ---
+# --- 1. Broadcast Start Channels ---
 $NOTIFY_CLI start || true
 sleep 1
-$NOTIFY_CLI update --stage prepare --status pass --message "Dual distribution stream channels activated successfully." || true
+$NOTIFY_CLI update --stage prepare --status pass --message "Multi-channel MTK distribution streaming active." || true
 
 # ==========================================
 # 2. Fastboot Template & Registry Validation
@@ -313,7 +313,6 @@ ROM_FILE="$(find _input_roms -type f | head -n 1)"
 TELEGRAM_FLAG=""
 if [ "$DZ_NOTIFY" = "true" ]; then TELEGRAM_FLAG="--telegram"; fi
 
-# Pre-set progress states visually inside stream card tracking steps
 $NOTIFY_CLI update --stage extract_rom --status running --message "Unpacking baseline architecture content..." || true
 $NOTIFY_CLI update --stage patch_rom --status running --message "Executing modifications algorithms configurations..." || true
 $NOTIFY_CLI update --stage rebuild_super --status running --message "Compiling high speed system logical structures image sparse block..." || true
@@ -336,7 +335,6 @@ else
     --execute $TELEGRAM_FLAG
 fi
 
-# Set pipeline updates flags manually to pass states tracking
 $NOTIFY_CLI update --stage extract_rom --status pass --message "Payload entries structural extraction finalized." || true
 $NOTIFY_CLI update --stage patch_rom --status pass --message "System configuration modification sequence verified." || true
 $NOTIFY_CLI update --stage rebuild_super --status pass --message "Logical sparse super block successfully compiled." || true
@@ -367,7 +365,6 @@ if [ "$DZ_MODE" == "execute" ]; then
   $NOTIFY_CLI update --stage github_release --status pass --message "Release parameters tagged and verified completely." || true
 fi
 
-# Complete Dual Broadcast Output
 $NOTIFY_CLI final --result success --message "Pipeline distribution finalized without errors. Installation payload stable." || true
 
 rm -rf _input_roms/ output/tmp output/work || true

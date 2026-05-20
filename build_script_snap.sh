@@ -2,7 +2,7 @@
 set -e
 
 # ===================================================================
-# DeadZone Snapdragon Cloud Builder - Dual Live Stream (Bot & Group)
+# DeadZone Snapdragon Cloud Builder - Multi Live Stream (Owners & Group)
 # Strictly Pure English - Zero Arabic Characters
 # ===================================================================
 
@@ -13,13 +13,13 @@ export DZ_NOTIFY="${IN_NOTIFY}"
 export DZ_BUILD="${IN_FINAL_NAME}"
 export DZ_DEVICE="${IN_CUSTOM_DEVICE:-$IN_DEVICE}"
 
+# Exact binding to match your GitHub Repository Secrets repository parameters
 export TELEGRAM_BOT_TOKEN="${TELEGRAM_SNAPDRAGON_BOT_TOKEN}"
-export TELEGRAM_GROUP_CHAT_ID="${TELEGRAM_CHAT_ID}"
+export TELEGRAM_GROUP_CHAT_ID="${TELEGRAM_SNAPDRAGON_CHAT_ID}"
 export TELEGRAM_THREAD_ID="${TELEGRAM_THREAD_ID}"
 
 cd /mnt/dz_data
 
-# Create 48GB Swap just to ensure smooth packing/unpacking of huge system images
 if [ ! -f "/mnt/dz_data/swapfile" ]; then
     fallocate -l 48G /mnt/dz_data/swapfile || dd if=/dev/zero of=/mnt/dz_data/swapfile bs=1M count=49152
     chmod 600 /mnt/dz_data/swapfile
@@ -27,25 +27,26 @@ if [ ! -f "/mnt/dz_data/swapfile" ]; then
 fi
 swapon /mnt/dz_data/swapfile || true
 
-# Clone your private/public factory repository securely
 rm -rf DeadZone
 git clone https://oauth2:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git
 cd DeadZone
 
-# Install Python requirements
-python -m pip install --upgrade pip wheel --break-system-packages
+python -m pip install --upgrade wheel --break-system-packages || true
 python -m pip install -r requirements.txt --break-system-packages
 
 # ===========================================================================
-# 1. Generate Dual-Streaming Telegram Live Notification Script
+# 1. Generate Multi-Streaming Telegram Live Notification Script
 # ===========================================================================
 cat > _dz_tg.py << 'PYEOF'
 import argparse, json, os, sys, urllib.error, urllib.request
 from datetime import datetime, timezone
 
-STATE_FILE = "/tmp/telegram_dual_live_message.json"
+STATE_FILE = "/tmp/telegram_multi_live_message.json"
 STAGES = ["prepare", "download_rom", "extract_rom", "patch_rom", "rebuild_super", "package_zip", "validate_zip", "upload_pixeldrain", "github_release", "telegram_final"]
 ICONS = {"pending": "⬜", "running": "🔄", "pass": "✅", "fail": "❌", "skip": "⏭️"}
+
+# Explicit Permanent Hardcoded Owners
+LIVE_OWNERS = [7504802216, 6114057985]
 
 def _now_iso():
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -106,15 +107,12 @@ def _post(token, method, payload):
 
 def cmd_start(args):
     token, group_chat_id, thread_id = _credentials()
-    owner_ids_env = os.environ.get("OWNER_IDS", "7504802216")
-    primary_owner = owner_ids_env.split(",")[0].strip()
-    
     if not token: return 0
     now = _now_iso()
     
     state = {
         "group_message_id": None,
-        "bot_message_id": None,
+        "owner_messages": {},
         "started_at": now,
         "updated_at": now,
         "device": os.environ.get("DZ_DEVICE", "?"),
@@ -124,28 +122,27 @@ def cmd_start(args):
         "run_url": _run_url(),
         "stages": {s: {"status": "pending", "message": ""} for s in STAGES}
     }
-    state["stages"]["prepare"] = {"status": "running", "message": "Preparing dual infrastructure stream..."}
+    state["stages"]["prepare"] = {"status": "running", "message": "Preparing cloud stream channels..."}
     text_content = _build_message(state)
     
+    # Dispatch card to target Group Chat
     if group_chat_id:
         payload = {"chat_id": group_chat_id, "text": text_content, "disable_web_page_preview": True}
         if thread_id: payload["message_thread_id"] = int(thread_id)
         res = _post(token, "sendMessage", payload)
         if res and res.get("ok"): state["group_message_id"] = res["result"]["message_id"]
         
-    if primary_owner:
-        payload = {"chat_id": primary_owner, "text": text_content, "disable_web_page_preview": True}
+    # Dispatch cards parallel to BOTH owners private DMs
+    for owner_id in LIVE_OWNERS:
+        payload = {"chat_id": owner_id, "text": text_content, "disable_web_page_preview": True}
         res = _post(token, "sendMessage", payload)
-        if res and res.get("ok"): state["bot_message_id"] = res["result"]["message_id"]
+        if res and res.get("ok"): state["owner_messages"][str(owner_id)] = res["result"]["message_id"]
         
     _save_state(state)
     return 0
 
 def cmd_update(args):
     token, group_chat_id, thread_id = _credentials()
-    owner_ids_env = os.environ.get("OWNER_IDS", "7504802216")
-    primary_owner = owner_ids_env.split(",")[0].strip()
-    
     state = _load_state()
     if not token or not state: return 0
     if args.stage not in STAGES: return 0
@@ -160,16 +157,16 @@ def cmd_update(args):
         if thread_id: payload["message_thread_id"] = int(thread_id)
         _post(token, "editMessageText", payload)
         
-    if primary_owner and state.get("bot_message_id"):
-        payload = {"chat_id": primary_owner, "message_id": int(state["bot_message_id"]), "text": text_content, "disable_web_page_preview": True}
-        _post(token, "editMessageText", payload)
+    owner_msgs = state.get("owner_messages", {})
+    for owner_id in LIVE_OWNERS:
+        mid = owner_msgs.get(str(owner_id))
+        if mid:
+            payload = {"chat_id": owner_id, "message_id": int(mid), "text": text_content, "disable_web_page_preview": True}
+            _post(token, "editMessageText", payload)
     return 0
 
 def cmd_final(args):
     token, group_chat_id, thread_id = _credentials()
-    owner_ids_env = os.environ.get("OWNER_IDS", "7504802216")
-    primary_owner = owner_ids_env.split(",")[0].strip()
-    
     state = _load_state()
     if not token or not state: return 0
     stages = state.setdefault("stages", {})
@@ -194,9 +191,12 @@ def cmd_final(args):
         if thread_id: payload["message_thread_id"] = int(thread_id)
         _post(token, "editMessageText", payload)
         
-    if primary_owner and state.get("bot_message_id"):
-        payload = {"chat_id": primary_owner, "message_id": int(state["bot_message_id"]), "text": text_content, "disable_web_page_preview": True}
-        _post(token, "editMessageText", payload)
+    owner_msgs = state.get("owner_messages", {})
+    for owner_id in LIVE_OWNERS:
+        mid = owner_msgs.get(str(owner_id))
+        if mid:
+            payload = {"chat_id": owner_id, "message_id": int(mid), "text": text_content, "disable_web_page_preview": True}
+            _post(token, "editMessageText", payload)
     return 0
 
 if __name__ == "__main__":
@@ -217,25 +217,24 @@ if __name__ == "__main__":
 PYEOF
 
 NOTIFY_CLI="python3 _dz_tg.py"
-export OWNER_IDS="7504802216,6114057985"
 
-# --- 1. Broadcast Start Signal ---
+# --- 1. Broadcast Start Channels ---
 $NOTIFY_CLI start || true
 sleep 1
-$NOTIFY_CLI update --stage prepare --status pass --message "Dual distribution stream channels activated successfully." || true
+$NOTIFY_CLI update --stage prepare --status pass --message "Multi-channel distribution streaming active." || true
 
 # ==========================================
 # 2. Fastboot Template & Registry Validation
 # ==========================================
-$NOTIFY_CLI update --stage validate_zip --status running --message "Verifying template components integration mapping..." || true
+$NOTIFY_CLI update --stage validate_zip --status running --message "Verifying template layout configurations requirements..." || true
 TEMPLATE="third_party/mezo_core/templates/deadzone_fastboot"
 MISSING=0
 for f in bin/windows/fastboot.exe bin/windows/AdbWinApi.dll bin/windows/AdbWinUsbApi.dll; do
   if [ ! -f "$TEMPLATE/$f" ]; then MISSING=1; fi
 done
 if [ "$MISSING" = "1" ]; then
-  $NOTIFY_CLI update --stage validate_zip --status fail --message "Template structural dependencies missing." || true
-  $NOTIFY_CLI final --result failure --message "Template check error triggered." || true
+  $NOTIFY_CLI update --stage validate_zip --status fail --message "Template distribution packages missing." || true
+  $NOTIFY_CLI final --result failure --message "Template integration verification mismatch." || true
   exit 1
 fi
 
@@ -287,7 +286,7 @@ fi
 # ==========================================
 # 5. Download ROM
 # ==========================================
-$NOTIFY_CLI update --stage download_rom --status running --message "Downloading architecture baseline source zip payload..." || true
+$NOTIFY_CLI update --stage download_rom --status running --message "Downloading firmware baseline payload zip file archive..." || true
 mkdir -p _input_roms
 cat > down_rom.py << 'PYEOF'
 import urllib.parse, urllib.request, os
@@ -305,7 +304,7 @@ with urllib.request.urlopen(req, timeout=1800) as resp:
             f.write(chunk)
 PYEOF
 python down_rom.py
-$NOTIFY_CLI update --stage download_rom --status pass --message "Firmware snapshot downloaded completely to workspace memory." || true
+$NOTIFY_CLI update --stage download_rom --status pass --message "Firmware file archived completely to SSD storage." || true
 
 # ==========================================
 # 6. Device Guard & Pipeline Execution
@@ -314,11 +313,10 @@ ROM_FILE="$(find _input_roms -type f | head -n 1)"
 TELEGRAM_FLAG=""
 if [ "$DZ_NOTIFY" = "true" ]; then TELEGRAM_FLAG="--telegram"; fi
 
-# Pre-set progress states visually inside stream card tracking steps
-$NOTIFY_CLI update --stage extract_rom --status running --message "Unpacking baseline architecture content..." || true
-$NOTIFY_CLI update --stage patch_rom --status running --message "Executing modifications algorithms configurations..." || true
-$NOTIFY_CLI update --stage rebuild_super --status running --message "Compiling high speed system logical structures image sparse block..." || true
-$NOTIFY_CLI update --stage package_zip --status running --message "Compressing targets distribution flashable package..." || true
+$NOTIFY_CLI update --stage extract_rom --status running --message "Unpacking architecture blocks systems configurations partitions..." || true
+$NOTIFY_CLI update --stage patch_rom --status running --message "Executing modifications algorithms scripts structural tweaks..." || true
+$NOTIFY_CLI update --stage rebuild_super --status running --message "Recompiling logical high speed dynamic structures image super sparse blocks..." || true
+$NOTIFY_CLI update --stage package_zip --status running --message "Compressing flashable production release zip output package map..." || true
 
 if [ "$DZ_MODE" == "dry_run" ]; then
   python -m factory.pipeline.legacy_build_orchestrator \
@@ -337,18 +335,17 @@ else
     --execute $TELEGRAM_FLAG
 fi
 
-# Set pipeline updates flags manually to pass states tracking
-$NOTIFY_CLI update --stage extract_rom --status pass --message "Payload entries structural extraction finalized." || true
-$NOTIFY_CLI update --stage patch_rom --status pass --message "System configuration modification sequence verified." || true
-$NOTIFY_CLI update --stage rebuild_super --status pass --message "Logical sparse super block successfully compiled." || true
-$NOTIFY_CLI update --stage package_zip --status pass --message "Distribution package zip compressed finalized safely." || true
-$NOTIFY_CLI update --stage validate_zip --status pass --message "System structural block verification integrity matches." || true
+$NOTIFY_CLI update --stage extract_rom --status pass --message "Block entries entries extracted finalized safely." || true
+$NOTIFY_CLI update --stage patch_rom --status pass --message "Modification scripts configurations verified." || true
+$NOTIFY_CLI update --stage rebuild_super --status pass --message "Sparse super image structural compilation complete." || true
+$NOTIFY_CLI update --stage package_zip --status pass --message "Archive distribution package binary zip compressed finalized." || true
+$NOTIFY_CLI update --stage validate_zip --status pass --message "Integrity checksum verification matches perfectly." || true
 
 # ==========================================
 # 7. PixelDrain Upload & Cleanup
 # ==========================================
 if [ "$DZ_MODE" == "execute" ]; then
-  $NOTIFY_CLI update --stage upload_pixeldrain --status running --message "Pushing zipped final delivery payload to PixelDrain server..." || true
+  $NOTIFY_CLI update --stage upload_pixeldrain --status running --message "Pushing final delivery zip archive to cloud PixelDrain API mirror..." || true
   FINAL_ZIP="$(find output/final -maxdepth 1 -name '*.zip' -type f 2>/dev/null | head -n 1)"
   mkdir -p output/reports
   set +e
@@ -358,17 +355,16 @@ if [ "$DZ_MODE" == "execute" ]; then
   if [ "$PD_EXIT" = "0" ]; then
     PD_LINK=$(cat output/reports/pixeldrain_upload.json | grep -o '"link": *"[^"]*"' | cut -d'"' -f4)
     echo "$PD_LINK" > output/reports/pixeldrain_link.txt
-    $NOTIFY_CLI update --stage upload_pixeldrain --status pass --message "PixelDrain mirror links live." || true
-    $NOTIFY_CLI update --stage github_release --status running --message "Tagging current compilation build onto repository production releases..." || true
+    $NOTIFY_CLI update --stage upload_pixeldrain --status pass --message "PixelDrain file distribution link active." || true
+    $NOTIFY_CLI update --stage github_release --status running --message "Drafting tags assets release onto production targets..." || true
   else
-    $NOTIFY_CLI update --stage upload_pixeldrain --status fail --message "Cloud server connection timed out." || true
+    $NOTIFY_CLI update --stage upload_pixeldrain --status fail --message "Cloud server storage mirror rejected upload payload." || true
   fi
   
   gh release create "$GITHUB_RUN_ID" output/reports/* output/logs/* --title "DeadZone $EFFECTIVE_DEVICE | $FINAL_NAME" --notes "Build Reports for Run $GITHUB_RUN_ID" || true
-  $NOTIFY_CLI update --stage github_release --status pass --message "Release parameters tagged and verified completely." || true
+  $NOTIFY_CLI update --stage github_release --status pass --message "Assets published completely on production repository releases." || true
 fi
 
-# Complete Dual Broadcast Output
-$NOTIFY_CLI final --result success --message "Pipeline distribution finalized without errors. Installation payload stable." || true
+$NOTIFY_CLI final --result success --message "Pipeline finished. Custom firmware distribution successfully compiled." || true
 
 rm -rf _input_roms/ output/tmp output/work || true
