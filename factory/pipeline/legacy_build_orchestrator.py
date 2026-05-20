@@ -317,27 +317,41 @@ def apply_legacy_build_pipeline(
             stage_reports[jar_stage["id"]] = _skip_stage(jar_stage, "non-Legend flavor")
             live.update(stages, current=jar_stage["name"])
         else:
-            jar_mod = _import_optional("factory.patch.legend.jar_patch")
-            if jar_mod is None or not hasattr(jar_mod, "LegendJarPatcher"):
-                stage_reports[jar_stage["id"]] = {"status": "FAILED", "errors": ["Legend JAR module missing"]}
-                jar_stage["status"] = "FAIL"
-                jar_stage["errors"] = ["Legend JAR module missing"]
-                live.update(stages, current=jar_stage["name"], final_status="FAILED")
-                stopped = execute
-            else:
+            # Prefer the modular MTCR runner; fall back to legacy LegendJarPatcher.
+            mtcr_runner = _import_optional("factory.patch.legend.mtcr.runner")
+            if mtcr_runner is not None and hasattr(mtcr_runner, "apply_legend_mtcr_patches"):
                 def jar_call() -> dict:
-                    from factory.patch.common.patch_report import session_to_dict
-                    patcher = jar_mod.LegendJarPatcher(
-                        project_dir,
+                    return mtcr_runner.apply_legend_mtcr_patches(
+                        project_dir=project_dir,
                         flavor=flavor,
-                        android_major=_android_major(android_version),
-                        dry_run=not execute,
+                        execute=execute,
                     )
-                    return session_to_dict(patcher.run())
 
                 report, failed = _run_stage(jar_stage, stages, live, jar_call, execute=execute)
                 stage_reports[jar_stage["id"]] = report
                 stopped = stop_if_needed(jar_stage, failed)
+            else:
+                jar_mod = _import_optional("factory.patch.legend.jar_patch")
+                if jar_mod is None or not hasattr(jar_mod, "LegendJarPatcher"):
+                    stage_reports[jar_stage["id"]] = {"status": "FAILED", "errors": ["Legend JAR module missing"]}
+                    jar_stage["status"] = "FAIL"
+                    jar_stage["errors"] = ["Legend JAR module missing"]
+                    live.update(stages, current=jar_stage["name"], final_status="FAILED")
+                    stopped = execute
+                else:
+                    def jar_call() -> dict:  # type: ignore[misc]
+                        from factory.patch.common.patch_report import session_to_dict
+                        patcher = jar_mod.LegendJarPatcher(
+                            project_dir,
+                            flavor=flavor,
+                            android_major=_android_major(android_version),
+                            dry_run=not execute,
+                        )
+                        return session_to_dict(patcher.run())
+
+                    report, failed = _run_stage(jar_stage, stages, live, jar_call, execute=execute)
+                    stage_reports[jar_stage["id"]] = report
+                    stopped = stop_if_needed(jar_stage, failed)
 
     if not stopped:
         provision_stage = stages[4]

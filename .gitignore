@@ -47,3 +47,10 @@ logs/
 .env.local
 
 .claude/
+
+# Local ROM reference / comparison folders -- never commit (anchored to repo root)
+/Legend/
+/DeadZone Fastboot Script/
+*_compare*/
+*_comparison*/
+*_reference*/
