@@ -1,0 +1,12 @@
+app = "deadzone-builder-mezo"
+primary_region = "fra"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SOC = "snapdragon"
+  MODE = "dry_run"
+  NOTIFY_TELEGRAM = "false"
+  DEVICE_CODENAME = "garnet"
+  FINAL_NAME = "DeadZone_Test"
