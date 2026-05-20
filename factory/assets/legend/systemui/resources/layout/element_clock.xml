@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.android.systemui.newstatusbar.clock.ClockView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:textAppearance="@style/TextAppearance.StatusBar.Clock"
+    android:id="@id/clock"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
+    android:singleLine="true"
+    android:layout_marginStart="@dimen/status_bar_clock_margin_new"
+    android:layout_marginEnd="@dimen/status_bar_clock_margin_new"
+    app:MiuiAmPmStyle="gone"
+    app:MiuiClockMode="time"
+    settingsKey="status_clock" />

@@ -7,7 +7,7 @@ All patch logic lives in generated rule modules; no reference-pack directories
 or patch comparison files are read at runtime.
 
   factory/patch/legend/systemui/smali/          -> 114 modified class patches
-  factory/patch/legend/systemui/smali_added/    -> 313 added class patches (classes2/3/4)
+  factory/patch/legend/systemui/smali_added/    -> 313 added class patches
   factory/patch/legend/systemui/resources/      -> layout + arsc + values rules
   factory/assets/legend/systemui/               -> managed XML assets
 
@@ -15,14 +15,15 @@ Pipeline (execute mode):
   1. Find MiuiSystemUI.apk in the ROM project tree.
   2. Copy to timestamped work directory.
   3. Decompile with APKEditor.
-  4. Apply add-resource XMLs from managed assets.
-  5. Apply layout XML changes from generated rules.
-  6. Apply arsc resource changes from generated rules.
-  7. Apply smali method patches with smart class/method matching.
-  8. Place added smali classes into smali_classesN roots.
-  9. Rebuild APK with APKEditor.
-  10. Verify rebuilt APK (size > 0).
-  11. Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copies).
+  4. Copy managed drawable/layout resource assets.
+  5. Apply add-resource XMLs from managed assets.
+  6. Apply layout XML changes from generated rules.
+  7. Apply arsc resource changes from generated rules.
+  8. Apply smali method patches with smart class/method matching.
+  9. Place added smali classes into a valid smali_classesN root.
+  10. Rebuild APK with APKEditor.
+  11. Verify rebuilt APK (size > 0).
+  12. Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copies).
 
 Flavor guard:
   Only runs for: legend, deadzone_legend (case-insensitive).
@@ -146,29 +147,25 @@ def _load_modified_class_patches() -> list[ClassPatch]:
 
 
 def _load_added_class_patches() -> list[ClassPatch]:
-    """Import every module in smali_added/classes2|3|4/ (added classes)."""
+    """Import every module in smali_added/classes_auto/ (added classes)."""
     result: list[ClassPatch] = []
-    base_pkg = "factory.patch.legend.systemui.smali_added"
+    pkg = "factory.patch.legend.systemui.smali_added.classes_auto"
     added_path = _PKG_ROOT / "smali_added"
     if not added_path.is_dir():
         return result
-    for group_name in ("classes2", "classes3", "classes4"):
-        group_path = added_path / group_name
-        if not group_path.is_dir():
+    group_path = added_path / "classes_auto"
+    if not group_path.is_dir():
+        return result
+    for finder, name, ispkg in pkgutil.iter_modules([str(group_path)]):
+        if name == "__init__":
             continue
-        pkg = f"{base_pkg}.{group_name}"
-        for finder, name, ispkg in pkgutil.iter_modules([str(group_path)]):
-            if name == "__init__":
-                continue
-            try:
-                mod = importlib.import_module(f"{pkg}.{name}")
-                cp = load_class_patch(mod)
-                if cp.target_class:
-                    if cp.dex_group is None:
-                        cp.dex_group = group_name
-                    result.append(cp)
-            except Exception as exc:
-                print(f"[systemui_runner] WARNING: could not load smali_added/{group_name}/{name}: {exc}")
+        try:
+            mod = importlib.import_module(f"{pkg}.{name}")
+            cp = load_class_patch(mod)
+            if cp.target_class:
+                result.append(cp)
+        except Exception as exc:
+            print(f"[systemui_runner] WARNING: could not load smali_added/classes_auto/{name}: {exc}")
     return result
 
 
@@ -233,6 +230,74 @@ def _apply_add_resources(decompiled_dir: Path, dry_run: bool) -> dict:
         result["status"] = "FAILED"
         result["error"] = str(exc)
 
+    return result
+
+
+def _apply_resource_copy_rules(decompiled_dir: Path, dry_run: bool) -> dict:
+    """Copy managed drawable/layout assets into decompiled APK res/ folders."""
+    from factory.patch.legend.systemui.resources.add_resource_rules import (
+        ADDED_LAYOUTS,
+        ASSETS_ROOT,
+        RESOURCE_RULES,
+    )
+
+    result: dict = {
+        "asset_root": str(ASSETS_ROOT),
+        "rules_total": len(RESOURCE_RULES),
+        "copied": 0,
+        "would_copy": 0,
+        "missing_assets": [],
+        "by_folder": {},
+        "added_layouts": list(ADDED_LAYOUTS),
+        "statuses": [],
+        "dry_run": dry_run,
+        "status": "NOT_RUN",
+    }
+
+    res_dir = decompiled_dir / "res"
+    for rule in RESOURCE_RULES:
+        rel_source = Path(rule["source"])
+        source = ASSETS_ROOT / rel_source
+        target = decompiled_dir / rule["target"]
+        folder = rule["resource_type"]
+        status = ""
+
+        if not source.is_file():
+            status = "FAILED_MISSING_ASSET"
+            entry = {
+                "id": rule["id"],
+                "source": str(source),
+                "target": str(target),
+                "status": status,
+                "required": rule.get("required", True),
+            }
+            result["missing_assets"].append(entry)
+            result["statuses"].append(entry)
+            if rule.get("required", True):
+                result["status"] = "FAILED_MISSING_ASSET"
+            continue
+
+        if dry_run:
+            status = "WOULD_COPY"
+            result["would_copy"] += 1
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            status = "COPIED"
+            result["copied"] += 1
+
+        by_folder = result["by_folder"]
+        by_folder[folder] = by_folder.get(folder, 0) + 1
+        result["statuses"].append({
+            "id": rule["id"],
+            "source": str(source),
+            "target": str(target.relative_to(res_dir.parent)),
+            "status": status,
+            "required": rule.get("required", True),
+        })
+
+    if result["status"] != "FAILED_MISSING_ASSET":
+        result["status"] = "WOULD_COPY" if dry_run else "COPIED"
     return result
 
 
@@ -667,70 +732,107 @@ def _apply_added_classes(
     added_patches: list[ClassPatch],
     dry_run: bool,
 ) -> dict:
-    """Write added class smali files into the appropriate smali_classesN root."""
+    """Write added class smali files into one valid smali_classesN root."""
     existing_roots = _find_smali_roots(decompiled_dir)
-    existing_names = {r.name for r in existing_roots}
 
     result: dict = {
         "existing_smali_roots": [r.name for r in existing_roots],
         "new_roots_created": [],
+        "smali_root_chosen": "",
         "classes_added": 0,
-        "classes_skipped": 0,
+        "classes_would_add": 0,
+        "classes_skipped_already_exists": 0,
+        "duplicate_class_count": 0,
+        "duplicate_conflict_count": 0,
         "errors": [],
+        "class_results": [],
         "dry_run": dry_run,
         "status": "NOT_RUN",
     }
 
     if dry_run:
-        result["status"] = "WOULD_APPLY"
-        result["would_add"] = len(added_patches)
-        return result
+        chosen = _next_smali_root(decompiled_dir)
+        result["smali_root_chosen"] = chosen.name
 
-    # Group patches by dex_group to create ordered roots
-    group_order = ["classes2", "classes3", "classes4"]
-    group_map: dict[str, list[ClassPatch]] = {}
+    write_root: Optional[Path] = None
+
     for cp in added_patches:
-        g = cp.dex_group or "classes2"
-        group_map.setdefault(g, []).append(cp)
-
-    # Allocate smali roots per dex group
-    group_to_root: dict[str, Path] = {}
-    for group in group_order:
-        if group not in group_map:
+        patch = next((p for p in cp.patches if p.type == "class_add"), None)
+        if patch is None:
             continue
-        # Find or create next available smali root
-        next_root = _next_smali_root(decompiled_dir)
-        next_root.mkdir(parents=True, exist_ok=True)
-        existing_names.add(next_root.name)
-        group_to_root[group] = next_root
-        result["new_roots_created"].append(next_root.name)
-        print(f"[systemui_runner] Created smali root: {next_root.name} for {group}")
 
-    # Write each added class smali file
-    for group in group_order:
-        if group not in group_map:
-            continue
-        root = group_to_root[group]
-        for cp in group_map[group]:
-            for patch in cp.patches:
-                if patch.type != "class_add":
-                    continue
-                # class path: "com/android/systemui/Foo.smali"
-                smali_rel = cp.target_class
-                dest = root / smali_rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
+        existing_matches = [root / cp.target_class for root in existing_roots if (root / cp.target_class).is_file()]
+        class_result = {
+            "target_class": cp.target_class,
+            "status": "",
+            "smali_root": "",
+            "existing_paths": [str(p) for p in existing_matches],
+            "required": patch.required,
+        }
+
+        if existing_matches:
+            result["duplicate_class_count"] += 1
+            identical = False
+            for existing in existing_matches:
                 try:
-                    dest.write_text(patch.replacement, encoding="utf-8")
-                    result["classes_added"] += 1
+                    if existing.read_text(encoding="utf-8", errors="replace") == patch.replacement:
+                        identical = True
+                        break
                 except Exception as exc:
-                    result["errors"].append(
-                        f"{cp.target_class}: write error: {exc}"
-                    )
-                    if patch.required:
-                        result["status"] = "FAILED"
-                        return result
+                    result["errors"].append(f"{cp.target_class}: duplicate read error: {exc}")
+            if identical:
+                class_result["status"] = "SKIPPED_ALREADY_EXISTS"
+                result["classes_skipped_already_exists"] += 1
+            else:
+                class_result["status"] = "FAILED_DUPLICATE_CLASS_CONFLICT"
+                result["duplicate_conflict_count"] += 1
+                message = f"{cp.target_class}: duplicate class differs from add rule"
+                if patch.required:
+                    result["errors"].append(message)
+                else:
+                    result.setdefault("warnings", []).append(message)
+            result["class_results"].append(class_result)
+            continue
 
-    result["status"] = "OK" if not result["errors"] else "PARTIAL"
+        if dry_run:
+            class_result["status"] = "WOULD_ADD_CLASS"
+            class_result["smali_root"] = result["smali_root_chosen"]
+            result["classes_would_add"] += 1
+            result["class_results"].append(class_result)
+            continue
+
+        if write_root is None:
+            write_root = _next_smali_root(decompiled_dir)
+            write_root.mkdir(parents=True, exist_ok=True)
+            result["smali_root_chosen"] = write_root.name
+            if write_root.name not in result["existing_smali_roots"]:
+                result["new_roots_created"].append(write_root.name)
+            print(f"[systemui_runner] Created smali root for added classes: {write_root.name}")
+
+        dest = write_root / cp.target_class
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            dest.write_text(patch.replacement, encoding="utf-8")
+            class_result["status"] = "ADDED_CLASS"
+            class_result["smali_root"] = write_root.name
+            result["classes_added"] += 1
+        except Exception as exc:
+            class_result["status"] = "FAILED_NOT_FOUND"
+            result["errors"].append(f"{cp.target_class}: write error: {exc}")
+            if patch.required:
+                result["class_results"].append(class_result)
+                result["status"] = "FAILED"
+                return result
+        result["class_results"].append(class_result)
+
+    if result["duplicate_conflict_count"]:
+        result["status"] = "FAILED_DUPLICATE_CLASS_CONFLICT"
+    elif dry_run:
+        result["status"] = "WOULD_ADD_CLASS"
+    elif result["classes_added"] or result["classes_skipped_already_exists"]:
+        result["status"] = "ADDED_CLASS"
+    else:
+        result["status"] = "OK"
     return result
 
 
@@ -750,9 +852,10 @@ def _format_text_report(report: dict) -> str:
         "",
         "APK:",
         f"  Original path      : {report.get('original_apk_path', '?')}",
+        f"  Restored path      : {report.get('restored_apk_path', '?')}",
         f"  Original filename  : {report.get('original_apk_name', '?')}",
         f"  APK found          : {report.get('apk_found', '?')}",
-        f"  Restored filename  : MiuiSystemUI.apk (no renamed copies)",
+        f"  Final filename     : {report.get('final_filename', 'MiuiSystemUI.apk')}",
         "",
         "Tool:",
         f"  APKEditor jar      : {report.get('apkeditor_jar', '?')}",
@@ -761,9 +864,12 @@ def _format_text_report(report: dict) -> str:
         "Smali rule inventory:",
         f"  Modified classes   : {report.get('smali_modified_count', 0)}",
         f"  Added classes      : {report.get('smali_added_count', 0)}",
-        "   classes2           : {}".format(report.get('smali_added_by_group', {}).get('classes2', 0)),
-        "   classes3           : {}".format(report.get('smali_added_by_group', {}).get('classes3', 0)),
-        "   classes4           : {}".format(report.get('smali_added_by_group', {}).get('classes4', 0)),
+        "   classes_auto       : {}".format(report.get('smali_added_by_group', {}).get('classes_auto', 0)),
+        "",
+        "Managed resource inventory:",
+        f"  Drawable/layout    : {report.get('managed_resource_count', 0)}",
+        f"  Copied resources   : {report.get('copied_resource_count', 0)}",
+        f"  Added layouts      : {', '.join(report.get('added_layouts', [])) or '(none)'}",
         f"  Layout rules       : {report.get('layout_rule_count', 0)}",
         f"  Arsc modified      : {report.get('arsc_modified_count', 0)}",
         f"  Arsc added         : {report.get('arsc_added_count', 0)}",
@@ -771,11 +877,13 @@ def _format_text_report(report: dict) -> str:
         "",
         "Stage results:",
         f"  Decompile          : {report.get('decompile_status', 'N/A')}",
+        f"  Resource copies    : {report.get('resource_copy_status', 'N/A')}",
         f"  Add resources      : {report.get('add_resource_status', 'N/A')}",
         f"  Layout patches     : {report.get('layout_status', 'N/A')}  ({report.get('layout_applied', 0)} blocks applied)",
         f"  Arsc patches       : {report.get('arsc_status', 'N/A')}  ({report.get('arsc_applied', 0)} entries applied)",
         f"  Smali patches      : {report.get('smali_status', 'N/A')}  ({report.get('smali_patches_applied', 0)} applied)",
         f"  Added classes      : {report.get('added_classes_status', 'N/A')}  ({report.get('added_classes_count', 0)} classes)",
+        f"  Duplicate classes  : {report.get('duplicate_class_count', 0)}",
         f"  Rebuild            : {report.get('rebuild_status', 'N/A')}",
         f"  Restore            : {report.get('restore_status', 'N/A')}",
         "",
@@ -803,6 +911,8 @@ def _format_text_report(report: dict) -> str:
         lines.append("Added-class smali roots:")
         for rn in added_info.get("existing_roots", []):
             lines.append(f"  existing: {rn}")
+        if added_info.get("smali_root_chosen"):
+            lines.append(f"  chosen  : {added_info.get('smali_root_chosen')}")
         for rn in added_info.get("new_roots_created", []):
             lines.append(f"  created : {rn}")
         lines.append("")
@@ -874,7 +984,7 @@ def apply_systemui_patch(
 
     added_by_group: dict[str, int] = {}
     for cp in added_patches:
-        g = cp.dex_group or "classes2"
+        g = cp.dex_group or "classes_auto"
         added_by_group[g] = added_by_group.get(g, 0) + 1
 
     try:
@@ -896,6 +1006,20 @@ def apply_systemui_patch(
     except Exception:
         add_xml_count = 0
 
+    try:
+        from factory.patch.legend.systemui.resources.add_resource_rules import (
+            ADDED_LAYOUTS as RESOURCE_ADDED_LAYOUTS,
+            RESOURCE_COUNTS_BY_FOLDER,
+            RESOURCE_RULES,
+        )
+        managed_resource_count = len(RESOURCE_RULES)
+        managed_resource_by_folder = dict(RESOURCE_COUNTS_BY_FOLDER)
+        managed_added_layouts = list(RESOURCE_ADDED_LAYOUTS)
+    except Exception:
+        managed_resource_count = 0
+        managed_resource_by_folder = {}
+        managed_added_layouts = []
+
     report: dict = {
         "stage":                   "legend_systemui_apk",
         "flavor":                  flavor,
@@ -905,7 +1029,9 @@ def apply_systemui_patch(
         "apkeditor_jar":           apkeditor_str,
         "apkeditor_exists":        apkeditor_jar is not None,
         "original_apk_path":       apk_str,
+        "restored_apk_path":       apk_str,
         "original_apk_name":       apk_name,
+        "final_filename":          SYSTEMUI_APK_NAME,
         "apk_found":               systemui_apk is not None,
         "backup_policy":           "disabled",
         "runtime_reads_legend_dir": False,
@@ -914,12 +1040,19 @@ def apply_systemui_patch(
         "smali_modified_count":    len(modified_patches),
         "smali_added_count":       len(added_patches),
         "smali_added_by_group":    added_by_group,
+        "managed_resource_count":  managed_resource_count,
+        "managed_resource_by_folder": managed_resource_by_folder,
+        "copied_resource_count":   0,
+        "copied_resource_by_folder": {},
+        "added_layouts":           managed_added_layouts,
+        "failed_missing_assets":   [],
         "layout_rule_count":       layout_count,
         "arsc_modified_count":     arsc_mod,
         "arsc_added_count":        arsc_add,
         "add_resource_xml_count":  add_xml_count,
         # Stage placeholders
         "decompile_status":        "N/A",
+        "resource_copy_status":    "N/A",
         "add_resource_status":     "N/A",
         "layout_status":           "N/A",
         "layout_applied":          0,
@@ -929,6 +1062,7 @@ def apply_systemui_patch(
         "smali_patches_applied":   0,
         "added_classes_status":    "N/A",
         "added_classes_count":     0,
+        "duplicate_class_count":   0,
         "added_classes_info":      {},
         "rebuild_status":          "N/A",
         "restore_status":          "N/A",
@@ -956,15 +1090,14 @@ def apply_systemui_patch(
             f"[3] APKEditor: {apkeditor_str}",
             f"[4] Decompile → {effective_work / 'MiuiSystemUI_apk_src'}/",
             f"[5] Merge {add_xml_count} managed add/ resource XMLs",
-            f"[6] Apply {layout_count} layout XML patches (text-diff hunks)",
-            f"[7] Apply {arsc_mod + arsc_add} arsc resource changes",
-            f"[8] Apply {len(modified_patches)} smali modified-class patches (smart Tier 1-4)",
-            f"[9] Place {len(added_patches)} added classes into smali_classesN roots",
-            f"     classes2={added_by_group.get('classes2',0)}  "
-            f"classes3={added_by_group.get('classes3',0)}  "
-            f"classes4={added_by_group.get('classes4',0)}",
-            f"[10] Rebuild MiuiSystemUI.apk with APKEditor",
-            f"[11] Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copy)",
+            f"[6] Copy {managed_resource_count} managed drawable/layout resources",
+            f"[7] Apply {layout_count} layout XML patches (text-diff hunks)",
+            f"[8] Apply {arsc_mod + arsc_add} arsc resource changes",
+            f"[9] Apply {len(modified_patches)} smali modified-class patches (smart Tier 1-4)",
+            f"[10] Place {len(added_patches)} added classes into a valid smali_classesN root",
+            f"     classes_auto={added_by_group.get('classes_auto',0)}",
+            f"[11] Rebuild MiuiSystemUI.apk with APKEditor",
+            f"[12] Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copy)",
         ]
 
         if not systemui_apk:
@@ -1014,14 +1147,28 @@ def apply_systemui_patch(
     smali_roots = _find_smali_roots(decompiled_dir)
     report["added_classes_info"]["existing_roots"] = [r.name for r in smali_roots]
 
-    # ── Step 2: Add resource XMLs ─────────────────────────────────────────────
+    # ── Step 2: Drawable/layout resource copies ───────────────────────────────
+    print(f"[systemui_runner] Copying managed drawable/layout resources ...")
+    resource_copy = _apply_resource_copy_rules(decompiled_dir, dry_run=False)
+    report["resource_copy_status"] = resource_copy.get("status", "UNKNOWN")
+    report["copied_resource_count"] = resource_copy.get("copied", 0)
+    report["copied_resource_by_folder"] = resource_copy.get("by_folder", {})
+    report["failed_missing_assets"] = resource_copy.get("missing_assets", [])
+    if resource_copy.get("status") == "FAILED_MISSING_ASSET":
+        for missing in resource_copy.get("missing_assets", []):
+            errors.append(f"resource_copy: missing asset {missing.get('source')}")
+        report["final_status"] = "FAILED_MISSING_ASSET"
+        _write_reports(report)
+        return report
+
+    # ── Step 3: Add resource XMLs ─────────────────────────────────────────────
     print(f"[systemui_runner] Merging managed add/ resource XMLs ...")
     add_res = _apply_add_resources(decompiled_dir, dry_run=False)
     report["add_resource_status"] = add_res.get("status", "UNKNOWN")
     for e in add_res.get("errors", []):
         warnings.append(f"add_resources: {e}")
 
-    # ── Step 3: Layout XML patches ────────────────────────────────────────────
+    # ── Step 4: Layout XML patches ────────────────────────────────────────────
     print(f"[systemui_runner] Applying layout XML patches ...")
     layout_res = _apply_layout_patches(decompiled_dir, dry_run=False)
     report["layout_status"]  = layout_res.get("status", "UNKNOWN")
@@ -1029,7 +1176,7 @@ def apply_systemui_patch(
     for e in layout_res.get("errors", []):
         warnings.append(f"layout: {e}")
 
-    # ── Step 4: Arsc resource patches ─────────────────────────────────────────
+    # ── Step 5: Arsc resource patches ─────────────────────────────────────────
     print(f"[systemui_runner] Applying arsc resource patches ...")
     arsc_res = _apply_arsc_patches(decompiled_dir, dry_run=False)
     report["arsc_status"]  = arsc_res.get("status", "UNKNOWN")
@@ -1037,7 +1184,7 @@ def apply_systemui_patch(
     for e in arsc_res.get("errors", []):
         warnings.append(f"arsc: {e}")
 
-    # ── Step 5: Modified smali class patches ──────────────────────────────────
+    # ── Step 6: Modified smali class patches ──────────────────────────────────
     print(f"[systemui_runner] Applying {len(modified_patches)} smali class patches ...")
     smali_roots_live = _find_smali_roots(decompiled_dir)
     class_results, smali_summary = _apply_smali_patches(
@@ -1069,20 +1216,23 @@ def apply_systemui_patch(
             f"{smali_summary['patches_failed']} required smali patches failed"
         )
 
-    # ── Step 6: Added smali classes ───────────────────────────────────────────
+    # ── Step 7: Added smali classes ───────────────────────────────────────────
     print(f"[systemui_runner] Placing {len(added_patches)} added smali classes ...")
     added_res = _apply_added_classes(decompiled_dir, added_patches, dry_run=False)
     report["added_classes_status"] = added_res.get("status", "UNKNOWN")
     report["added_classes_count"]  = added_res.get("classes_added", 0)
+    report["duplicate_class_count"] = added_res.get("duplicate_class_count", 0)
     report["added_classes_info"]["new_roots_created"] = added_res.get("new_roots_created", [])
+    report["added_classes_info"]["smali_root_chosen"] = added_res.get("smali_root_chosen", "")
+    report["added_classes_info"]["class_results"] = added_res.get("class_results", [])
     for e in added_res.get("errors", []):
         errors.append(f"added_classes: {e}")
 
-    if added_res.get("status") == "FAILED":
+    if added_res.get("status") in {"FAILED", "FAILED_DUPLICATE_CLASS_CONFLICT"}:
         report["final_status"] = "FAILED"
         _write_reports(report)
         return report
-    # ── Step 7: Rebuild APK ───────────────────────────────────────────────────
+    # ── Step 8: Rebuild APK ───────────────────────────────────────────────────
     print(f"[systemui_runner] Rebuilding {SYSTEMUI_APK_NAME} ...")
     rebuild_ok = rebuild_apk(apkeditor_jar, decompiled_dir)
     report["rebuild_status"] = "OK" if rebuild_ok else "FAILED"
@@ -1114,7 +1264,9 @@ def apply_systemui_patch(
     ok = restore.get("success", False)
     report["restore_status"] = "OK" if ok else "FAILED"
     report["final_apk_path"] = str(systemui_apk)
+    report["restored_apk_path"] = str(systemui_apk)
     report["final_apk_name"] = SYSTEMUI_APK_NAME
+    report["final_filename"] = SYSTEMUI_APK_NAME
 
     if not ok:
         errors.append(f"Restore failed: {restore.get('error', 'unknown')}")

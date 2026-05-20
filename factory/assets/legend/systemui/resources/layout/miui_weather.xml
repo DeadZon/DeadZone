@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.justas.AnimationWeather.Weather xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@id/weather_id"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+    <com.justas.AnimationWeather.LightninAnimation
+        android:id="@id/lightnin_anim"
+        android:visibility="gone"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="100dp"
+        android:layout_marginStart="200dp" />
+    <com.justas.AnimationWeather.MoonAnimation
+        android:id="@id/moon_anim"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+    <com.justas.AnimationWeather.SunAnimation
+        android:id="@id/sun_anim"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+    <ImageView
+        android:id="@id/fog"
+        android:visibility="gone"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/blue_fog_1" />
+    <com.justas.AnimationWeather.CloudAnimation
+        android:id="@id/cloud_anim"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true" />
+    <FrameLayout
+        android:id="@id/rain_snow_frame"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="-70dp"
+        android:layout_below="@id/cloud_anim">
+        <com.justas.AnimationWeather.RainAnimation
+            android:id="@id/rain_anim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+        <com.justas.AnimationWeather.SnowAnimation
+            android:id="@id/snow_anim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+        <com.justas.AnimationWeather.DrippingDrops
+            android:id="@id/drop_anim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
+</com.justas.AnimationWeather.Weather>

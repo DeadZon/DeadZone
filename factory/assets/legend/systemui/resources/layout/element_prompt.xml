@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@id/phone_status_bar_left_container"
+    android:clipChildren="false"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent">
+    <include layout="@layout/heads_up_status_bar_layout" />
+    <ViewStub
+        android:id="@id/operator_name_stub"
+        android:layout="@layout/operator_name"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent" />
+    <ViewStub
+        android:id="@id/pad_clock"
+        android:layout="@layout/pad_clock"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_marginStart="@dimen/status_bar_padding_extra_start"
+        android:layout_marginEnd="@dimen/status_bar_clock_margin_end" />
+    <include
+        android:id="@id/ongoing_activity_chip_primary"
+        layout="@layout/ongoing_activity_chip_primary" />
+    <include
+        android:id="@id/ongoing_activity_chip_secondary"
+        android:visibility="gone"
+        layout="@layout/ongoing_activity_chip_secondary" />
+    <com.android.systemui.statusbar.AlphaOptimizedFrameLayout
+        android:orientation="horizontal"
+        android:id="@id/notification_icon_area"
+        android:visibility="gone"
+        android:clipChildren="false"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1.0" />
+    <android.widget.Space
+        android:gravity="center"
+        android:id="@id/cutout_space_view"
+        android:layout_width="0dp"
+        android:layout_height="match_parent" />
+    <FrameLayout
+        android:id="@id/status_bar_start_side_content"
+        android:visibility="gone"
+        android:clipChildren="false"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+    <FrameLayout
+        android:id="@id/status_bar_end_side_content"
+        android:visibility="gone"
+        android:clipChildren="false"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+</LinearLayout>
