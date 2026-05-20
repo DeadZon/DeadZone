@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/wm/WindowState.smali"
 CLASS_FALLBACK_NAMES = ['WindowState.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/internal/hidden_from_bootclasspath/com/android/window/flags/Flags;', 'Lcom/android/server/wm/WindowState$$ExternalSyntheticLambda2;', 'Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;', 'Lcom/android/server/wm/MiuiFreeFormManagerServiceStub;', 'Lcom/android/internal/protolog/ProtoLogImpl_232878649;', 'Lcom/android/internal/protolog/common/IProtoLogGroup;']
 
 PATCHES = [
     {

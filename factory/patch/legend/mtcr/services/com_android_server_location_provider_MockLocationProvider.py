@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/location/provider/MockLocationProvider.smali"
 CLASS_FALLBACK_NAMES = ['MockLocationProvider.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/location/provider/MockLocationProvider;', 'Landroid/location/LocationResult;', 'Landroid/location/Location;', '->setIsFromMockProvider', '->mLocation', '->validate']
 
 PATCHES = [
     {

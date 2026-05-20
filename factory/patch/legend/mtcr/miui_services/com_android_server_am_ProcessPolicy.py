@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ProcessPolicy.smali"
 CLASS_FALLBACK_NAMES = ['ProcessPolicy.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/am/ProcessPolicy;', 'Landroid/content/ContentResolver;', 'Landroid/content/res/Resources;', '->IS_INTERNATIONAL_BUILD', 'Landroid/util/Slog;', '->getContentResolver']
 
 PATCHES = [
     {

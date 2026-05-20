@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ProcessManagerService.smali"
 CLASS_FALLBACK_NAMES = ['ProcessManagerService.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/am/ProcessManagerService;', 'Lcom/android/server/am/ProcessRecord;', '->IS_INTERNATIONAL_BUILD', 'Lmiui/os/Build;', '->isSystemApp']
 
 PATCHES = [
     {

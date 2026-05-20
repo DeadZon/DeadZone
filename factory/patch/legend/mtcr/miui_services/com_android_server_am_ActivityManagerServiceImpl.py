@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ActivityManagerServiceImpl.smali"
 CLASS_FALLBACK_NAMES = ['ActivityManagerServiceImpl.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/am/ActivityManagerServiceImpl;', 'Lcom/android/server/wm/ActivityTaskManagerService;', 'Lcom/android/server/am/ActivityManagerService;', 'Lcom/android/server/wm/WindowProcessUtils;', 'Lmiui/security/SecurityManagerInternal;', 'Lcom/android/server/appop/flags/Flags;']
 
 PATCHES = [
     {

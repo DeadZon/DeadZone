@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/devicepolicy/DevicePolicyCacheImpl.smali"
 CLASS_FALLBACK_NAMES = ['DevicePolicyCacheImpl.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/devicepolicy/DevicePolicyCacheImpl;', '->mScreenCaptureDisallowedUsers', 'Ljava/util/Set;', '->contains', '->valueOf', '->mLock']
 
 PATCHES = [
     {

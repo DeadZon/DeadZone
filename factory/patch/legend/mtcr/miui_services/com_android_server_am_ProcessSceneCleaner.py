@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ProcessSceneCleaner.smali"
 CLASS_FALLBACK_NAMES = ['ProcessSceneCleaner.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/wm/WindowProcessController;', 'Lcom/android/server/wm/WindowProcessUtils;', 'Lcom/android/server/am/ProcessRecord;', 'Lmiui/process/ProcessConfig;', '->getWindowProcessController', '->getKillingPackage']
 
 PATCHES = [
     {

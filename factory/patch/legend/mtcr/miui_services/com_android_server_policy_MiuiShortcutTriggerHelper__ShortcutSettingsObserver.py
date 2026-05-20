@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver.smali"
 CLASS_FALLBACK_NAMES = ['MiuiShortcutTriggerHelper$ShortcutSettingsObserver.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver;', 'Lcom/android/server/policy/MiuiShortcutTriggerHelper;', 'Landroid/provider/Settings$System;', 'Landroid/database/ContentObserver;', 'Landroid/content/ContentResolver;', '->registerContentObserver']
 
 PATCHES = [
     {

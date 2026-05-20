@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/policy/PhoneWindowManager.smali"
 CLASS_FALLBACK_NAMES = ['PhoneWindowManager.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/policy/PhoneWindowManager$$ExternalSyntheticLambda6;', 'Lcom/android/server/policy/WindowManagerPolicy$WindowManagerFuncs;', 'Lcom/android/server/statusbar/StatusBarManagerInternal;', 'Lcom/android/internal/statusbar/IStatusBarService$Stub;', 'Lcom/android/server/policy/PhoneWindowManager$Injector;', 'Lcom/android/server/policy/SingleKeyGestureDetector;']
 
 PATCHES = [
     {

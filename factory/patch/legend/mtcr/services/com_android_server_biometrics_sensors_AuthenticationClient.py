@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/biometrics/sensors/AuthenticationClient.smali"
 CLASS_FALLBACK_NAMES = ['AuthenticationClient.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/biometrics/sensors/AuthenticationClient;', 'Lcom/android/server/biometrics/log/OperationContextExt;', 'Lcom/android/server/biometrics/sensors/LockoutTracker;', 'Lcom/android/server/biometrics/log/BiometricLogger;', 'Landroid/hardware/biometrics/AuthenticateOptions;', 'Landroid/app/ActivityTaskManager;']
 
 PATCHES = [
     {

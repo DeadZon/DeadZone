@@ -4,11 +4,14 @@ Smart smali patcher — multi-tier class/method matching with register/label tol
 Architecture
 ============
 Class matching tiers:
-  Tier 1 — Exact path    : TARGET_CLASS resolved directly under each smali_root.
-  Tier 2 — Basename      : any *.smali whose filename matches (also tries CLASS_FALLBACK_NAMES).
-  Tier 3 — Anchor scan   : any *.smali containing ALL class_anchors.
+  Tier 1 — Exact path         : TARGET_CLASS resolved directly under each smali_root.
+  Tier 2 — Basename           : any *.smali whose filename matches CLASS_FALLBACK_NAMES.
+  Tier 3 — Class anchors      : any *.smali containing ALL class_anchors (stable verbatim refs).
+  Tier 4 — Method-anchor refs : stable class/member refs extracted from method_anchors; any
+                                 *.smali containing ALL of them.  Requires exactly 1 hit.
 
-  AMBIGUOUS = FAIL: > 1 candidate at any tier → ClassMatchStatus.AMBIGUOUS, abort.
+  AMBIGUOUS = FAIL at every tier: > 1 candidate → ClassMatchStatus.AMBIGUOUS, abort.
+  If all four tiers fail     → ClassMatchStatus.NOT_FOUND.
 
 Method matching tiers:
   Tier 1 — Exact signature : full ".method …" line matches exactly.
@@ -20,19 +23,26 @@ Smali register / label tolerance:
   Labels :cond_* / :goto_* / :pswitch_* / :sswitch_* are wildcard-matched.
   .line N directives are stripped before comparison.
 
+Stable refs (for Tier 3 CLASS_ANCHORS and Tier 4 method-anchor extraction)
+  Good: full class type refs  Lcom/android/server/policy/PhoneWindowManager;
+        member refs            ->interceptKeyBeforeQueueing  ->mKeyguardDelegate
+        specific invoke refs   Landroid/provider/Settings$System;->getIntForUser
+  Bad:  register names v0 p0 p1, label names :cond_0 :goto_a (volatile across ROM versions)
+
 Public API
 ==========
-  find_class(smali_roots, exact_class, fallback_names, class_anchors)   -> ClassMatchResult
-  find_method(class_text, exact_signature, method_name, method_anchors)  -> MethodMatchResult
-  apply_smart_patch(smali_roots, rule, dry_run)                          -> PatchResult
-  normalize_smali_for_match(text)                                         -> str
-  build_register_wildcard_regex(smali_block)                              -> str
-  replace_method_body(class_text, found_block, replacement)              -> tuple[str, bool]
-  insert_method_if_missing(class_text, method_block)                     -> str
-  add_class_if_missing(smali_roots, class_name, class_content)           -> bool
-  extract_anchors_from_block(smali_block, n)                             -> list[str]
-  extract_method_name(signature)                                          -> str
-  parse_smali_methods(content)                                            -> dict[str, str]
+  find_class(smali_roots, exact_class, fallback_names, class_anchors, method_anchors) -> ClassMatchResult
+  find_method(class_text, exact_signature, method_name, method_anchors)               -> MethodMatchResult
+  apply_smart_patch(smali_roots, rule, dry_run)                                        -> PatchResult
+  normalize_smali_for_match(text)                                                       -> str
+  build_register_wildcard_regex(smali_block)                                            -> str
+  replace_method_body(class_text, found_block, replacement)                            -> tuple[str, bool]
+  insert_method_if_missing(class_text, method_block)                                   -> str
+  add_class_if_missing(smali_roots, class_name, class_content)                         -> bool
+  extract_anchors_from_block(smali_block, n)                                           -> list[str]
+  extract_stable_refs_from_anchors(method_anchors, max_refs)                           -> list[str]
+  extract_method_name(signature)                                                         -> str
+  parse_smali_methods(content)                                                           -> dict[str, str]
 """
 from __future__ import annotations
 
@@ -46,11 +56,12 @@ from typing import Optional
 # ── Status enums ───────────────────────────────────────────────────────────────
 
 class ClassMatchStatus(Enum):
-    EXACT      = "EXACT"       # Tier 1: exact path under smali_root
-    BASENAME   = "BASENAME"    # Tier 2: filename match (or fallback name)
-    ANCHOR     = "ANCHOR"      # Tier 3: class_anchors all present
-    NOT_FOUND  = "NOT_FOUND"
-    AMBIGUOUS  = "AMBIGUOUS"   # > 1 candidate — refused to guess
+    EXACT          = "EXACT"          # Tier 1: exact path under smali_root
+    BASENAME       = "BASENAME"       # Tier 2: filename match (or fallback name)
+    ANCHOR         = "ANCHOR"         # Tier 3: class_anchors all present
+    METHOD_ANCHOR  = "METHOD_ANCHOR"  # Tier 4: stable refs from method_anchors all present
+    NOT_FOUND      = "NOT_FOUND"
+    AMBIGUOUS      = "AMBIGUOUS"      # > 1 candidate — refused to guess
 
 
 class MethodMatchStatus(Enum):
@@ -117,6 +128,92 @@ _ANCHOR_OPCODES = frozenset({
     "move-result-object", "move-result",
     "if-eqz", "if-nez", "if-eq", "if-ne", "if-lt", "if-ge", "if-gt", "if-le",
 })
+
+
+# ── Stable-ref extraction (Tier 3 CLASS_ANCHORS / Tier 4 method-anchor refs) ──
+
+# Matches any non-trivial fully-qualified smali class ref: Lcom/foo/Bar;
+_STABLE_CLASS_REF_RE = re.compile(
+    r"L[a-zA-Z][a-zA-Z0-9_]+(?:/[a-zA-Z$][a-zA-Z0-9_$]*){2,};"
+)
+# Matches ->methodOrFieldName followed by ( or :  (not a register/label)
+_STABLE_MEMBER_REF_RE = re.compile(r"->([a-zA-Z_<][a-zA-Z0-9_<>]*)[\(:]")
+
+# Ubiquitous refs that appear in almost every smali file — useless as anchors
+_TRIVIAL_CLASS_REFS = frozenset({
+    "Ljava/lang/Object;",
+    "Ljava/lang/String;",
+    "Ljava/lang/Integer;",
+    "Ljava/lang/Boolean;",
+    "Ljava/lang/Long;",
+    "Ljava/lang/Float;",
+    "Ljava/lang/Double;",
+    "Ljava/lang/Runnable;",
+    "Ljava/lang/Thread;",
+    "Ljava/lang/Throwable;",
+    "Ljava/lang/Exception;",
+    "Ljava/lang/RuntimeException;",
+    "Ljava/util/List;",
+    "Ljava/util/ArrayList;",
+    "Landroid/util/Log;",
+    "Landroid/os/Bundle;",
+    "Landroid/content/Context;",
+    "Landroid/content/Intent;",
+})
+
+# Very short member names that appear everywhere
+_TRIVIAL_MEMBER_NAMES = frozenset({
+    "toString", "hashCode", "equals", "getClass", "notify", "wait",
+    "init", "<init>", "<clinit>", "get", "set", "add", "put",
+    "run", "call", "execute", "start", "stop",
+})
+
+
+def extract_stable_refs_from_anchors(
+    method_anchors: list[str],
+    max_refs: int = 8,
+) -> list[str]:
+    """
+    Extract version-stable class/member reference strings from instruction-line anchors.
+
+    Pulls ``L<pkg>/<Class>;`` type refs and ``->memberName`` refs from smali instruction
+    lines, discards trivially common ones, and returns the most specific (longest) subset.
+
+    These stable refs survive register renaming and label renaming between ROM versions,
+    making them suitable for Tier 4 class-file discovery (content substring search).
+
+    Examples of good output:
+      Lcom/android/server/policy/PhoneWindowManager;
+      ->interceptKeyBeforeQueueing
+      Landroid/provider/Settings$System;
+      ->getIntForUser
+    """
+    candidates: list[tuple[int, str]] = []   # (length, ref)
+
+    for line in method_anchors:
+        # Class type refs
+        for m in _STABLE_CLASS_REF_RE.finditer(line):
+            ref = m.group(0)
+            if ref not in _TRIVIAL_CLASS_REFS and len(ref) >= 15:
+                candidates.append((len(ref), ref))
+
+        # Member refs  ->name( or ->name:
+        for m in _STABLE_MEMBER_REF_RE.finditer(line):
+            name = m.group(1)
+            ref  = f"->{name}"
+            if name not in _TRIVIAL_MEMBER_NAMES and len(name) >= 5:
+                candidates.append((len(name), ref))
+
+    # Deduplicate, longest-first (most specific)
+    seen:   set[str]  = set()
+    result: list[str] = []
+    for _, ref in sorted(candidates, key=lambda t: -t[0]):
+        if ref not in seen:
+            seen.add(ref)
+            result.append(ref)
+            if len(result) >= max_refs:
+                break
+    return result
 
 
 def normalize_smali_for_match(text: str) -> str:
@@ -217,16 +314,24 @@ def find_class(
     exact_class: str,
     fallback_names: list[str] | None = None,
     class_anchors: list[str] | None = None,
+    method_anchors: list[str] | None = None,
 ) -> ClassMatchResult:
     """
-    Locate a smali file using a 3-tier strategy.
+    Locate a smali file using a 4-tier strategy.
 
     Parameters
     ----------
     smali_roots    : directories to search (smali_classes*, smali_classes2*, …)
     exact_class    : class path as in TARGET_CLASS, e.g. "com/android/server/pm/Foo.smali"
     fallback_names : alternative basenames to try in Tier 2
-    class_anchors  : content lines that must ALL be present for a Tier 3 match
+    class_anchors  : verbatim content strings that must ALL be present for a Tier 3 match
+    method_anchors : instruction lines from search block; stable class/member refs extracted
+                     from them are used for Tier 4 when Tiers 1-3 all fail
+
+    Tier guarantees
+    ---------------
+    AMBIGUOUS = FAIL at every tier.  Never patches a random close match.
+    Returns ClassMatchStatus.NOT_FOUND only after all four tiers are exhausted.
     """
     if not exact_class.endswith(".smali"):
         exact_class += ".smali"
@@ -242,12 +347,12 @@ def find_class(
                 strategy=f"exact path in {root.name}",
             )
 
-    # Collect all smali files for tier 2/3
+    # Collect all smali files for tiers 2-4
     all_smali: list[Path] = []
     for root in smali_roots:
         all_smali.extend(root.rglob("*.smali"))
 
-    # Tier 2 — basename
+    # Tier 2 — basename (TARGET_CLASS filename + fallback names)
     search_basenames: set[str] = {Path(exact_class).name}
     for fb in (fallback_names or []):
         bn = fb if fb.endswith(".smali") else fb + ".smali"
@@ -267,33 +372,67 @@ def find_class(
             strategy=f"basename ambiguous: {len(tier2)} files named {sorted(search_basenames)}",
         )
 
-    # Tier 3 — content anchors
-    if not class_anchors:
-        return ClassMatchResult(status=ClassMatchStatus.NOT_FOUND, strategy="no class anchors")
+    # Tier 3 — verbatim class_anchors content scan
+    if class_anchors:
+        tier3: list[Path] = []
+        for p in all_smali:
+            try:
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if all(a in text for a in class_anchors):
+                tier3.append(p)
 
-    tier3: list[Path] = []
-    for p in all_smali:
-        try:
-            text = p.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        if all(a in text for a in class_anchors):
-            tier3.append(p)
+        if len(tier3) == 1:
+            return ClassMatchResult(
+                status=ClassMatchStatus.ANCHOR,
+                path=tier3[0],
+                strategy=f"class-anchor scan: {len(class_anchors)} anchors matched in {tier3[0].name}",
+            )
+        if len(tier3) > 1:
+            return ClassMatchResult(
+                status=ClassMatchStatus.AMBIGUOUS,
+                candidates=tier3,
+                strategy=f"class-anchor ambiguous: {len(tier3)} files match all anchors",
+            )
+        # Tier 3 found nothing; fall through to Tier 4
 
-    if len(tier3) == 1:
-        return ClassMatchResult(
-            status=ClassMatchStatus.ANCHOR,
-            path=tier3[0],
-            strategy=f"anchor scan matched {len(class_anchors)} anchors in {tier3[0].name}",
-        )
-    if len(tier3) > 1:
-        return ClassMatchResult(
-            status=ClassMatchStatus.AMBIGUOUS,
-            candidates=tier3,
-            strategy=f"anchor ambiguous: {len(tier3)} files match all anchors",
-        )
+    # Tier 4 — stable refs extracted from method_anchors instruction lines
+    if method_anchors:
+        stable_refs = extract_stable_refs_from_anchors(method_anchors)
+        if stable_refs:
+            tier4: list[Path] = []
+            for p in all_smali:
+                try:
+                    text = p.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                if all(ref in text for ref in stable_refs):
+                    tier4.append(p)
 
-    return ClassMatchResult(status=ClassMatchStatus.NOT_FOUND, strategy="all tiers exhausted")
+            if len(tier4) == 1:
+                return ClassMatchResult(
+                    status=ClassMatchStatus.METHOD_ANCHOR,
+                    path=tier4[0],
+                    strategy=(
+                        f"method-anchor ref scan: {len(stable_refs)} refs "
+                        f"({', '.join(stable_refs[:3])}) matched in {tier4[0].name}"
+                    ),
+                )
+            if len(tier4) > 1:
+                return ClassMatchResult(
+                    status=ClassMatchStatus.AMBIGUOUS,
+                    candidates=tier4,
+                    strategy=(
+                        f"method-anchor ref ambiguous: {len(tier4)} files match "
+                        f"all {len(stable_refs)} stable refs"
+                    ),
+                )
+
+    return ClassMatchResult(
+        status=ClassMatchStatus.NOT_FOUND,
+        strategy="all four tiers exhausted (path, basename, class-anchors, method-anchor-refs)",
+    )
 
 
 # ── Method finder ──────────────────────────────────────────────────────────────
@@ -478,8 +617,10 @@ def apply_smart_patch(
             message="class injected" if written else "class already exists",
         )
 
-    # ── smali patches: locate target class ────────────────────────────────────
-    class_result = find_class(smali_roots, target_class, fallback_names, class_anchors)
+    # ── smali patches: locate target class (4-tier) ──────────────────────────
+    class_result = find_class(
+        smali_roots, target_class, fallback_names, class_anchors, method_anchors
+    )
 
     if class_result.status in (ClassMatchStatus.NOT_FOUND, ClassMatchStatus.AMBIGUOUS):
         return PatchResult(

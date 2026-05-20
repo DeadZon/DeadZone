@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/wm/WindowManagerServiceImpl.smali"
 CLASS_FALLBACK_NAMES = ['WindowManagerServiceImpl.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/wm/RootWindowContainer;', 'Lcom/android/server/wm/ActivityRecordStub;', 'Lcom/android/server/wm/DisplayContent;', 'Landroid/os/Binder;', '->isCompatibilityMode', '->getDisplayContent']
 
 PATCHES = [
     {

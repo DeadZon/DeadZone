@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/miui/server/greeze/PolicyManager.smali"
 CLASS_FALLBACK_NAMES = ['PolicyManager.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/miui/server/greeze/PolicyManager;', 'Landroid/os/SystemProperties;', '->IMMOBULUS_ENABLED', '->getBoolean']
 
 PATCHES = [
     {

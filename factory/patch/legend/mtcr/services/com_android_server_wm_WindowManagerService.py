@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/wm/WindowManagerService.smali"
 CLASS_FALLBACK_NAMES = ['WindowManagerService.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/wm/WindowManagerInternal$OnHardKeyboardStatusChangeListener;', 'Lcom/android/server/wm/WindowManagerService$$ExternalSyntheticLambda0;', 'Lcom/android/server/wm/EmbeddedWindowController$EmbeddedWindow;', 'Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;', 'Lcom/android/server/wm/ScreenRecordingCallbackController;', 'Lcom/android/server/wm/DisplayAreaPolicy$Provider;']
 
 PATCHES = [
     {

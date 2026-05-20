@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/devicepolicy/DevicePolicyManagerService.smali"
 CLASS_FALLBACK_NAMES = ['DevicePolicyManagerService.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda205;', 'Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda127;', 'Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda195;', 'Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda24;', 'Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda86;', 'Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda46;']
 
 PATCHES = [
     {

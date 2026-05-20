@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/BroadcastQueueModernStubImpl.smali"
 CLASS_FALLBACK_NAMES = ['BroadcastQueueModernStubImpl.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/am/BroadcastQueueModernStubImpl;', 'Lmiui/security/SecurityManagerInternal;', 'Lcom/android/server/am/BroadcastRecord;', 'Landroid/content/pm/ApplicationInfo;', 'Lcom/android/server/LocalServices;', 'Landroid/content/pm/ActivityInfo;']
 
 PATCHES = [
     {

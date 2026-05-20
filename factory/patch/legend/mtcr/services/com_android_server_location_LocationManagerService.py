@@ -13,7 +13,7 @@ from __future__ import annotations
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/location/LocationManagerService.smali"
 CLASS_FALLBACK_NAMES = ['LocationManagerService.smali']
-CLASS_ANCHORS        = []
+CLASS_ANCHORS        = ['Lcom/android/server/location/provider/LocationProviderManager$StateChangedListener;', 'Lcom/android/internal/hidden_from_bootclasspath/android/location/flags/Flags;', 'Lcom/android/server/location/provider/proxy/ProxyPopulationDensityProvider;', 'Lcom/android/server/location/provider/proxy/ProxyLocationProvider;', 'Lcom/android/server/location/provider/LocationProviderManager;', 'Lcom/android/server/location/fudger/LocationFudgerCache;']
 
 PATCHES = [
     {
