@@ -1,0 +1,117 @@
+name: DeadZone Snapdragon Factory
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: "ROM download URL"
+        required: true
+        type: string
+      device:
+        description: "Snapdragon device codename"
+        required: true
+        type: string
+        default: select_device_codename
+      custom_device:
+        description: "Optional custom codename."
+        required: false
+        type: string
+      final_name:
+        description: "Final build name"
+        required: true
+        type: string
+      platform:
+        description: "ROM platform"
+        required: true
+        type: string
+        default: os3_a16
+      flavor:
+        description: "DeadZone flavor"
+        required: true
+        type: string
+        default: legend
+      android_version:
+        description: "Android version number"
+        required: true
+        type: string
+        default: "16"
+      mi_version:
+        description: "MI/OS incremental version string"
+        required: true
+        type: string
+        default: OS3.0.303.0.WNOCNXM
+      vbmeta_mode:
+        description: "vbmeta patch mode"
+        required: true
+        type: string
+        default: "3"
+      mode:
+        description: "dry_run or execute"
+        required: true
+        type: string
+        default: dry_run
+      notify_telegram:
+        description: "Send Telegram notifications"
+        required: true
+        type: boolean
+        default: true
+      runner_label:
+        description: "GitHub runner label"
+        required: true
+        type: string
+        default: ubuntu-latest
+      VM_CPUS:
+        description: 'Fly.io VM CPUs'
+        required: true
+        default: '16'
+      VM_MEMORY:
+        description: 'Fly.io VM Memory in MB'
+        required: true
+        default: '131072'
+
+jobs:
+  launch_snapdragon_builder:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Run Build on Fly.io Cloud (400GB SSD)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl machine run . \
+            --app dz-builder-snap \
+            --region fra \
+            --vm-cpu-kind performance \
+            --vm-cpus ${{ inputs.VM_CPUS }} \
+            --vm-memory ${{ inputs.VM_MEMORY }} \
+            --volume dz_data_snap:/mnt/dz_data \
+            --env IN_ROM_URL="${{ inputs.rom_url }}" \
+            --env IN_DEVICE="${{ inputs.device }}" \
+            --env IN_CUSTOM_DEVICE="${{ inputs.custom_device }}" \
+            --env IN_FINAL_NAME="${{ inputs.final_name }}" \
+            --env IN_PLATFORM="${{ inputs.platform }}" \
+            --env IN_FLAVOR="${{ inputs.flavor }}" \
+            --env IN_ANDROID_VERSION="${{ inputs.android_version }}" \
+            --env IN_MI_VERSION="${{ inputs.mi_version }}" \
+            --env IN_VBMETA_MODE="${{ inputs.vbmeta_mode }}" \
+            --env IN_MODE="${{ inputs.mode }}" \
+            --env IN_NOTIFY="${{ inputs.notify_telegram }}" \
+            --env PIXELDRAIN_API_KEY="${{ secrets.PIXELDRAIN_API_KEY }}" \
+            --env TELEGRAM_SNAPDRAGON_BOT_TOKEN="${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}" \
+            --env TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --env TELEGRAM_THREAD_ID="${{ secrets.TELEGRAM_THREAD_ID }}" \
+            --env GITHUB_TOKEN="${{ secrets.G_TOKEN }}" \
+            --env GITHUB_RUN_NUMBER="${{ github.run_number }}" \
+            --env GITHUB_RUN_ID="${{ github.run_id }}" \
+            --env GITHUB_SERVER_URL="${{ github.server_url }}" \
+            --env GITHUB_REPOSITORY="${{ github.repository }}" \
+            --rm
