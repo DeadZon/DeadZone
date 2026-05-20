@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/qs/tileimpl/QSTileImpl.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         '.method public isAvailable()Z\n    .registers 1\n\n    instance-of p0, p0, Lcom/android/systemui/qs/tiles/ModesDndTile;\n\n    xor-int/lit8 p0, p0, 0x1\n\n    return p0\n.end method\n',
         'replacement':    '.method public isAvailable()Z\n    .registers 1\n\n    const/4 p0, 0x1\n\n    return p0\n.end method\n',
         'required':       True,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr modified class',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule modified class',
     },
 ]

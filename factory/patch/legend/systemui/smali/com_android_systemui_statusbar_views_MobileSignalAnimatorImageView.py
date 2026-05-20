@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/statusbar/views/MobileSignalAnimatorImageView.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method public copyView()Landroid/view/View;\n    .registers 8\n\n    new-instance v0, Lcom/android/systemui/statusbar/views/MobileSignalAnimatorImageView;\n\n    invoke-virtual {p0}, Landroid/widget/ImageView;->getContext()Landroid/content/Context;\n\n    move-result-object v1\n\n    const/16 v5, 0xe\n\n    const/4 v6, 0x0\n\n    const/4 v2, 0x0\n\n    const/4 v3, 0x0\n\n    const/4 v4, 0x0\n\n    invoke-direct/range {v0 .. v6}, Lcom/android/systemui/statusbar/views/MobileSignalAnimatorImageView;-><init>(Landroid/content/Context;Landroid/util/AttributeSet;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V\n\n    invoke-virtual {p0}, Landroid/widget/ImageView;->getDrawable()Landroid/graphics/drawable/Drawable;\n\n    move-result-object v1\n\n    invoke-virtual {v0, v1}, Landroid/widget/ImageView;->setImageDrawable(Landroid/graphics/drawable/Drawable;)V\n\n    invoke-virtual {p0}, Landroid/widget/ImageView;->getAdjustViewBounds()Z\n\n    move-result p0\n\n    invoke-virtual {v0, p0}, Landroid/widget/ImageView;->setAdjustViewBounds(Z)V\n\n    return-object v0\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
 ]

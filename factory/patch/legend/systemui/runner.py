@@ -1,29 +1,28 @@
 """
-Legend MiuiSystemUI APK patch runner — clean Python rules edition.
+Legend MiuiSystemUI APK patch runner - clean Python rules edition.
 
 Architecture
 ============
-All patch logic lives in generated rule modules — no MTCR or Legend/ reads at runtime:
+All patch logic lives in generated rule modules; no reference-pack directories
+or patch comparison files are read at runtime.
 
-  factory/patch/legend/systemui/smali/          → 114 modified class patches
-  factory/patch/legend/systemui/smali_added/    → 313 added class patches (classes2/3/4)
-  factory/patch/legend/systemui/resources/      → layout + arsc + values rules
-  factory/patch/legend/systemui/dex/            → managed dex payload declarations
-  factory/assets/legend/systemui/               → managed XML assets + dex payloads
+  factory/patch/legend/systemui/smali/          -> 114 modified class patches
+  factory/patch/legend/systemui/smali_added/    -> 313 added class patches (classes2/3/4)
+  factory/patch/legend/systemui/resources/      -> layout + arsc + values rules
+  factory/assets/legend/systemui/               -> managed XML assets
 
 Pipeline (execute mode):
   1. Find MiuiSystemUI.apk in the ROM project tree.
   2. Copy to timestamped work directory.
   3. Decompile with APKEditor.
-  4. Apply add-resource XMLs (values_rules → managed assets).
-  5. Apply layout XML changes (layout_rules — text-diff hunks).
-  6. Apply arsc resource changes (arsc_rules — XML merge).
-  7. Apply smali method patches (smali/ — smart class/method matching).
-  8. Apply added smali classes (smali_added/ — class_add into smali_classesN).
-  9. Apply DEX payloads (dex/ — baksmali decode → smali → new smali_classesN root).
-  10. Rebuild APK with APKEditor.
-  11. Verify rebuilt APK (size > 0).
-  12. Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copies).
+  4. Apply add-resource XMLs from managed assets.
+  5. Apply layout XML changes from generated rules.
+  6. Apply arsc resource changes from generated rules.
+  7. Apply smali method patches with smart class/method matching.
+  8. Place added smali classes into smali_classesN roots.
+  9. Rebuild APK with APKEditor.
+  10. Verify rebuilt APK (size > 0).
+  11. Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copies).
 
 Flavor guard:
   Only runs for: legend, deadzone_legend (case-insensitive).
@@ -44,7 +43,6 @@ import json
 import pkgutil
 import re
 import shutil
-import subprocess
 import sys
 import time
 import xml.etree.ElementTree as ET
@@ -60,7 +58,7 @@ from factory.patch.apk.apk_workspace import (
     rebuild_apk,
     restore_rebuilt_apk_no_backup,
 )
-from factory.patch.legend.mtcr.smart_smali_patcher import (
+from factory.patch.legend.smart_smali_patcher import (
     ClassMatchStatus,
     MethodMatchStatus,
     PatchApplyStatus,
@@ -183,7 +181,7 @@ def _apply_add_resources(decompiled_dir: Path, dry_run: bool) -> dict:
     from factory.patch.apk.resource_merge import (
         apply_add_resources as _orig_apply,
     )
-    # Point to managed assets, not Legend/
+    # Point to managed factory assets.
     from factory.patch.legend.systemui.resources.values_rules import ADD_RESOURCES_SRC
 
     result: dict = {
@@ -737,90 +735,6 @@ def _apply_added_classes(
 
 
 # ---------------------------------------------------------------------------
-# Stage: apply dex payloads (baksmali decode → smali_classesN)
-# ---------------------------------------------------------------------------
-
-def _resolve_baksmali() -> Optional[Path]:
-    """Find baksmali.jar in the repo tools tree."""
-    for candidate in (
-        _REPO_ROOT / "third_party" / "mezo_core" / "baksmali.jar",
-        _REPO_ROOT / "tools" / "baksmali.jar",
-        _REPO_ROOT / "third_party" / "baksmali.jar",
-    ):
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def _apply_dex_payloads(decompiled_dir: Path, dry_run: bool) -> dict:
-    """Decode managed dex payloads via baksmali and place smali into smali_classesN."""
-    from factory.patch.legend.systemui.dex.add_dex_payloads import DEX_PAYLOADS
-
-    result: dict = {
-        "payloads": [],
-        "new_roots_created": [],
-        "classes_added": 0,
-        "errors": [],
-        "dry_run": dry_run,
-        "status": "NOT_RUN",
-    }
-
-    if dry_run:
-        result["status"] = "WOULD_APPLY"
-        result["would_apply"] = len(DEX_PAYLOADS)
-        return result
-
-    baksmali = _resolve_baksmali()
-    if baksmali is None:
-        result["status"] = "SKIPPED_NO_BAKSMALI"
-        result["errors"].append("baksmali.jar not found — dex payloads skipped")
-        # Non-fatal: smali_added/ classes cover the same content
-        return result
-
-    for payload in DEX_PAYLOADS:
-        dex_path = payload["asset_path"]
-        name = payload["name"]
-
-        pinfo: dict = {"name": name, "status": "NOT_RUN", "classes_added": 0}
-
-        if not dex_path.is_file():
-            pinfo["status"] = "SKIPPED_MISSING_ASSET"
-            result["errors"].append(f"{name}: asset not found: {dex_path}")
-            result["payloads"].append(pinfo)
-            if payload.get("required"):
-                result["status"] = "FAILED"
-                return result
-            continue
-
-        next_root = _next_smali_root(decompiled_dir)
-        next_root.mkdir(parents=True, exist_ok=True)
-        result["new_roots_created"].append(next_root.name)
-
-        try:
-            cmd = ["java", "-jar", str(baksmali), "d", str(dex_path),
-                   "-o", str(next_root)]
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            if proc.returncode != 0:
-                raise RuntimeError(f"baksmali exit {proc.returncode}: {proc.stderr[:200]}")
-
-            classes_added = sum(1 for _ in next_root.rglob("*.smali"))
-            pinfo["status"] = "OK"
-            pinfo["classes_added"] = classes_added
-            pinfo["smali_root"] = next_root.name
-            result["classes_added"] += classes_added
-
-        except Exception as exc:
-            pinfo["status"] = "FAILED"
-            pinfo["error"] = str(exc)
-            result["errors"].append(f"{name}: {exc}")
-
-        result["payloads"].append(pinfo)
-
-    result["status"] = "OK" if not result["errors"] else "PARTIAL"
-    return result
-
-
-# ---------------------------------------------------------------------------
 # Report formatting
 # ---------------------------------------------------------------------------
 
@@ -862,7 +776,6 @@ def _format_text_report(report: dict) -> str:
         f"  Arsc patches       : {report.get('arsc_status', 'N/A')}  ({report.get('arsc_applied', 0)} entries applied)",
         f"  Smali patches      : {report.get('smali_status', 'N/A')}  ({report.get('smali_patches_applied', 0)} applied)",
         f"  Added classes      : {report.get('added_classes_status', 'N/A')}  ({report.get('added_classes_count', 0)} classes)",
-        f"  Dex payloads       : {report.get('dex_payload_status', 'N/A')}",
         f"  Rebuild            : {report.get('rebuild_status', 'N/A')}",
         f"  Restore            : {report.get('restore_status', 'N/A')}",
         "",
@@ -884,13 +797,13 @@ def _format_text_report(report: dict) -> str:
             lines.append(f"  ... and {len(cr_list) - 20} more classes")
         lines.append("")
 
-    # DEX smali roots
-    dex_info = report.get("dex_payload_info", {})
-    if dex_info:
-        lines.append("DEX smali roots:")
-        for rn in dex_info.get("existing_roots", []):
+    # Added-class smali roots
+    added_info = report.get("added_classes_info", {})
+    if added_info:
+        lines.append("Added-class smali roots:")
+        for rn in added_info.get("existing_roots", []):
             lines.append(f"  existing: {rn}")
-        for rn in dex_info.get("new_roots_created", []):
+        for rn in added_info.get("new_roots_created", []):
             lines.append(f"  created : {rn}")
         lines.append("")
 
@@ -1016,8 +929,7 @@ def apply_systemui_patch(
         "smali_patches_applied":   0,
         "added_classes_status":    "N/A",
         "added_classes_count":     0,
-        "dex_payload_status":      "N/A",
-        "dex_payload_info":        {},
+        "added_classes_info":      {},
         "rebuild_status":          "N/A",
         "restore_status":          "N/A",
         "class_results":           [],
@@ -1051,9 +963,8 @@ def apply_systemui_patch(
             f"     classes2={added_by_group.get('classes2',0)}  "
             f"classes3={added_by_group.get('classes3',0)}  "
             f"classes4={added_by_group.get('classes4',0)}",
-            f"[10] Apply DEX payloads via baksmali (non-blocking if baksmali missing)",
-            f"[11] Rebuild MiuiSystemUI.apk with APKEditor",
-            f"[12] Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copy)",
+            f"[10] Rebuild MiuiSystemUI.apk with APKEditor",
+            f"[11] Restore to exact original path as MiuiSystemUI.apk (no backup, no renamed copy)",
         ]
 
         if not systemui_apk:
@@ -1101,7 +1012,7 @@ def apply_systemui_patch(
         return report
 
     smali_roots = _find_smali_roots(decompiled_dir)
-    report["dex_payload_info"]["existing_roots"] = [r.name for r in smali_roots]
+    report["added_classes_info"]["existing_roots"] = [r.name for r in smali_roots]
 
     # ── Step 2: Add resource XMLs ─────────────────────────────────────────────
     print(f"[systemui_runner] Merging managed add/ resource XMLs ...")
@@ -1163,7 +1074,7 @@ def apply_systemui_patch(
     added_res = _apply_added_classes(decompiled_dir, added_patches, dry_run=False)
     report["added_classes_status"] = added_res.get("status", "UNKNOWN")
     report["added_classes_count"]  = added_res.get("classes_added", 0)
-    report["dex_payload_info"]["new_roots_created"] = added_res.get("new_roots_created", [])
+    report["added_classes_info"]["new_roots_created"] = added_res.get("new_roots_created", [])
     for e in added_res.get("errors", []):
         errors.append(f"added_classes: {e}")
 
@@ -1171,16 +1082,7 @@ def apply_systemui_patch(
         report["final_status"] = "FAILED"
         _write_reports(report)
         return report
-
-    # ── Step 7: DEX payloads (baksmali) ───────────────────────────────────────
-    print(f"[systemui_runner] Applying DEX payloads ...")
-    dex_res = _apply_dex_payloads(decompiled_dir, dry_run=False)
-    report["dex_payload_status"] = dex_res.get("status", "UNKNOWN")
-    report["dex_payload_info"].update(dex_res)
-    for e in dex_res.get("errors", []):
-        warnings.append(f"dex_payload: {e}")  # baksmali failures are non-fatal
-
-    # ── Step 8: Rebuild APK ───────────────────────────────────────────────────
+    # ── Step 7: Rebuild APK ───────────────────────────────────────────────────
     print(f"[systemui_runner] Rebuilding {SYSTEMUI_APK_NAME} ...")
     rebuild_ok = rebuild_apk(apkeditor_jar, decompiled_dir)
     report["rebuild_status"] = "OK" if rebuild_ok else "FAILED"
@@ -1197,7 +1099,7 @@ def apply_systemui_patch(
     except Exception:
         pass
 
-    # ── Step 9: Verify rebuilt APK ────────────────────────────────────────────
+    # ── Step 8: Verify rebuilt APK ────────────────────────────────────────────
     rebuilt = effective_work / SYSTEMUI_APK_NAME
     if not rebuilt.is_file() or rebuilt.stat().st_size == 0:
         errors.append("Rebuilt APK is missing or zero bytes")
@@ -1206,7 +1108,7 @@ def apply_systemui_patch(
         _write_reports(report)
         return report
 
-    # ── Step 10: Restore — exact original filename, no backup ─────────────────
+    # ── Step 9: Restore — exact original filename, no backup ─────────────────
     print(f"[systemui_runner] Restoring {SYSTEMUI_APK_NAME} to original path ...")
     restore = restore_rebuilt_apk_no_backup(rebuilt, systemui_apk)
     ok = restore.get("success", False)

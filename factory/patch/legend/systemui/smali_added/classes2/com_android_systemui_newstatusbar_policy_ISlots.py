@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch -- added class.
+Legend MiuiSystemUI generated patch -- added class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/newstatusbar/policy/ISlots.smali
@@ -21,6 +21,6 @@ PATCHES = [
         'search':      None,
         'replacement': '.class public interface abstract Lcom/android/systemui/newstatusbar/policy/ISlots;\n.super Ljava/lang/Object;\n\n\n# virtual methods\n.method public abstract setSlot(Lcom/android/systemui/newstatusbar/controllers/ElementController$Slots;)V\n.end method\n',
         'required':    True,
-        'reason':      'Legend MiuiSystemUI MTCR dex.mtcr added class',
+        'reason':      'Legend MiuiSystemUI generated generated dex rule added class',
     },
 ]

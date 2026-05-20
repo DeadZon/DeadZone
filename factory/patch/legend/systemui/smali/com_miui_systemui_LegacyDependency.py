@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/miui/systemui/LegacyDependency.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.field public mWeatherController:Ldagger/Lazy;',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added field',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added field',
     },
 ]

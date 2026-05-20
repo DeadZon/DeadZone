@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/tuner/TunerServiceImpl.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method public final getValue(ILjava/lang/String;)I\n    .registers 4\n\n    iget-object v0, p0, Lcom/android/systemui/tuner/TunerServiceImpl;->mContentResolver:Landroid/content/ContentResolver;\n\n    iget p0, p0, Lcom/android/systemui/tuner/TunerServiceImpl;->mCurrentUser:I\n\n    invoke-static {v0, p2, p1, p0}, Landroid/provider/Settings$Secure;->getIntForUser(Landroid/content/ContentResolver;Ljava/lang/String;II)I\n\n    move-result p0\n\n    return p0\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
 ]

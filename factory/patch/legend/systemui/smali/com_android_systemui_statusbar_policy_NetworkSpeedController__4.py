@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/statusbar/policy/NetworkSpeedController$4.smali
@@ -22,7 +22,7 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method constructor <init>(Lcom/android/systemui/statusbar/policy/NetworkSpeedController;Landroid/os/Handler;)V\n    .registers 3\n\n    iput-object p1, p0, Lcom/android/systemui/statusbar/policy/NetworkSpeedController$4;->this$0:Lcom/android/systemui/statusbar/policy/NetworkSpeedController;\n\n    invoke-direct {p0, p2}, Landroid/database/ContentObserver;-><init>(Landroid/os/Handler;)V\n\n    return-void\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
     {
         'id':             'p0001_onChange',
@@ -33,7 +33,7 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method public onChange(Z)V\n    .registers 3\n\n    iget-object v0, p0, Lcom/android/systemui/statusbar/policy/NetworkSpeedController$4;->this$0:Lcom/android/systemui/statusbar/policy/NetworkSpeedController;\n\n    invoke-static {v0}, Lcom/android/systemui/statusbar/policy/NetworkSpeedController;->access$1000(Lcom/android/systemui/statusbar/policy/NetworkSpeedController;)V\n\n    iget-object v0, p0, Lcom/android/systemui/statusbar/policy/NetworkSpeedController$4;->this$0:Lcom/android/systemui/statusbar/policy/NetworkSpeedController;\n\n    invoke-static {v0}, Lcom/android/systemui/statusbar/policy/NetworkSpeedController;->access$800(Lcom/android/systemui/statusbar/policy/NetworkSpeedController;)V\n\n    return-void\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
     {
         'id':             'p0002_field__field_final_synthet',
@@ -44,6 +44,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.field final synthetic this$0:Lcom/android/systemui/statusbar/policy/NetworkSpeedController;',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added field',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added field',
     },
 ]

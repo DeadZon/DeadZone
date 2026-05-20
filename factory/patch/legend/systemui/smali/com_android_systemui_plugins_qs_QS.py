@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/plugins/qs/QS.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method public abstract updateBackgroundColors()V\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
 ]

@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/statusbar/phone/ui/IconManager.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         '.method public onCreateLayoutParams(Lcom/android/internal/statusbar/StatusBarIcon$Shape;)Landroid/widget/LinearLayout$LayoutParams;\n    .registers 3\n\n    sget-object v0, Lcom/android/internal/statusbar/StatusBarIcon$Shape;->FIXED_SPACE:Lcom/android/internal/statusbar/StatusBarIcon$Shape;\n\n    if-ne p1, v0, :cond_0\n\n    iget p1, p0, Lcom/android/systemui/statusbar/phone/ui/IconManager;->mIconSize:I\n\n    goto :goto_0\n\n    :cond_0\n    const/4 p1, -0x2\n\n    :goto_0\n    new-instance v0, Landroid/widget/LinearLayout$LayoutParams;\n\n    iget p0, p0, Lcom/android/systemui/statusbar/phone/ui/IconManager;->mIconSize:I\n\n    invoke-direct {v0, p1, p0}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V\n\n    return-object v0\n.end method\n',
         'replacement':    '.method public onCreateLayoutParams(Lcom/android/internal/statusbar/StatusBarIcon$Shape;)Landroid/widget/LinearLayout$LayoutParams;\n    .registers 3\n\n    sget-object v0, Lcom/android/internal/statusbar/StatusBarIcon$Shape;->FIXED_SPACE:Lcom/android/internal/statusbar/StatusBarIcon$Shape;\n\n    if-ne p1, v0, :cond_0\n\n    iget p1, p0, Lcom/android/systemui/statusbar/phone/ui/IconManager;->mIconSize:I\n\n    goto :goto_0\n\n    :cond_0\n    const/4 p1, -0x2\n\n    :goto_0\n    new-instance v0, Landroid/widget/LinearLayout$LayoutParams;\n\n    iget p0, p0, Lcom/android/systemui/statusbar/phone/ui/IconManager;->mIconSize:I\n\n    invoke-direct {v0, p1, p1}, Landroid/widget/LinearLayout$LayoutParams;-><init>(II)V\n\n    return-object v0\n.end method\n',
         'required':       True,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr modified class',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule modified class',
     },
 ]

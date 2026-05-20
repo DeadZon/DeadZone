@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/miui/systemui/notification/NotificationSettingsHelper.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method public static showMezoStyle()Z\n    .registers 2\n\n    const/4 v1, 0x1\n\n    const-string v0, "icon_mezo_app_color"\n\n    invoke-static {v0, v1}, Landroid/preference/SettingsMezoHelper;->getIntofSettings(Ljava/lang/String;I)I\n\n    move-result v0\n\n    return v0\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
 ]

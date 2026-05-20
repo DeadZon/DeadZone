@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/miui/systemui/modulesettings/KeyguardSettings.smali
@@ -22,7 +22,7 @@ PATCHES = [
         'search':         '.method static constructor <clinit>()V\n    .registers 1\n\n    const-string v0, "wakeup_for_keyguard_notification"\n\n    invoke-static {v0}, Landroid/provider/Settings$System;->getUriFor(Ljava/lang/String;)Landroid/net/Uri;\n\n    move-result-object v0\n\n    sput-object v0, Lcom/miui/systemui/modulesettings/KeyguardSettings;->WAKEUP_FOR_NOTIFICATION:Landroid/net/Uri;\n\n    return-void\n.end method\n',
         'replacement':    '.method static constructor <clinit>()V\n    .registers 1\n\n    const-string v0, "wakeup_for_keyguard_notification"\n\n    invoke-static {v0}, Landroid/provider/Settings$System;->getUriFor(Ljava/lang/String;)Landroid/net/Uri;\n\n    move-result-object v0\n\n    sput-object v0, Lcom/miui/systemui/modulesettings/KeyguardSettings;->WAKEUP_FOR_NOTIFICATION:Landroid/net/Uri;\n\n    const-string v0, "charge_animation_type"\n\n    invoke-static {v0}, Landroid/provider/Settings$System;->getUriFor(Ljava/lang/String;)Landroid/net/Uri;\n\n    move-result-object v0\n\n    sput-object v0, Lcom/miui/systemui/modulesettings/KeyguardSettings;->CHARGE_ANIM_TYPE:Landroid/net/Uri;\n\n    return-void\n.end method\n',
         'required':       True,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr modified class',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule modified class',
     },
     {
         'id':             'p0001_field__field_public_static',
@@ -33,6 +33,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.field public static final CHARGE_ANIM_TYPE:Landroid/net/Uri;',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added field',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added field',
     },
 ]

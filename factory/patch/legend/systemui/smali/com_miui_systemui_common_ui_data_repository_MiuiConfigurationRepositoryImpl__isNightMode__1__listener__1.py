@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl$isNightMode$1$listener$1.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         '.method public final onUiModeChanged()V\n    .registers 2\n\n    iget-object v0, p0, Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl$isNightMode$1$listener$1;->this$0:Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl;\n\n    iget-object v0, v0, Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl;->context:Landroid/content/Context;\n\n    invoke-static {v0}, Lcom/miui/utils/configs/MiuiConfigs;->isNightMode(Landroid/content/Context;)Z\n\n    move-result v0\n\n    invoke-static {v0}, Ljava/lang/Boolean;->valueOf(Z)Ljava/lang/Boolean;\n\n    move-result-object v0\n\n    iget-object p0, p0, Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl$isNightMode$1$listener$1;->$$this$conflatedCallbackFlow:Lkotlinx/coroutines/channels/ProducerScope;\n\n    check-cast p0, Lkotlinx/coroutines/channels/ProducerCoroutine;\n\n    invoke-virtual {p0, v0}, Lkotlinx/coroutines/channels/ProducerCoroutine;->trySend-JP2dKIU(Ljava/lang/Object;)Ljava/lang/Object;\n\n    return-void\n.end method\n',
         'replacement':    '.method public final onUiModeChanged()V\n    .registers 2\n\n    iget-object v0, p0, Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl$isNightMode$1$listener$1;->this$0:Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl;\n\n    iget-object v0, v0, Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl;->context:Landroid/content/Context;\n\n    invoke-static {v0}, Lcom/miui/utils/configs/MiuiConfigs;->isNightMode1(Landroid/content/Context;)Z\n\n    move-result v0\n\n    invoke-static {v0}, Ljava/lang/Boolean;->valueOf(Z)Ljava/lang/Boolean;\n\n    move-result-object v0\n\n    iget-object p0, p0, Lcom/miui/systemui/common/ui/data/repository/MiuiConfigurationRepositoryImpl$isNightMode$1$listener$1;->$$this$conflatedCallbackFlow:Lkotlinx/coroutines/channels/ProducerScope;\n\n    check-cast p0, Lkotlinx/coroutines/channels/ProducerCoroutine;\n\n    invoke-virtual {p0, v0}, Lkotlinx/coroutines/channels/ProducerCoroutine;->trySend-JP2dKIU(Ljava/lang/Object;)Ljava/lang/Object;\n\n    return-void\n.end method\n',
         'required':       True,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr modified class',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule modified class',
     },
 ]

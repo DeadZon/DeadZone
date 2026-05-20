@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch — modified class.
+Legend MiuiSystemUI generated patch — modified class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/android/systemui/controlcenter/phone/widget/ControlCenterFakeStatusIcons.smali
@@ -22,6 +22,6 @@ PATCHES = [
         'search':         None,
         'replacement':    '.method public setAlpha(F)V\n    .registers 3\n\n    const/4 v0, 0x0\n\n    invoke-super {p0, v0}, Lcom/android/systemui/statusbar/AlphaOptimizedFrameLayout;->setAlpha(F)V\n\n    return-void\n.end method\n',
         'required':       False,
-        'reason':         'Legend MiuiSystemUI MTCR dex.mtcr added method',
+        'reason':         'Legend MiuiSystemUI generated generated dex rule added method',
     },
 ]

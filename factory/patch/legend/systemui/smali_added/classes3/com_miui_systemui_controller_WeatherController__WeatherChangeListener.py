@@ -1,5 +1,5 @@
 """
-Legend MiuiSystemUI MTCR patch -- added class.
+Legend MiuiSystemUI generated patch -- added class.
 
 Target APK   : MiuiSystemUI.apk
 Target class : com/miui/systemui/controller/WeatherController$WeatherChangeListener.smali
@@ -21,6 +21,6 @@ PATCHES = [
         'search':      None,
         'replacement': '.class public interface abstract Lcom/miui/systemui/controller/WeatherController$WeatherChangeListener;\n.super Ljava/lang/Object;\n\n\n# virtual methods\n.method public abstract onWeatherChange(Lcom/miui/systemui/controller/WeatherController$WeatherInfo;)V\n.end method\n',
         'required':    True,
-        'reason':      'Legend MiuiSystemUI MTCR dex.mtcr added class',
+        'reason':      'Legend MiuiSystemUI generated generated dex rule added class',
     },
 ]
