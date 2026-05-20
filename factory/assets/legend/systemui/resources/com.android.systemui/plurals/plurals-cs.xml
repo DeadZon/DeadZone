@@ -1,0 +1,129 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <plurals name="abbrev_a_hour_ago">
+        <item quantity="other">Před hodinou</item>
+    </plurals>
+    <plurals name="abbrev_half_hour_ago">
+        <item quantity="other">Před půl hodinou</item>
+    </plurals>
+    <plurals name="abbrev_in_a_hour">
+        <item quantity="other">Do hodiny</item>
+    </plurals>
+    <plurals name="abbrev_in_half_hour">
+        <item quantity="other">Do půl hodiny</item>
+    </plurals>
+    <plurals name="abbrev_in_less_than_one_minute">
+        <item quantity="other">Okamžitě</item>
+    </plurals>
+    <plurals name="abbrev_in_num_minutes">
+        <item quantity="one">za 1 minutu</item>
+        <item quantity="other">za %d minut</item>
+    </plurals>
+    <plurals name="abbrev_less_than_one_minute_ago">
+        <item quantity="other">Nyní</item>
+    </plurals>
+    <plurals name="abbrev_num_minutes_ago">
+        <item quantity="one">Před minutou</item>
+        <item quantity="other">Před %d minutami</item>
+    </plurals>
+    <plurals name="abc_slice_duration_days">
+        <item quantity="one">Před %d dnem</item>
+        <item quantity="few">Před %d dny</item>
+        <item quantity="many">Před %d dny</item>
+        <item quantity="other">Před %d dny</item>
+    </plurals>
+    <plurals name="abc_slice_duration_min">
+        <item quantity="one">Před %d min</item>
+        <item quantity="few">Před %d min</item>
+        <item quantity="many">Před %d min</item>
+        <item quantity="other">Před %d min</item>
+    </plurals>
+    <plurals name="abc_slice_duration_years">
+        <item quantity="one">Před %d r.</item>
+        <item quantity="few">Před %d r.</item>
+        <item quantity="many">Před %d r.</item>
+        <item quantity="other">Před %d r.</item>
+    </plurals>
+    <plurals name="accessibility_descriptions_signal_strength">
+        <item quantity="one">Síla signálu: %1$d z %2$d čárky</item>
+        <item quantity="few">Síla signálu: %1$d ze %2$d čárek</item>
+        <item quantity="many">Síla signálu: %1$d z %2$d čárek</item>
+        <item quantity="other">Síla signálu: %1$d z %2$d čárek</item>
+    </plurals>
+    <plurals name="atmospheric_pressure_desc">
+        <item quantity="one">Atmosférický tlak: %s hektopascal</item>
+        <item quantity="other">Atmosférický tlak: %s hektopascalů</item>
+    </plurals>
+    <plurals name="health_chart_calories_burned_schedule_format_desc">
+        <item quantity="one">Spálena %1$s kalorie</item>
+        <item quantity="other">Spálených %1$s kalorií</item>
+    </plurals>
+    <plurals name="health_chart_calories_goal_schedule_format_desc">
+        <item quantity="one">Cíl kalorií: %1$s kalorie</item>
+        <item quantity="other">Cíl kalorií: %1$s kalorií</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_current_schedule_format_desc">
+        <item quantity="one">Doba aktivity: %1$s minuta</item>
+        <item quantity="other">Doba aktivity: %1$s minut</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_goal_schedule_format_desc">
+        <item quantity="one">Cíl aktivity: %1$s minuta</item>
+        <item quantity="other">Cíl aktivity: %1$s minut</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_schedule_format">
+        <item quantity="one">%1$s/%2$s min</item>
+        <item quantity="other">%1$s/%2$s min</item>
+    </plurals>
+    <plurals name="health_chart_stand_count_schedule_format_desc">
+        <item quantity="one">Vstání za %1$s hodinu</item>
+        <item quantity="other">Vstání za %1$s hodin</item>
+    </plurals>
+    <plurals name="health_chart_stand_goal_schedule_format_desc">
+        <item quantity="one">Cíl vstaní: %1$s hodina</item>
+        <item quantity="other">Cíl vstaní: %1$s hodin</item>
+    </plurals>
+    <plurals name="health_chart_stand_schedule_format">
+        <item quantity="one">%1$s/%2$s h</item>
+        <item quantity="other">%1$s/%2$s hod.</item>
+    </plurals>
+    <plurals name="health_chart_step_count_current_schedule_format_desc">
+        <item quantity="one">Aktuální počet kroků: %1$s krok</item>
+        <item quantity="other">Aktuální počet kroků: %1$s kroků</item>
+    </plurals>
+    <plurals name="health_chart_step_count_goal_schedule_format_desc">
+        <item quantity="one">Cíl kroku: %1$s krok</item>
+        <item quantity="other">Cíl kroku: %1$s kroků</item>
+    </plurals>
+    <plurals name="health_chart_step_count_schedule_format">
+        <item quantity="one">%1$s/%2$s krok</item>
+        <item quantity="other">%1$s/%2$s kroků</item>
+    </plurals>
+    <plurals name="info_focus_rebirth_percent">
+        <item quantity="one">%d</item>
+        <item quantity="few">%d</item>
+        <item quantity="many">%d</item>
+        <item quantity="other">%d</item>
+    </plurals>
+    <plurals name="input_pattern_after_timeout_msg">
+        <item quantity="one">Zadání gesta je vyžadováno po %d hodině neaktivity</item>
+        <item quantity="other">Zadání gesta je vyžadováno po %d hodinách neaktivity</item>
+    </plurals>
+    <plurals name="mtrl_badge_content_description">
+        <item quantity="one">%d nové oznámení</item>
+        <item quantity="few">%d nová oznámení</item>
+        <item quantity="many">%d nového oznámení</item>
+        <item quantity="other">%d nových oznámení</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_minutes_string">
+        <item quantity="one">Zkuste to znovu za %d minutu</item>
+        <item quantity="other">Zkuste to znovu za %d minut</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_seconds_string">
+        <item quantity="one">Zkuste to znovu za %d sekundu</item>
+        <item quantity="other">Zkuste to znovu za %d sekund</item>
+    </plurals>
+    <plurals name="weather_temperature_desc">
+        <item quantity="one">Teplota: %1$s stupeň, %2$s</item>
+        <item quantity="other">Teplota: %1$s stupňů, %2$s</item>
+    </plurals>
+</resources>

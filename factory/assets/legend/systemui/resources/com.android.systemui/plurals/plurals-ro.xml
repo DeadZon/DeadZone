@@ -1,0 +1,114 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <plurals name="abbrev_a_hour_ago">
+        <item quantity="other">Cu o oră în urmă</item>
+    </plurals>
+    <plurals name="abbrev_half_hour_ago">
+        <item quantity="other">Cu o jumătate de oră în urmă</item>
+    </plurals>
+    <plurals name="abbrev_in_a_hour">
+        <item quantity="other">Într-o oră</item>
+    </plurals>
+    <plurals name="abbrev_in_half_hour">
+        <item quantity="other">Într-o jumătate de oră</item>
+    </plurals>
+    <plurals name="abbrev_in_less_than_one_minute">
+        <item quantity="other">Imediat</item>
+    </plurals>
+    <plurals name="abbrev_in_num_minutes">
+        <item quantity="one">într-un minut</item>
+        <item quantity="other">în %d minute</item>
+    </plurals>
+    <plurals name="abbrev_less_than_one_minute_ago">
+        <item quantity="other">Chiar acum</item>
+    </plurals>
+    <plurals name="abbrev_num_minutes_ago">
+        <item quantity="one">Cu 1 minut în urmă</item>
+        <item quantity="other">Cu %d minute în urmă</item>
+    </plurals>
+    <plurals name="abc_slice_duration_days">
+        <item quantity="one">cu %d zi în urmă</item>
+        <item quantity="other">cu %d zile în urmă</item>
+    </plurals>
+    <plurals name="abc_slice_duration_min">
+        <item quantity="one">cu %d min în urmă</item>
+        <item quantity="other">cu %d min în urmă</item>
+    </plurals>
+    <plurals name="abc_slice_duration_years">
+        <item quantity="one">cu %d an în urmă</item>
+        <item quantity="other">cu %d ani în urmă</item>
+    </plurals>
+    <plurals name="accessibility_descriptions_signal_strength">
+        <item quantity="one">Puterea semnalului: %1$d din %2$d linie</item>
+        <item quantity="few">Puterea semnalului: %1$d din %2$d linii</item>
+        <item quantity="other">Puterea semnalului: %1$d din %2$d linii</item>
+    </plurals>
+    <plurals name="atmospheric_pressure_desc">
+        <item quantity="one">Presiunea atmosferică: %s hectopascal</item>
+        <item quantity="other">Presiunea atmosferică: %s hectopascali</item>
+    </plurals>
+    <plurals name="health_chart_calories_burned_schedule_format_desc">
+        <item quantity="one">Ars %1$s calorie</item>
+        <item quantity="other">Arse %1$s calorii</item>
+    </plurals>
+    <plurals name="health_chart_calories_goal_schedule_format_desc">
+        <item quantity="one">Ținta pentru calorii: %1$s calorie</item>
+        <item quantity="other">Ținta pentru calorii: %1$s calorii</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_current_schedule_format_desc">
+        <item quantity="one">Durata activităților: %1$s minut</item>
+        <item quantity="other">Durata activităților: %1$s minute</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_goal_schedule_format_desc">
+        <item quantity="one">Ținta pentru activități: %1$s minut</item>
+        <item quantity="other">Ținta pentru activități: %1$s minute</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_schedule_format">
+        <item quantity="one">%1$s/%2$s minut</item>
+        <item quantity="other">%1$s/%2$s minute</item>
+    </plurals>
+    <plurals name="health_chart_stand_count_schedule_format_desc">
+        <item quantity="one">Stat ridicat în %1$s oră</item>
+        <item quantity="other">Stat ridicat în %1$s ore</item>
+    </plurals>
+    <plurals name="health_chart_stand_goal_schedule_format_desc">
+        <item quantity="one">Ținta pentru stat în picioare: %1$s oră</item>
+        <item quantity="other">Ținta pentru stat în picioare: %1$s ore</item>
+    </plurals>
+    <plurals name="health_chart_stand_schedule_format">
+        <item quantity="one">%1$s/%2$s oră</item>
+        <item quantity="other">%1$s/%2$s ore</item>
+    </plurals>
+    <plurals name="health_chart_step_count_current_schedule_format_desc">
+        <item quantity="one">Numărul de pași curent: %1$s pas</item>
+        <item quantity="other">Numărul de pași curent: %1$s pași</item>
+    </plurals>
+    <plurals name="health_chart_step_count_goal_schedule_format_desc">
+        <item quantity="one">Ținta pentru pași: %1$s pas</item>
+        <item quantity="other">Ținta pentru pași: %1$s pași</item>
+    </plurals>
+    <plurals name="health_chart_step_count_schedule_format">
+        <item quantity="one">%1$s/%2$s pas</item>
+        <item quantity="other">%1$s/%2$s pași</item>
+    </plurals>
+    <plurals name="input_pattern_after_timeout_msg">
+        <item quantity="one">Introduceți parola cel puțin o dată la %d oră pentru a nu o uita</item>
+        <item quantity="other">Introduceți parola cel puțin o dată la %d de ore pentru a nu o uita</item>
+    </plurals>
+    <plurals name="mtrl_badge_content_description">
+        <item quantity="one">%d notificare nouă</item>
+        <item quantity="other">%d notificări noi</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_minutes_string">
+        <item quantity="one">Încercați din nou în %d minut</item>
+        <item quantity="other">Încercați din nou în %d minute</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_seconds_string">
+        <item quantity="one">Încercați din nou în %d secundă</item>
+        <item quantity="other">Încercați din nou în %d secunde</item>
+    </plurals>
+    <plurals name="weather_temperature_desc">
+        <item quantity="one">Temperatura: %1$s grad, %2$s</item>
+        <item quantity="other">Temperatura: %1$s grade, %2$s</item>
+    </plurals>
+</resources>

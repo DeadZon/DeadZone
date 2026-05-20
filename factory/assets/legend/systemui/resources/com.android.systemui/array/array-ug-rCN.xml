@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <string-array name="battery_options">
+        <item>ئىزچىل پىرسەنت بويىچە كۆرۈنۈش</item>
+        <item>زەرەتلىگەندە پىرسەنت كۆرۈنۈش (سۈكۈتتىكى)</item>
+        <item>بۇ سىنبەلگە كۆرۈنمىسۇن</item>
+    </string-array>
+    <string-array name="bluetooth_audio_active_device_summaries">
+        <item></item>
+        <item> |  ئىشلىتىلىۋاتىدۇ</item>
+        <item> |  ئىشلىتىلىۋاتىدۇ(مېدىيا)</item>
+        <item> |  ئىشلىتىلىۋاتىدۇ(يانفون)</item>
+    </string-array>
+    <string-array name="clock_options">
+        <item>ۋاقىت،مىنۇت ۋە سېكۇنتنى كۆرسىتىش</item>
+        <item>سائەت ۋە مىنۇتنى كۆرسىتىش (سۈكۈتتىكى)</item>
+        <item>بۇ سىنبەلگە كۆرۈنمىسۇن</item>
+    </string-array>
+    <string-array name="nav_bar_buttons">
+        <item>چاپلاش تاختىسى</item>
+        <item>كونۇپكا كودى</item>
+        <item>كونۇپكا تاختا ئالماشتۇرغۇچ</item>
+        <item>يوق</item>
+    </string-array>
+    <string-array name="nav_bar_layouts">
+        <item>ئادەتتىكى</item>
+        <item>ئىخچام</item>
+        <item>سولغا</item>
+        <item>ئوڭغا</item>
+    </string-array>
+    <string-array name="wifitrackerlib_wifi_status">
+        <item></item>
+        <item>تەكشۈرىۋاتىدۇ...</item>
+        <item>ئۇلىنىۋاتىدۇ…</item>
+        <item>سالاھىيەت دەلىللىنىۋاتىدۇ...</item>
+        <item>IP ئادرېسىغا ئېرىشىۋاتىدۇ…</item>
+        <item>باغلاندى</item>
+        <item>ۋاقىتلىق توختىدى</item>
+        <item>ئۇلىنىش ئۈزۈلىۋاتىدۇ...</item>
+        <item>ئۈزۈلدى</item>
+        <item>مۇۋەپپەقىيەتسىز</item>
+        <item>توسۇلدى</item>
+        <item>ئۇلىنىشى ياخشى ئەمەس، توختىتىلدى</item>
+    </string-array>
+</resources>
