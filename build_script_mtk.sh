@@ -31,7 +31,7 @@ rm -rf DeadZone
 git clone https://oauth2:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git
 cd DeadZone
 
-python -m pip install -r requirements.txt
+python -m pip install -r requirements.txt --break-system-packages
 
 # ===========================================================================
 # 1. Generate Multi-Streaming Telegram Live Notification Script
