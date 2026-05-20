@@ -27,8 +27,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
-RUN python3 -m pip install --break-system-packages --upgrade pip wheel \
-    && python3 -m pip install --break-system-packages -r requirements.txt
+RUN python3 -m pip install --break-system-packages -r requirements.txt
 
 COPY . .
 
