@@ -31,6 +31,10 @@ rm -rf DeadZone
 git clone https://oauth2:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git
 cd DeadZone
 
+# Force route notifications through our smart fly script dynamically
+cp scripts/telegram_live_fly.py scripts/telegram_live_notify.py
+chmod +x scripts/telegram_live_notify.py
+
 # [FIXED] Safe Python Requirements installation without wheel upgrade crash
 python -m pip install -r requirements.txt --break-system-packages
 
