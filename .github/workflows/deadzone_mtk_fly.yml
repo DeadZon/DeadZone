@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       device:
-        description: "MTK device codename"
+        description: "MediaTek device codename"
         required: true
         type: string
         default: select_device_codename
@@ -83,7 +83,7 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Run MTK Build on Fly.io Cloud (400GB SSD)
+      - name: Run Build on Fly.io Cloud (400GB SSD)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
@@ -94,7 +94,6 @@ jobs:
             --vm-cpus ${{ inputs.VM_CPUS }} \
             --vm-memory ${{ inputs.VM_MEMORY }} \
             --volume dz_data_mtk:/mnt/dz_data \
-            --entrypoint "/build_script_mtk.sh" \
             --env IN_ROM_URL="${{ inputs.rom_url }}" \
             --env IN_DEVICE="${{ inputs.device }}" \
             --env IN_CUSTOM_DEVICE="${{ inputs.custom_device }}" \
@@ -107,8 +106,8 @@ jobs:
             --env IN_MODE="${{ inputs.mode }}" \
             --env IN_NOTIFY="${{ inputs.notify_telegram }}" \
             --env PIXELDRAIN_API_KEY="${{ secrets.PIXELDRAIN_API_KEY }}" \
-            --env TELEGRAM_MTK_BOT_TOKEN="${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}" \
-            --env TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            --env TELEGRAM_SNAPDRAGON_BOT_TOKEN="${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}" \
+            --env TELEGRAM_CHAT_ID="${{ secrets.TELEGRAM_MTK_CHAT_ID }}" \
             --env TELEGRAM_THREAD_ID="${{ secrets.TELEGRAM_THREAD_ID }}" \
             --env GITHUB_TOKEN="${{ secrets.G_TOKEN }}" \
             --env GITHUB_RUN_NUMBER="${{ github.run_number }}" \
