@@ -1,4 +1,4 @@
-app = "deadzone-builder-mezo"
+app = "dz-builder-snap"
 primary_region = "fra"
 
 [build]
@@ -10,3 +10,13 @@ primary_region = "fra"
   NOTIFY_TELEGRAM = "false"
   DEVICE_CODENAME = "garnet"
   FINAL_NAME = "DeadZone_Test"
+  PLATFORM = "os3_a16"
+  FLAVOR = "legend"
+  ANDROID_VERSION = "16"
+  MI_VERSION = "OS3.0.303.0.WNOCNXM"
+  VBMETA_MODE = "3"
+  KEEP_ALIVE_AFTER_RUN = "true"
+
+[[mounts]]
+  source = "deadzone_work"
+  destination = "/work"
