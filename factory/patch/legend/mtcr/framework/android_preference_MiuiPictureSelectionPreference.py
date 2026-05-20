@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "android/preference/MiuiPictureSelectionPreference.smali"
+CLASS_FALLBACK_NAMES = ['MiuiPictureSelectionPreference.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

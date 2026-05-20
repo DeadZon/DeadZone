@@ -61,12 +61,13 @@ from factory.patch.common.jar_workspace import (
     unpack_dir_for,
     unpack_jar,
 )
-from factory.patch.common.mtcr_exact_patcher import (
-    _find_class_in_smali_roots,
-    _inject_method_block,
-    _normalize,
-    _replace_method_block,
-    parse_smali_methods,
+from factory.patch.legend.mtcr.smart_smali_patcher import (
+    ClassMatchStatus,
+    MethodMatchStatus,
+    PatchApplyStatus,
+    apply_smart_patch,
+    find_class,
+    normalize_smali_for_match,
 )
 from factory.patch.common.add_dex_merger import merge_add_dex
 
@@ -153,76 +154,19 @@ def _smali_dirs_in(unpack_dir: Path) -> list[Path]:
     return smali_dirs_in(unpack_dir)
 
 
-def _apply_one_patch(
-    patch: dict,
-    class_smali: str,      # current in-memory smali text
-    target_path: Path,
-    class_name: str,
-) -> tuple[str, dict]:
-    """
-    Apply a single PATCHES entry to *class_smali*.
-
-    Returns (new_smali_text, result_dict).
-    result_dict keys: patch_id, method, type, status, message.
-    """
-    pid    = patch.get("id", "?")
-    typ    = patch.get("type", "?")
-    method = patch.get("method", "")
-
-    result: dict = {
-        "patch_id": pid,
-        "method":   method,
-        "type":     typ,
-        "status":   "UNKNOWN",
-        "message":  "",
+def _patch_result_to_dict(pr) -> dict:
+    """Convert a smart_smali_patcher.PatchResult to the runner's report dict format."""
+    return {
+        "patch_id":       pr.patch_id,
+        "method":         pr.method,
+        "type":           pr.type,
+        "status":         pr.status.value,
+        "class_match":    pr.class_match.value,
+        "method_match":   pr.method_match.value,
+        "class_strategy": pr.class_strategy,
+        "method_strategy": pr.method_strategy,
+        "message":        pr.message,
     }
-
-    if typ == "method_replace":
-        search      = patch.get("search", "")
-        replacement = patch.get("replacement", "")
-        if not search:
-            result["status"]  = "SKIPPED_NO_SEARCH"
-            result["message"] = "search block is empty"
-            return class_smali, result
-
-        new_text, replaced = _replace_method_block(class_smali, search, replacement)
-        if replaced:
-            result["status"] = "PATCHED"
-            return new_text, result
-        else:
-            result["status"]  = "SKIPPED_PATTERN_NOT_FOUND"
-            result["message"] = "a/ method block not found in target; ROM may differ"
-            return class_smali, result
-
-    elif typ == "method_add":
-        replacement = patch.get("replacement", "")
-        # Check if already present (identical)
-        existing_methods = parse_smali_methods(class_smali)
-        b_methods = parse_smali_methods(replacement)
-        sig = next(iter(b_methods), method)
-        if sig in existing_methods:
-            result["status"]  = "EXISTS_IDENTICAL"
-            result["message"] = "method already present"
-            return class_smali, result
-        new_text = _inject_method_block(class_smali, replacement)
-        result["status"] = "PATCHED"
-        return new_text, result
-
-    elif typ == "class_add":
-        # Whole-class inject — handled at the class loop level, not here
-        result["status"]  = "SKIPPED_HANDLED_BY_CLASS_LOOP"
-        result["message"] = "class_add is handled by the outer class loop"
-        return class_smali, result
-
-    elif typ == "dex_add":
-        result["status"]  = "SKIPPED_DEX_ADD_HANDLED_SEPARATELY"
-        result["message"] = "dex_add is handled in the DEX merge stage"
-        return class_smali, result
-
-    else:
-        result["status"]  = "UNKNOWN_TYPE"
-        result["message"] = f"unknown patch type: {typ}"
-        return class_smali, result
 
 
 def _apply_class_module(
@@ -231,119 +175,73 @@ def _apply_class_module(
     dry_run: bool,
 ) -> dict:
     """
-    Apply all PATCHES from one class-rule module.
+    Apply all PATCHES from one class-rule module using the smart smali patcher.
 
-    Returns a class-level result dict with per-patch rows.
+    Returns a class-level result dict with per-patch rows that include
+    CLASS MATCH and METHOD MATCH strategy information.
     """
-    jar_name     = getattr(mod, "TARGET_JAR",   "?")
-    target_class = getattr(mod, "TARGET_CLASS", "?")
-    patches      = getattr(mod, "PATCHES",      [])
+    jar_name      = getattr(mod, "TARGET_JAR",           "?")
+    target_class  = getattr(mod, "TARGET_CLASS",         "?")
+    patches       = getattr(mod, "PATCHES",              [])
+    fallback_names = getattr(mod, "CLASS_FALLBACK_NAMES", [])
+    class_anchors  = getattr(mod, "CLASS_ANCHORS",        [])
 
     cr: dict = {
-        "class":        target_class,
-        "jar":          jar_name,
-        "status":       "NOT_APPLIED",
-        "patch_count":  len(patches),
+        "class":         target_class,
+        "jar":           jar_name,
+        "status":        "NOT_APPLIED",
+        "patch_count":   len(patches),
         "patch_results": [],
-        "errors":       [],
+        "errors":        [],
     }
 
-    # Filter out dex_add entries
     smali_patches = [p for p in patches if p.get("type") != "dex_add"]
-    dex_patches   = [p for p in patches if p.get("type") == "dex_add"]
 
-    # Handle class_add (no target class to find)
-    if all(p.get("type") == "class_add" for p in smali_patches) and smali_patches:
-        for p in smali_patches:
-            replacement = p.get("replacement", "")
-            class_file  = target_class.replace(".smali", "")
-            existing = _find_class_in_smali_roots(smali_roots, class_file)
-
-            pr: dict = {
-                "patch_id": p.get("id", "?"),
-                "method":   "",
-                "type":     "class_add",
-                "status":   "UNKNOWN",
-                "message":  "",
-            }
-
-            if existing is not None:
-                pr["status"]  = "EXISTS_IDENTICAL"
-                pr["message"] = "class already present in smali tree"
-            elif dry_run:
-                inject_root = smali_roots[-1] if smali_roots else None
-                pr["status"]  = "WOULD_ADD"
-                pr["message"] = f"would inject into {inject_root.name}/" if inject_root else "no smali root"
-            else:
-                inject_root = smali_roots[-1] if smali_roots else None
-                if inject_root is None:
-                    pr["status"]  = "FAILED"
-                    pr["message"] = "no smali_classes* directory found"
-                else:
-                    dest = inject_root / (class_file + ".smali")
-                    try:
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        dest.write_text(replacement, encoding="utf-8")
-                        pr["status"]  = "PATCHED"
-                        pr["message"] = f"injected into {inject_root.name}/"
-                    except Exception as exc:
-                        pr["status"]  = "FAILED"
-                        pr["message"] = str(exc)
-                        cr["errors"].append(str(exc))
-
-            cr["patch_results"].append(pr)
-
-        applied = sum(1 for r in cr["patch_results"] if r["status"] == "PATCHED")
-        would   = sum(1 for r in cr["patch_results"] if r["status"] == "WOULD_ADD")
-        cr["status"] = "PATCHED" if applied else ("WOULD_PATCH" if would else "EXISTS_IDENTICAL")
-        return cr
-
-    # Modified class: find the target smali file
-    class_file  = target_class.replace(".smali", "")
-    target_path = _find_class_in_smali_roots(smali_roots, class_file)
-
-    if target_path is None:
-        cr["status"] = "SKIPPED_CLASS_NOT_FOUND"
-        cr["errors"].append(f"class not found in any smali_classes* dir: {class_file}")
-        return cr
-
-    if dry_run:
-        for p in smali_patches:
-            cr["patch_results"].append({
-                "patch_id": p.get("id", "?"),
-                "method":   p.get("method", ""),
-                "type":     p.get("type", "?"),
-                "status":   "WOULD_PATCH",
-                "message":  "",
-            })
-        cr["status"] = "WOULD_PATCH"
-        return cr
-
-    # Execute: apply each patch sequentially
-    try:
-        current_smali = target_path.read_text(encoding="utf-8", errors="replace")
-    except Exception as exc:
-        cr["status"] = "FAILED"
-        cr["errors"].append(f"could not read {target_path}: {exc}")
-        return cr
-
-    working_smali = current_smali
     for p in smali_patches:
-        working_smali, pr = _apply_one_patch(p, working_smali, target_path, class_file)
-        cr["patch_results"].append(pr)
+        # Inject module-level class metadata into the rule dict
+        enriched = dict(p)
+        enriched["target_class"] = target_class
+        if fallback_names and "class_fallback_names" not in enriched:
+            enriched["class_fallback_names"] = fallback_names
+        if class_anchors and "class_anchors" not in enriched:
+            enriched["class_anchors"] = class_anchors
 
-    # Write back only if changed
-    if _normalize(working_smali) != _normalize(current_smali):
         try:
-            target_path.write_text(working_smali, encoding="utf-8")
+            patch_result = apply_smart_patch(smali_roots, enriched, dry_run=dry_run)
+            cr["patch_results"].append(_patch_result_to_dict(patch_result))
+            if patch_result.status == PatchApplyStatus.FAILED:
+                cr["errors"].append(
+                    f"{patch_result.patch_id}: {patch_result.message}"
+                )
         except Exception as exc:
-            cr["status"] = "FAILED"
-            cr["errors"].append(f"write failed: {exc}")
-            return cr
+            cr["patch_results"].append({
+                "patch_id":       p.get("id", "?"),
+                "method":         p.get("method", ""),
+                "type":           p.get("type", "?"),
+                "status":         "FAILED",
+                "class_match":    "UNKNOWN",
+                "method_match":   "UNKNOWN",
+                "class_strategy": "",
+                "method_strategy": "",
+                "message":        f"exception: {exc}",
+            })
+            cr["errors"].append(f"{p.get('id', '?')}: exception: {exc}")
 
-    patched = sum(1 for r in cr["patch_results"] if r["status"] == "PATCHED")
-    failed  = sum(1 for r in cr["patch_results"] if r["status"] == "FAILED")
-    cr["status"] = "FAILED" if failed else ("PATCHED" if patched else "SKIPPED")
+    patched = sum(
+        1 for r in cr["patch_results"]
+        if r["status"] in ("PATCHED", "EXISTS")
+    )
+    would = sum(1 for r in cr["patch_results"] if r["status"] == "WOULD_PATCH")
+    failed = sum(1 for r in cr["patch_results"] if r["status"] == "FAILED")
+
+    if failed:
+        cr["status"] = "FAILED"
+    elif patched:
+        cr["status"] = "PATCHED"
+    elif would:
+        cr["status"] = "WOULD_PATCH"
+    else:
+        cr["status"] = "SKIPPED"
     return cr
 
 
@@ -458,7 +356,21 @@ def _patch_one_jar(
                 "jar":    getattr(m, "TARGET_JAR",   "?"),
                 "status": "WOULD_PATCH",
                 "patch_count": len(getattr(m, "PATCHES", [])),
-                "patch_results": [],
+                "patch_results": [
+                    {
+                        "patch_id":        p.get("id", "?"),
+                        "method":          p.get("method", ""),
+                        "type":            p.get("type", "?"),
+                        "status":          "WOULD_PATCH",
+                        "class_match":     "N/A",
+                        "method_match":    "N/A",
+                        "class_strategy":  "",
+                        "method_strategy": "",
+                        "message":         "dry-run (no JAR unpacked)",
+                    }
+                    for p in getattr(m, "PATCHES", [])
+                    if p.get("type") != "dex_add"
+                ],
                 "errors": [],
             }
             for m in smali_patches_mods
@@ -640,10 +552,21 @@ def _format_text_report(report: dict) -> str:
                 lines.append(f"        jar    : {cr['jar']}")
                 lines.append(f"        status : {cr['status']}")
                 for pr in cr.get("patch_results", []):
+                    cm  = pr.get("class_match", "")
+                    mm  = pr.get("method_match", "")
+                    cs  = pr.get("class_strategy", "")
+                    ms  = pr.get("method_strategy", "")
                     lines.append(
-                        f"        PATCH [{pr['status']:30s}]  "
-                        f"{pr['type']:20s}  {pr['method'][:60]}"
+                        f"        PATCH [{pr['status']:20s}]  "
+                        f"CLASS={cm:10s}  METHOD={mm:12s}  "
+                        f"{pr['type']:16s}  {pr['method'][:50]}"
                     )
+                    if cs:
+                        lines.append(f"          class  via: {cs}")
+                    if ms:
+                        lines.append(f"          method via: {ms}")
+                    if pr.get("message"):
+                        lines.append(f"          msg: {pr['message']}")
                 for ce in cr.get("errors", []):
                     lines.append(f"        ! {ce}")
 

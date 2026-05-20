@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/location/LocationManagerService.smali"
+CLASS_FALLBACK_NAMES = ['LocationManagerService.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_addLocationProviderManager_Lcom_android_server_location_prov",
         "method":      ".method addLocationProviderManager(Lcom/android/server/location/provider/LocationProviderManager;Lcom/android/server/location/provider/AbstractLocationProvider;)V",
+        "method_name": 'addLocationProviderManager',
         "type":        "method_replace",
         "search": """\
 .method addLocationProviderManager(Lcom/android/server/location/provider/LocationProviderManager;Lcom/android/server/location/provider/AbstractLocationProvider;)V
@@ -331,12 +334,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/location/LocationManagerService;->mProviderManagers:Ljava/util/concurrent/CopyOnWriteArrayList;', 'invoke-virtual {p1}, Lcom/android/server/location/provider/LocationProviderManager;->getName()Ljava/lang/String;', 'move-result-object v1', 'invoke-virtual {p0, v1}, Lcom/android/server/location/LocationManagerService;->getLocationProviderManager(Ljava/lang/String;)Lcom/android/server/location/provider/LocationProviderManager;', 'move-result-object v1', 'if-nez v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_addTestProvider_Ljava_lang_String_Landroid_location_provider",
         "method":      ".method public addTestProvider(Ljava/lang/String;Landroid/location/provider/ProviderProperties;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)V",
+        "method_name": 'addTestProvider',
         "type":        "method_replace",
         "search": """\
 .method public addTestProvider(Ljava/lang/String;Landroid/location/provider/ProviderProperties;Ljava/util/List;Ljava/lang/String;Ljava/lang/String;)V
@@ -513,12 +518,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-static {p4, p5}, Landroid/location/util/identity/CallerIdentity;->fromBinderUnsafe(Ljava/lang/String;Ljava/lang/String;)Landroid/location/util/identity/CallerIdentity;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/location/LocationManagerService;->mInjector:Lcom/android/server/location/injector/Injector;', 'invoke-interface {v1}, Lcom/android/server/location/injector/Injector;->getAppOpsHelper()Lcom/android/server/location/injector/AppOpsHelper;', 'move-result-object v1', 'invoke-virtual {v1, v2, v0}, Lcom/android/server/location/injector/AppOpsHelper;->noteOp(ILandroid/location/util/identity/CallerIdentity;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_calculateAppOpsLocationSourceTags_I_Landroid_os_PackageTagsL",
         "method":      ".method calculateAppOpsLocationSourceTags(I)Landroid/os/PackageTagsList;",
+        "method_name": 'calculateAppOpsLocationSourceTags',
         "type":        "method_replace",
         "search": """\
 .method calculateAppOpsLocationSourceTags(I)Landroid/os/PackageTagsList;
@@ -1025,12 +1032,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Landroid/os/PackageTagsList$Builder;', 'invoke-direct {v0}, Landroid/os/PackageTagsList$Builder;-><init>()V', 'iget-object v1, p0, Lcom/android/server/location/LocationManagerService;->mProviderManagers:Ljava/util/concurrent/CopyOnWriteArrayList;', 'invoke-virtual {v1}, Ljava/util/concurrent/CopyOnWriteArrayList;->iterator()Ljava/util/Iterator;', 'move-result-object v1', 'invoke-interface {v1}, Ljava/util/Iterator;->hasNext()Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dump_Ljava_io_FileDescriptor_Ljava_io_PrintWriter__Ljava_lan",
         "method":      ".method protected dump(Ljava/io/FileDescriptor;Ljava/io/PrintWriter;[Ljava/lang/String;)V",
+        "method_name": 'dump',
         "type":        "method_replace",
         "search": """\
 .method protected dump(Ljava/io/FileDescriptor;Ljava/io/PrintWriter;[Ljava/lang/String;)V
@@ -2696,12 +2705,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/location/LocationManagerService;->mContext:Landroid/content/Context;', 'const-string v1, "LocationManagerService"', 'invoke-static {v0, v1, p2}, Lcom/android/internal/util/DumpUtils;->checkDumpPermission(Landroid/content/Context;Ljava/lang/String;Ljava/io/PrintWriter;)Z', 'move-result v0', 'if-nez v0, :cond_0', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getLocationProviderManager_Ljava_lang_String__Lcom_android_s",
         "method":      ".method getLocationProviderManager(Ljava/lang/String;)Lcom/android/server/location/provider/LocationProviderManager;",
+        "method_name": 'getLocationProviderManager',
         "type":        "method_replace",
         "search": """\
 .method getLocationProviderManager(Ljava/lang/String;)Lcom/android/server/location/provider/LocationProviderManager;
@@ -2921,12 +2932,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p1, :cond_0', 'return-object v0', 'iget-object v1, p0, Lcom/android/server/location/LocationManagerService;->mProviderManagers:Ljava/util/concurrent/CopyOnWriteArrayList;', 'invoke-virtual {v1}, Ljava/util/concurrent/CopyOnWriteArrayList;->iterator()Ljava/util/Iterator;', 'move-result-object v1', 'invoke-interface {v1}, Ljava/util/Iterator;->hasNext()Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onSystemReady__V",
         "method":      ".method onSystemReady()V",
+        "method_name": 'onSystemReady',
         "type":        "method_replace",
         "search": """\
 .method onSystemReady()V
@@ -3090,12 +3103,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Landroid/os/Build;->IS_DEBUGGABLE:Z', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/location/LocationManagerService;->mContext:Landroid/content/Context;', 'const-class v1, Landroid/app/AppOpsManager;', 'invoke-virtual {v0, v1}, Landroid/content/Context;->getSystemService(Ljava/lang/Class;)Ljava/lang/Object;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onSystemThirdPartyAppsCanStart__V",
         "method":      ".method onSystemThirdPartyAppsCanStart()V",
+        "method_name": 'onSystemThirdPartyAppsCanStart',
         "type":        "method_replace",
         "search": """\
 .method onSystemThirdPartyAppsCanStart()V
@@ -5388,12 +5403,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v1, v0, Lcom/android/server/location/LocationManagerService;->mContext:Landroid/content/Context;', 'const-string v4, "network"', 'const-string v5, "com.android.location.service.v3.NetworkLocationProvider"', 'invoke-static {v1, v4, v5, v2, v3}, Lcom/android/server/location/provider/proxy/ProxyLocationProvider;->create(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;II)Lcom/android/server/location/provider/proxy/ProxyLocationProvider;', 'move-result-object v1', 'const-string v2, "LocationManagerService"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeTestProvider_Ljava_lang_String_Ljava_lang_String_Ljava",
         "method":      ".method public removeTestProvider(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V",
+        "method_name": 'removeTestProvider',
         "type":        "method_replace",
         "search": """\
 .method public removeTestProvider(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
@@ -5602,12 +5619,14 @@ PATCHES = [
     throw v2
 .end method
 """,
+        "method_anchors": ['invoke-static {p2, p3}, Landroid/location/util/identity/CallerIdentity;->fromBinderUnsafe(Ljava/lang/String;Ljava/lang/String;)Landroid/location/util/identity/CallerIdentity;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/location/LocationManagerService;->mInjector:Lcom/android/server/location/injector/Injector;', 'invoke-interface {v1}, Lcom/android/server/location/injector/Injector;->getAppOpsHelper()Lcom/android/server/location/injector/AppOpsHelper;', 'move-result-object v1', 'invoke-virtual {v1, v2, v0}, Lcom/android/server/location/injector/AppOpsHelper;->noteOp(ILandroid/location/util/identity/CallerIdentity;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setLocationFudgerCache_Lcom_android_server_location_fudger_L",
         "method":      ".method protected setLocationFudgerCache(Lcom/android/server/location/fudger/LocationFudgerCache;)V",
+        "method_name": 'setLocationFudgerCache',
         "type":        "method_replace",
         "search": """\
 .method protected setLocationFudgerCache(Lcom/android/server/location/fudger/LocationFudgerCache;)V
@@ -5764,12 +5783,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/internal/hidden_from_bootclasspath/android/location/flags/Flags;->densityBasedCoarseLocations()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return-void', 'iput-object p1, p0, Lcom/android/server/location/LocationManagerService;->mLocationFudgerCache:Lcom/android/server/location/fudger/LocationFudgerCache;', 'iget-object v0, p0, Lcom/android/server/location/LocationManagerService;->mProviderManagers:Ljava/util/concurrent/CopyOnWriteArrayList;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setProxyPopulationDensityProvider_Lcom_android_server_locati",
         "method":      ".method protected setProxyPopulationDensityProvider(Lcom/android/server/location/provider/proxy/ProxyPopulationDensityProvider;)V",
+        "method_name": 'setProxyPopulationDensityProvider',
         "type":        "method_replace",
         "search": """\
 .method protected setProxyPopulationDensityProvider(Lcom/android/server/location/provider/proxy/ProxyPopulationDensityProvider;)V
@@ -5826,12 +5847,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/internal/hidden_from_bootclasspath/android/location/flags/Flags;->populationDensityProvider()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iput-object p1, p0, Lcom/android/server/location/LocationManagerService;->mPopulationDensityProvider:Lcom/android/server/location/provider/proxy/ProxyPopulationDensityProvider;', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setTestProviderEnabled_Ljava_lang_String_ZLjava_lang_String_",
         "method":      ".method public setTestProviderEnabled(Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;)V",
+        "method_name": 'setTestProviderEnabled',
         "type":        "method_replace",
         "search": """\
 .method public setTestProviderEnabled(Ljava/lang/String;ZLjava/lang/String;Ljava/lang/String;)V
@@ -5970,12 +5993,14 @@ PATCHES = [
     throw v2
 .end method
 """,
+        "method_anchors": ['invoke-static {p3, p4}, Landroid/location/util/identity/CallerIdentity;->fromBinderUnsafe(Ljava/lang/String;Ljava/lang/String;)Landroid/location/util/identity/CallerIdentity;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/location/LocationManagerService;->mInjector:Lcom/android/server/location/injector/Injector;', 'invoke-interface {v1}, Lcom/android/server/location/injector/Injector;->getAppOpsHelper()Lcom/android/server/location/injector/AppOpsHelper;', 'move-result-object v1', 'invoke-virtual {v1, v2, v0}, Lcom/android/server/location/injector/AppOpsHelper;->noteOp(ILandroid/location/util/identity/CallerIdentity;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setTestProviderLocation_Ljava_lang_String_Landroid_location_",
         "method":      ".method public setTestProviderLocation(Ljava/lang/String;Landroid/location/Location;Ljava/lang/String;Ljava/lang/String;)V",
+        "method_name": 'setTestProviderLocation',
         "type":        "method_replace",
         "search": """\
 .method public setTestProviderLocation(Ljava/lang/String;Landroid/location/Location;Ljava/lang/String;Ljava/lang/String;)V
@@ -6156,6 +6181,7 @@ PATCHES = [
     throw v2
 .end method
 """,
+        "method_anchors": ['invoke-static {p3, p4}, Landroid/location/util/identity/CallerIdentity;->fromBinderUnsafe(Ljava/lang/String;Ljava/lang/String;)Landroid/location/util/identity/CallerIdentity;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/location/LocationManagerService;->mInjector:Lcom/android/server/location/injector/Injector;', 'invoke-interface {v1}, Lcom/android/server/location/injector/Injector;->getAppOpsHelper()Lcom/android/server/location/injector/AppOpsHelper;', 'move-result-object v1', 'invoke-virtual {v1, v2, v0}, Lcom/android/server/location/injector/AppOpsHelper;->noteOp(ILandroid/location/util/identity/CallerIdentity;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

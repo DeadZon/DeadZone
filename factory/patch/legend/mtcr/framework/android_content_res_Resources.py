@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "android/content/res/Resources.smali"
+CLASS_FALLBACK_NAMES = ['Resources.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "add_method____Nest_fgetmResourcesImpl_Landroid_content_res_Resources__L",
         "method":      ".method static bridge synthetic whitelist -$$Nest$fgetmResourcesImpl(Landroid/content/res/Resources;)Landroid/content/res/ResourcesImpl;",
+        "method_name": '-$$Nest$fgetmResourcesImpl',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -34,6 +37,7 @@ PATCHES = [
     {
         "id":          "add_method__clinit___V",
         "method":      ".method static constructor whitelist <clinit>()V",
+        "method_name": '<clinit>',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -121,6 +125,7 @@ PATCHES = [
     {
         "id":          "add_method__init___V",
         "method":      ".method private constructor whitelist <init>()V",
+        "method_name": '<init>',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -214,6 +219,7 @@ PATCHES = [
     {
         "id":          "add_method__init__Landroid_content_res_AssetManager_Landroid_util_Displ",
         "method":      ".method public constructor whitelist <init>(Landroid/content/res/AssetManager;Landroid/util/DisplayMetrics;Landroid/content/res/Configuration;)V",
+        "method_name": '<init>',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -245,6 +251,7 @@ PATCHES = [
     {
         "id":          "add_method__init__Ljava_lang_ClassLoader__V",
         "method":      ".method public constructor whitelist <init>(Ljava/lang/ClassLoader;)V",
+        "method_name": '<init>',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -326,6 +333,7 @@ PATCHES = [
     {
         "id":          "add_method__init__Z_V",
         "method":      ".method public constructor whitelist <init>(Z)V",
+        "method_name": '<init>',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -396,6 +404,7 @@ PATCHES = [
     {
         "id":          "add_method_addBootEvent_Ljava_lang_String__V",
         "method":      ".method private static whitelist addBootEvent(Ljava/lang/String;)V",
+        "method_name": 'addBootEvent',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -536,6 +545,7 @@ PATCHES = [
     {
         "id":          "add_method_checkCallbacksRegistered__V",
         "method":      ".method private whitelist checkCallbacksRegistered()V",
+        "method_name": 'checkCallbacksRegistered',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -562,6 +572,7 @@ PATCHES = [
     {
         "id":          "add_method_cleanupThemeReferences__V",
         "method":      ".method private whitelist cleanupThemeReferences()V",
+        "method_name": 'cleanupThemeReferences',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -620,6 +631,7 @@ PATCHES = [
     {
         "id":          "add_method_clearPreloadedCache__V",
         "method":      ".method static whitelist clearPreloadedCache()V",
+        "method_name": 'clearPreloadedCache',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -637,6 +649,7 @@ PATCHES = [
     {
         "id":          "add_method_dumpHistory_Ljava_io_PrintWriter_Ljava_lang_String__V",
         "method":      ".method public static whitelist dumpHistory(Ljava/io/PrintWriter;Ljava/lang/String;)V",
+        "method_name": 'dumpHistory',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -752,6 +765,7 @@ PATCHES = [
     {
         "id":          "add_method_getAttributeSetSourceResId_Landroid_util_AttributeSet__I",
         "method":      ".method public static whitelist getAttributeSetSourceResId(Landroid/util/AttributeSet;)I",
+        "method_name": 'getAttributeSetSourceResId',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -771,6 +785,7 @@ PATCHES = [
     {
         "id":          "add_method_getSystem__Landroid_content_res_Resources_",
         "method":      ".method public static whitelist getSystem()Landroid/content/res/Resources;",
+        "method_name": 'getSystem',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -829,6 +844,7 @@ PATCHES = [
     {
         "id":          "add_method_isCarWithDisplay_Landroid_view_Display__Z",
         "method":      ".method private whitelist isCarWithDisplay(Landroid/view/Display;)Z",
+        "method_name": 'isCarWithDisplay',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -875,6 +891,7 @@ PATCHES = [
     {
         "id":          "add_method_isCarWithRunning_Landroid_content_Context__Z",
         "method":      ".method private whitelist isCarWithRunning(Landroid/content/Context;)Z",
+        "method_name": 'isCarWithRunning',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -954,6 +971,7 @@ PATCHES = [
     {
         "id":          "add_method_isStatusbarAndGet_I_F",
         "method":      ".method private whitelist isStatusbarAndGet(I)F",
+        "method_name": 'isStatusbarAndGet',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1011,6 +1029,7 @@ PATCHES = [
     {
         "id":          "add_method_lambda_cleanupThemeReferences_0_Ljava_lang_ref_WeakReference",
         "method":      ".method static synthetic whitelist lambda$cleanupThemeReferences$0(Ljava/lang/ref/WeakReference;)Z",
+        "method_name": 'lambda$cleanupThemeReferences$0',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1032,6 +1051,7 @@ PATCHES = [
     {
         "id":          "add_method_lambda_dumpHistory_1_Landroid_util_ArrayMap_Landroid_content",
         "method":      ".method static synthetic whitelist lambda$dumpHistory$1(Landroid/util/ArrayMap;Landroid/content/res/Resources;)V",
+        "method_name": 'lambda$dumpHistory$1',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1074,6 +1094,7 @@ PATCHES = [
     {
         "id":          "add_method_nextPowerOf2_I_I",
         "method":      ".method static whitelist nextPowerOf2(I)I",
+        "method_name": 'nextPowerOf2',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1121,6 +1142,7 @@ PATCHES = [
     {
         "id":          "add_method_obtainAttributes_Landroid_content_res_Resources_Landroid_con",
         "method":      ".method public static whitelist obtainAttributes(Landroid/content/res/Resources;Landroid/content/res/Resources$Theme;Landroid/util/AttributeSet;[I)Landroid/content/res/TypedArray;",
+        "method_name": 'obtainAttributes',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1151,6 +1173,7 @@ PATCHES = [
     {
         "id":          "add_method_obtainTempTypedValue__Landroid_util_TypedValue_",
         "method":      ".method private whitelist obtainTempTypedValue()Landroid/util/TypedValue;",
+        "method_name": 'obtainTempTypedValue',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1209,6 +1232,7 @@ PATCHES = [
     {
         "id":          "add_method_preloadColorStateLists_Landroid_content_res_Resources_Landro",
         "method":      ".method private static whitelist preloadColorStateLists(Landroid/content/res/Resources;Landroid/content/res/TypedArray;)I",
+        "method_name": 'preloadColorStateLists',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1307,6 +1331,7 @@ PATCHES = [
     {
         "id":          "add_method_preloadDrawables_Landroid_content_res_Resources_Landroid_con",
         "method":      ".method private static whitelist preloadDrawables(Landroid/content/res/Resources;Landroid/content/res/TypedArray;)I",
+        "method_name": 'preloadDrawables',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1405,6 +1430,7 @@ PATCHES = [
     {
         "id":          "add_method_preloadResources__V",
         "method":      ".method public static whitelist preloadResources()V",
+        "method_name": 'preloadResources',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1635,6 +1661,7 @@ PATCHES = [
     {
         "id":          "add_method_registerResourcePaths_Ljava_lang_String_Landroid_content_pm_",
         "method":      ".method public static whitelist registerResourcePaths(Ljava/lang/String;Landroid/content/pm/ApplicationInfo;)V",
+        "method_name": 'registerResourcePaths',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1671,6 +1698,7 @@ PATCHES = [
     {
         "id":          "add_method_releaseTempTypedValue_Landroid_util_TypedValue__V",
         "method":      ".method private whitelist releaseTempTypedValue(Landroid/util/TypedValue;)V",
+        "method_name": 'releaseTempTypedValue',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1709,6 +1737,7 @@ PATCHES = [
     {
         "id":          "add_method_resetPreloadDrawableStateCache__V",
         "method":      ".method public static whitelist resetPreloadDrawableStateCache()V",
+        "method_name": 'resetPreloadDrawableStateCache',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1728,6 +1757,7 @@ PATCHES = [
     {
         "id":          "add_method_resourceHasPackage_I_Z",
         "method":      ".method public static whitelist resourceHasPackage(I)Z",
+        "method_name": 'resourceHasPackage',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1755,6 +1785,7 @@ PATCHES = [
     {
         "id":          "add_method_selectDefaultTheme_II_I",
         "method":      ".method public static whitelist selectDefaultTheme(II)I",
+        "method_name": 'selectDefaultTheme',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1786,6 +1817,7 @@ PATCHES = [
     {
         "id":          "add_method_selectSystemTheme_IIIIII_I",
         "method":      ".method public static whitelist selectSystemTheme(IIIIII)I",
+        "method_name": 'selectSystemTheme',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1827,6 +1859,7 @@ PATCHES = [
     {
         "id":          "add_method_updateSystemConfiguration_Landroid_content_res_Configuration",
         "method":      ".method public static whitelist updateSystemConfiguration(Landroid/content/res/Configuration;Landroid/util/DisplayMetrics;Landroid/content/res/CompatibilityInfo;)V",
+        "method_name": 'updateSystemConfiguration',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1851,6 +1884,7 @@ PATCHES = [
     {
         "id":          "add_method_addLoaders__Landroid_content_res_loader_ResourcesLoader__V",
         "method":      ".method public varargs whitelist addLoaders([Landroid/content/res/loader/ResourcesLoader;)V",
+        "method_name": 'addLoaders',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1970,6 +2004,7 @@ PATCHES = [
     {
         "id":          "add_method_calcConfigChanges_Landroid_content_res_Configuration__I",
         "method":      ".method public whitelist calcConfigChanges(Landroid/content/res/Configuration;)I",
+        "method_name": 'calcConfigChanges',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -1991,6 +2026,7 @@ PATCHES = [
     {
         "id":          "add_method_clearLoaders__V",
         "method":      ".method public whitelist clearLoaders()V",
+        "method_name": 'clearLoaders',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2064,6 +2100,7 @@ PATCHES = [
     {
         "id":          "add_method_dump_Ljava_io_PrintWriter_Ljava_lang_String__V",
         "method":      ".method public whitelist dump(Ljava/io/PrintWriter;Ljava/lang/String;)V",
+        "method_name": 'dump',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2175,6 +2212,7 @@ PATCHES = [
     {
         "id":          "add_method_dumpToLog_Ljava_lang_String__V",
         "method":      ".method public whitelist dumpToLog(Ljava/lang/String;)V",
+        "method_name": 'dumpToLog',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2226,6 +2264,7 @@ PATCHES = [
     {
         "id":          "add_method_finishPreloading__V",
         "method":      ".method public final whitelist finishPreloading()V",
+        "method_name": 'finishPreloading',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2245,6 +2284,7 @@ PATCHES = [
     {
         "id":          "add_method_flushLayoutCache__V",
         "method":      ".method public final whitelist flushLayoutCache()V",
+        "method_name": 'flushLayoutCache',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2264,6 +2304,7 @@ PATCHES = [
     {
         "id":          "add_method_getAnimation_I_Landroid_content_res_XmlResourceParser_",
         "method":      ".method public whitelist getAnimation(I)Landroid/content/res/XmlResourceParser;",
+        "method_name": 'getAnimation',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2290,6 +2331,7 @@ PATCHES = [
     {
         "id":          "add_method_getAnimatorCache__Landroid_content_res_ConfigurationBoundRes",
         "method":      ".method public whitelist getAnimatorCache()Landroid/content/res/ConfigurationBoundResourceCache;",
+        "method_name": 'getAnimatorCache',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2319,6 +2361,7 @@ PATCHES = [
     {
         "id":          "add_method_getAssets__Landroid_content_res_AssetManager_",
         "method":      ".method public final whitelist getAssets()Landroid/content/res/AssetManager;",
+        "method_name": 'getAssets',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2340,6 +2383,7 @@ PATCHES = [
     {
         "id":          "add_method_getBoolean_I_Z",
         "method":      ".method public whitelist getBoolean(I)Z",
+        "method_name": 'getBoolean',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2458,6 +2502,7 @@ PATCHES = [
     {
         "id":          "add_method_getClassLoader__Ljava_lang_ClassLoader_",
         "method":      ".method public whitelist getClassLoader()Ljava/lang/ClassLoader;",
+        "method_name": 'getClassLoader',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2475,6 +2520,7 @@ PATCHES = [
     {
         "id":          "add_method_getColor_I_I",
         "method":      ".method public whitelist getColor(I)I",
+        "method_name": 'getColor',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2504,6 +2550,7 @@ PATCHES = [
     {
         "id":          "add_method_getColor_ILandroid_content_res_Resources_Theme__I",
         "method":      ".method public whitelist getColor(ILandroid/content/res/Resources$Theme;)I",
+        "method_name": 'getColor',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2636,6 +2683,7 @@ PATCHES = [
     {
         "id":          "add_method_getColorStateList_I_Landroid_content_res_ColorStateList_",
         "method":      ".method public whitelist getColorStateList(I)Landroid/content/res/ColorStateList;",
+        "method_name": 'getColorStateList',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2710,6 +2758,7 @@ PATCHES = [
     {
         "id":          "add_method_getColorStateList_ILandroid_content_res_Resources_Theme__Lan",
         "method":      ".method public whitelist getColorStateList(ILandroid/content/res/Resources$Theme;)Landroid/content/res/ColorStateList;",
+        "method_name": 'getColorStateList',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2756,6 +2805,7 @@ PATCHES = [
     {
         "id":          "add_method_getCompatibilityInfo__Landroid_content_res_CompatibilityInfo",
         "method":      ".method public whitelist getCompatibilityInfo()Landroid/content/res/CompatibilityInfo;",
+        "method_name": 'getCompatibilityInfo',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2777,6 +2827,7 @@ PATCHES = [
     {
         "id":          "add_method_getConfiguration__Landroid_content_res_Configuration_",
         "method":      ".method public whitelist getConfiguration()Landroid/content/res/Configuration;",
+        "method_name": 'getConfiguration',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2798,6 +2849,7 @@ PATCHES = [
     {
         "id":          "add_method_getDimension_I_F",
         "method":      ".method public whitelist getDimension(I)F",
+        "method_name": 'getDimension',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -2923,6 +2975,7 @@ PATCHES = [
     {
         "id":          "add_method_getDimensionPixelOffset_I_I",
         "method":      ".method public whitelist getDimensionPixelOffset(I)I",
+        "method_name": 'getDimensionPixelOffset',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3050,6 +3103,7 @@ PATCHES = [
     {
         "id":          "add_method_getDimensionPixelSize_I_I",
         "method":      ".method public whitelist getDimensionPixelSize(I)I",
+        "method_name": 'getDimensionPixelSize',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3380,6 +3434,7 @@ PATCHES = [
     {
         "id":          "add_method_getDisplayAdjustments__Landroid_view_DisplayAdjustments_",
         "method":      ".method public whitelist getDisplayAdjustments()Landroid/view/DisplayAdjustments;",
+        "method_name": 'getDisplayAdjustments',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3401,6 +3456,7 @@ PATCHES = [
     {
         "id":          "add_method_getDisplayMetrics__Landroid_util_DisplayMetrics_",
         "method":      ".method public whitelist getDisplayMetrics()Landroid/util/DisplayMetrics;",
+        "method_name": 'getDisplayMetrics',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3438,6 +3494,7 @@ PATCHES = [
     {
         "id":          "add_method_getDrawable_I_Landroid_graphics_drawable_Drawable_",
         "method":      ".method public whitelist getDrawable(I)Landroid/graphics/drawable/Drawable;",
+        "method_name": 'getDrawable',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3512,6 +3569,7 @@ PATCHES = [
     {
         "id":          "add_method_getDrawable_ILandroid_content_res_Resources_Theme__Landroid_",
         "method":      ".method public whitelist getDrawable(ILandroid/content/res/Resources$Theme;)Landroid/graphics/drawable/Drawable;",
+        "method_name": 'getDrawable',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3538,6 +3596,7 @@ PATCHES = [
     {
         "id":          "add_method_getDrawableForDensity_II_Landroid_graphics_drawable_Drawable",
         "method":      ".method public whitelist getDrawableForDensity(II)Landroid/graphics/drawable/Drawable;",
+        "method_name": 'getDrawableForDensity',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3567,6 +3626,7 @@ PATCHES = [
     {
         "id":          "add_method_getDrawableForDensity_IILandroid_content_res_Resources_Theme",
         "method":      ".method public whitelist getDrawableForDensity(IILandroid/content/res/Resources$Theme;)Landroid/graphics/drawable/Drawable;",
+        "method_name": 'getDrawableForDensity',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3608,6 +3668,7 @@ PATCHES = [
     {
         "id":          "add_method_getDrawableInflater__Landroid_graphics_drawable_DrawableInfl",
         "method":      ".method public final whitelist getDrawableInflater()Landroid/graphics/drawable/DrawableInflater;",
+        "method_name": 'getDrawableInflater',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3638,6 +3699,7 @@ PATCHES = [
     {
         "id":          "add_method_getFloat_I_F",
         "method":      ".method public whitelist getFloat(I)F",
+        "method_name": 'getFloat',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3739,6 +3801,7 @@ PATCHES = [
     {
         "id":          "add_method_getFont_I_Landroid_graphics_Typeface_",
         "method":      ".method public whitelist getFont(I)Landroid/graphics/Typeface;",
+        "method_name": 'getFont',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3822,6 +3885,7 @@ PATCHES = [
     {
         "id":          "add_method_getFont_Landroid_util_TypedValue_I_Landroid_graphics_Typefac",
         "method":      ".method whitelist getFont(Landroid/util/TypedValue;I)Landroid/graphics/Typeface;",
+        "method_name": 'getFont',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3848,6 +3912,7 @@ PATCHES = [
     {
         "id":          "add_method_getFraction_III_F",
         "method":      ".method public whitelist getFraction(III)F",
+        "method_name": 'getFraction',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3955,6 +4020,7 @@ PATCHES = [
     {
         "id":          "add_method_getIdentifier_Ljava_lang_String_Ljava_lang_String_Ljava_lang",
         "method":      ".method public whitelist getIdentifier(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)I",
+        "method_name": 'getIdentifier',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3976,6 +4042,7 @@ PATCHES = [
     {
         "id":          "add_method_getImpl__Landroid_content_res_ResourcesImpl_",
         "method":      ".method public whitelist getImpl()Landroid/content/res/ResourcesImpl;",
+        "method_name": 'getImpl',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -3993,6 +4060,7 @@ PATCHES = [
     {
         "id":          "add_method_getIntArray_I__I",
         "method":      ".method public whitelist getIntArray(I)[I",
+        "method_name": 'getIntArray',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4054,6 +4122,7 @@ PATCHES = [
     {
         "id":          "add_method_getInteger_I_I",
         "method":      ".method public whitelist getInteger(I)I",
+        "method_name": 'getInteger',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4164,6 +4233,7 @@ PATCHES = [
     {
         "id":          "add_method_getIntegerMap__Ljava_util_HashMap_",
         "method":      ".method whitelist getIntegerMap()Ljava/util/HashMap;",
+        "method_name": 'getIntegerMap',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4190,6 +4260,7 @@ PATCHES = [
     {
         "id":          "add_method_getLastResourceResolution__Ljava_lang_String_",
         "method":      ".method public whitelist getLastResourceResolution()Ljava/lang/String;",
+        "method_name": 'getLastResourceResolution',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4216,6 +4287,7 @@ PATCHES = [
     {
         "id":          "add_method_getLayout_I_Landroid_content_res_XmlResourceParser_",
         "method":      ".method public whitelist getLayout(I)Landroid/content/res/XmlResourceParser;",
+        "method_name": 'getLayout',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4242,6 +4314,7 @@ PATCHES = [
     {
         "id":          "add_method_getLoaders__Ljava_util_List_",
         "method":      ".method public whitelist getLoaders()Ljava/util/List;",
+        "method_name": 'getLoaders',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4275,6 +4348,7 @@ PATCHES = [
     {
         "id":          "add_method_getMovie_I_Landroid_graphics_Movie_",
         "method":      ".method public whitelist getMovie(I)Landroid/graphics/Movie;",
+        "method_name": 'getMovie',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4317,6 +4391,7 @@ PATCHES = [
     {
         "id":          "add_method_getPreloadedDrawables__Landroid_util_LongSparseArray_",
         "method":      ".method public whitelist getPreloadedDrawables()Landroid/util/LongSparseArray;",
+        "method_name": 'getPreloadedDrawables',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4346,6 +4421,7 @@ PATCHES = [
     {
         "id":          "add_method_getQuantityString_II_Ljava_lang_String_",
         "method":      ".method public whitelist getQuantityString(II)Ljava/lang/String;",
+        "method_name": 'getQuantityString',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4374,6 +4450,7 @@ PATCHES = [
     {
         "id":          "add_method_getQuantityString_II_Ljava_lang_Object__Ljava_lang_String_",
         "method":      ".method public varargs whitelist getQuantityString(II[Ljava/lang/Object;)Ljava/lang/String;",
+        "method_name": 'getQuantityString',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4422,6 +4499,7 @@ PATCHES = [
     {
         "id":          "add_method_getQuantityText_II_Ljava_lang_CharSequence_",
         "method":      ".method public whitelist getQuantityText(II)Ljava/lang/CharSequence;",
+        "method_name": 'getQuantityText',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4448,6 +4526,7 @@ PATCHES = [
     {
         "id":          "add_method_getResourceEntryName_I_Ljava_lang_String_",
         "method":      ".method public whitelist getResourceEntryName(I)Ljava/lang/String;",
+        "method_name": 'getResourceEntryName',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4474,6 +4553,7 @@ PATCHES = [
     {
         "id":          "add_method_getResourceName_I_Ljava_lang_String_",
         "method":      ".method public whitelist getResourceName(I)Ljava/lang/String;",
+        "method_name": 'getResourceName',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4500,6 +4580,7 @@ PATCHES = [
     {
         "id":          "add_method_getResourcePackageName_I_Ljava_lang_String_",
         "method":      ".method public whitelist getResourcePackageName(I)Ljava/lang/String;",
+        "method_name": 'getResourcePackageName',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4526,6 +4607,7 @@ PATCHES = [
     {
         "id":          "add_method_getResourceTypeName_I_Ljava_lang_String_",
         "method":      ".method public whitelist getResourceTypeName(I)Ljava/lang/String;",
+        "method_name": 'getResourceTypeName',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4552,6 +4634,7 @@ PATCHES = [
     {
         "id":          "add_method_getSizeAndUiModeConfigurations___Landroid_content_res_Config",
         "method":      ".method public whitelist getSizeAndUiModeConfigurations()[Landroid/content/res/Configuration;",
+        "method_name": 'getSizeAndUiModeConfigurations',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4573,6 +4656,7 @@ PATCHES = [
     {
         "id":          "add_method_getSizeConfigurations___Landroid_content_res_Configuration_",
         "method":      ".method public whitelist getSizeConfigurations()[Landroid/content/res/Configuration;",
+        "method_name": 'getSizeConfigurations',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4594,6 +4678,7 @@ PATCHES = [
     {
         "id":          "add_method_getStateListAnimatorCache__Landroid_content_res_Configuratio",
         "method":      ".method public whitelist getStateListAnimatorCache()Landroid/content/res/ConfigurationBoundResourceCache;",
+        "method_name": 'getStateListAnimatorCache',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4623,6 +4708,7 @@ PATCHES = [
     {
         "id":          "add_method_getString_I_Ljava_lang_String_",
         "method":      ".method public whitelist getString(I)Ljava/lang/String;",
+        "method_name": 'getString',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4651,6 +4737,7 @@ PATCHES = [
     {
         "id":          "add_method_getString_I_Ljava_lang_Object__Ljava_lang_String_",
         "method":      ".method public varargs whitelist getString(I[Ljava/lang/Object;)Ljava/lang/String;",
+        "method_name": 'getString',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4695,6 +4782,7 @@ PATCHES = [
     {
         "id":          "add_method_getStringArray_I__Ljava_lang_String_",
         "method":      ".method public whitelist getStringArray(I)[Ljava/lang/String;",
+        "method_name": 'getStringArray',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4756,6 +4844,7 @@ PATCHES = [
     {
         "id":          "add_method_getText_I_Ljava_lang_CharSequence_",
         "method":      ".method public whitelist getText(I)Ljava/lang/CharSequence;",
+        "method_name": 'getText',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4884,6 +4973,7 @@ PATCHES = [
     {
         "id":          "add_method_getText_ILjava_lang_CharSequence__Ljava_lang_CharSequence_",
         "method":      ".method public whitelist getText(ILjava/lang/CharSequence;)Ljava/lang/CharSequence;",
+        "method_name": 'getText',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -4927,6 +5017,7 @@ PATCHES = [
     {
         "id":          "add_method_getTextArray_I__Ljava_lang_CharSequence_",
         "method":      ".method public whitelist getTextArray(I)[Ljava/lang/CharSequence;",
+        "method_name": 'getTextArray',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5055,6 +5146,7 @@ PATCHES = [
     {
         "id":          "add_method_getValue_ILandroid_util_TypedValue_Z_V",
         "method":      ".method public whitelist getValue(ILandroid/util/TypedValue;Z)V",
+        "method_name": 'getValue',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5079,6 +5171,7 @@ PATCHES = [
     {
         "id":          "add_method_getValue_Ljava_lang_String_Landroid_util_TypedValue_Z_V",
         "method":      ".method public whitelist getValue(Ljava/lang/String;Landroid/util/TypedValue;Z)V",
+        "method_name": 'getValue',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5103,6 +5196,7 @@ PATCHES = [
     {
         "id":          "add_method_getValueForDensity_IILandroid_util_TypedValue_Z_V",
         "method":      ".method public whitelist getValueForDensity(IILandroid/util/TypedValue;Z)V",
+        "method_name": 'getValueForDensity',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5127,6 +5221,7 @@ PATCHES = [
     {
         "id":          "add_method_getXml_I_Landroid_content_res_XmlResourceParser_",
         "method":      ".method public whitelist getXml(I)Landroid/content/res/XmlResourceParser;",
+        "method_name": 'getXml',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5153,6 +5248,7 @@ PATCHES = [
     {
         "id":          "add_method_hasOverrideDisplayAdjustments__Z",
         "method":      ".method public whitelist hasOverrideDisplayAdjustments()Z",
+        "method_name": 'hasOverrideDisplayAdjustments',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5170,6 +5266,7 @@ PATCHES = [
     {
         "id":          "add_method_isPreloadOverlayed_I_Z",
         "method":      ".method whitelist isPreloadOverlayed(I)Z",
+        "method_name": 'isPreloadOverlayed',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5187,6 +5284,7 @@ PATCHES = [
     {
         "id":          "add_method_isPreloading__Z",
         "method":      ".method whitelist isPreloading()Z",
+        "method_name": 'isPreloading',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5208,6 +5306,7 @@ PATCHES = [
     {
         "id":          "add_method_loadColorStateList_Landroid_util_TypedValue_ILandroid_conten",
         "method":      ".method whitelist loadColorStateList(Landroid/util/TypedValue;ILandroid/content/res/Resources$Theme;)Landroid/content/res/ColorStateList;",
+        "method_name": 'loadColorStateList',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5234,6 +5333,7 @@ PATCHES = [
     {
         "id":          "add_method_loadComplexColor_Landroid_util_TypedValue_ILandroid_content_",
         "method":      ".method public whitelist loadComplexColor(Landroid/util/TypedValue;ILandroid/content/res/Resources$Theme;)Landroid/content/res/ComplexColor;",
+        "method_name": 'loadComplexColor',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5255,6 +5355,7 @@ PATCHES = [
     {
         "id":          "add_method_loadDrawable_Landroid_util_TypedValue_IILandroid_content_res",
         "method":      ".method whitelist loadDrawable(Landroid/util/TypedValue;IILandroid/content/res/Resources$Theme;)Landroid/graphics/drawable/Drawable;",
+        "method_name": 'loadDrawable',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5297,6 +5398,7 @@ PATCHES = [
     {
         "id":          "add_method_loadOverlayDrawable_Landroid_util_TypedValue_I_Landroid_grap",
         "method":      ".method whitelist loadOverlayDrawable(Landroid/util/TypedValue;I)Landroid/graphics/drawable/Drawable;",
+        "method_name": 'loadOverlayDrawable',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5314,6 +5416,7 @@ PATCHES = [
     {
         "id":          "add_method_loadOverlayTypedArray_Landroid_content_res_TypedArray__Landr",
         "method":      ".method whitelist loadOverlayTypedArray(Landroid/content/res/TypedArray;)Landroid/content/res/TypedArray;",
+        "method_name": 'loadOverlayTypedArray',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5329,6 +5432,7 @@ PATCHES = [
     {
         "id":          "add_method_loadOverlayValue_Landroid_util_TypedValue_I_V",
         "method":      ".method whitelist loadOverlayValue(Landroid/util/TypedValue;I)V",
+        "method_name": 'loadOverlayValue',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5344,6 +5448,7 @@ PATCHES = [
     {
         "id":          "add_method_loadXmlResourceParser_ILjava_lang_String__Landroid_content_r",
         "method":      ".method whitelist loadXmlResourceParser(ILjava/lang/String;)Landroid/content/res/XmlResourceParser;",
+        "method_name": 'loadXmlResourceParser',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5491,6 +5596,7 @@ PATCHES = [
     {
         "id":          "add_method_loadXmlResourceParser_Ljava_lang_String_IILjava_lang_String_",
         "method":      ".method whitelist loadXmlResourceParser(Ljava/lang/String;IILjava/lang/String;)Landroid/content/res/XmlResourceParser;",
+        "method_name": 'loadXmlResourceParser',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5527,6 +5633,7 @@ PATCHES = [
     {
         "id":          "add_method_loadXmlResourceParser_Ljava_lang_String_IILjava_lang_String_",
         "method":      ".method public whitelist loadXmlResourceParser(Ljava/lang/String;IILjava/lang/String;Z)Landroid/content/res/XmlResourceParser;",
+        "method_name": 'loadXmlResourceParser',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5563,6 +5670,7 @@ PATCHES = [
     {
         "id":          "add_method_needUpdateIntegerMap__Z",
         "method":      ".method whitelist needUpdateIntegerMap()Z",
+        "method_name": 'needUpdateIntegerMap',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5580,6 +5688,7 @@ PATCHES = [
     {
         "id":          "add_method_newTheme__Landroid_content_res_Resources_Theme_",
         "method":      ".method public final whitelist newTheme()Landroid/content/res/Resources$Theme;",
+        "method_name": 'newTheme',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5635,6 +5744,7 @@ PATCHES = [
     {
         "id":          "add_method_obtainAttributes_Landroid_util_AttributeSet__I_Landroid_cont",
         "method":      ".method public whitelist obtainAttributes(Landroid/util/AttributeSet;[I)Landroid/content/res/TypedArray;",
+        "method_name": 'obtainAttributes',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5678,6 +5788,7 @@ PATCHES = [
     {
         "id":          "add_method_obtainTypedArray_I_Landroid_content_res_TypedArray_",
         "method":      ".method public whitelist obtainTypedArray(I)Landroid/content/res/TypedArray;",
+        "method_name": 'obtainTypedArray',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5765,6 +5876,7 @@ PATCHES = [
     {
         "id":          "add_method_openRawResource_I_Ljava_io_InputStream_",
         "method":      ".method public whitelist openRawResource(I)Ljava/io/InputStream;",
+        "method_name": 'openRawResource',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5805,6 +5917,7 @@ PATCHES = [
     {
         "id":          "add_method_openRawResource_ILandroid_util_TypedValue__Ljava_io_InputStr",
         "method":      ".method public whitelist openRawResource(ILandroid/util/TypedValue;)Ljava/io/InputStream;",
+        "method_name": 'openRawResource',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5831,6 +5944,7 @@ PATCHES = [
     {
         "id":          "add_method_openRawResourceFd_I_Landroid_content_res_AssetFileDescriptor",
         "method":      ".method public whitelist openRawResourceFd(I)Landroid/content/res/AssetFileDescriptor;",
+        "method_name": 'openRawResourceFd',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -5873,6 +5987,7 @@ PATCHES = [
     {
         "id":          "add_method_parseBundleExtra_Ljava_lang_String_Landroid_util_AttributeSe",
         "method":      ".method public whitelist parseBundleExtra(Ljava/lang/String;Landroid/util/AttributeSet;Landroid/os/Bundle;)V",
+        "method_name": 'parseBundleExtra',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6101,6 +6216,7 @@ PATCHES = [
     {
         "id":          "add_method_parseBundleExtras_Landroid_content_res_XmlResourceParser_Lan",
         "method":      ".method public whitelist parseBundleExtras(Landroid/content/res/XmlResourceParser;Landroid/os/Bundle;)V",
+        "method_name": 'parseBundleExtras',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6183,6 +6299,7 @@ PATCHES = [
     {
         "id":          "add_method_preloadFonts_I_V",
         "method":      ".method public whitelist preloadFonts(I)V",
+        "method_name": 'preloadFonts',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6232,6 +6349,7 @@ PATCHES = [
     {
         "id":          "add_method_removeLoaders__Landroid_content_res_loader_ResourcesLoader__",
         "method":      ".method public varargs whitelist removeLoaders([Landroid/content/res/loader/ResourcesLoader;)V",
+        "method_name": 'removeLoaders',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6347,6 +6465,7 @@ PATCHES = [
     {
         "id":          "add_method_setCallbacks_Landroid_content_res_Resources_UpdateCallbacks_",
         "method":      ".method public whitelist setCallbacks(Landroid/content/res/Resources$UpdateCallbacks;)V",
+        "method_name": 'setCallbacks',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6377,6 +6496,7 @@ PATCHES = [
     {
         "id":          "add_method_setCompatibilityInfo_Landroid_content_res_CompatibilityInfo_",
         "method":      ".method public whitelist setCompatibilityInfo(Landroid/content/res/CompatibilityInfo;)V",
+        "method_name": 'setCompatibilityInfo',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6401,6 +6521,7 @@ PATCHES = [
     {
         "id":          "add_method_setImpl_Landroid_content_res_ResourcesImpl__V",
         "method":      ".method public whitelist setImpl(Landroid/content/res/ResourcesImpl;)V",
+        "method_name": 'setImpl',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6494,6 +6615,7 @@ PATCHES = [
     {
         "id":          "add_method_startPreloading__V",
         "method":      ".method public final whitelist startPreloading()V",
+        "method_name": 'startPreloading',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6513,6 +6635,7 @@ PATCHES = [
     {
         "id":          "add_method_updateConfiguration_Landroid_content_res_Configuration_Landr",
         "method":      ".method public whitelist updateConfiguration(Landroid/content/res/Configuration;Landroid/util/DisplayMetrics;)V",
+        "method_name": 'updateConfiguration',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -6534,6 +6657,7 @@ PATCHES = [
     {
         "id":          "add_method_updateConfiguration_Landroid_content_res_Configuration_Landr",
         "method":      ".method public whitelist updateConfiguration(Landroid/content/res/Configuration;Landroid/util/DisplayMetrics;Landroid/content/res/CompatibilityInfo;)V",
+        "method_name": 'updateConfiguration',
         "type":        "method_add",
         "search":      None,
         "replacement": """\

@@ -4,18 +4,25 @@ Data model for Legend MTCR class/method-level patch rules.
 Every per-class rule file under framework/, services/, miui_framework/,
 miui_services/ is a plain Python module that exposes:
 
-  TARGET_JAR   : str   — e.g. "services.jar"
-  TARGET_CLASS : str   — e.g. "com/android/server/pm/PackageManagerService.smali"
-  PATCHES      : list[dict]   — one dict per SmaliMethodPatch or DexAddPatch
+  TARGET_JAR            : str        — e.g. "services.jar"
+  TARGET_CLASS          : str        — e.g. "com/android/server/pm/PackageManagerService.smali"
+  CLASS_FALLBACK_NAMES  : list[str]  — alt basenames for smart class Tier-2 search (optional)
+  CLASS_ANCHORS         : list[str]  — content lines for smart class Tier-3 scan (optional)
+  PATCHES               : list[dict] — one dict per SmaliMethodPatch or DexAddPatch
 
 Dict keys (SmaliMethodPatch):
-  id          str   — unique patch id within the class
-  method      str   — full .method signature line (e.g. ".method public foo()V")
-  type        str   — "method_replace" | "method_add" | "class_add"
-  search      str | None   — a/ smali block (for method_replace); None for add
-  replacement str   — b/ smali block (for replace/add) or full class text
-  required    bool
-  reason      str
+  id                  str        — unique patch id within the class
+  method              str        — full .method signature line
+  type                str        — "method_replace" | "method_add" | "class_add"
+  search              str | None — a/ smali block (method_replace); None for add
+  replacement         str        — b/ smali block (replace/add) or full class text
+  required            bool
+  reason              str
+  method_name         str        — short name for smart Tier-2 search (derived if absent)
+  method_anchors      list[str]  — instruction lines for smart Tier-3 search (derived if absent)
+  class_fallback_names list[str] — mirrors CLASS_FALLBACK_NAMES at patch level (optional)
+  class_anchors       list[str]  — mirrors CLASS_ANCHORS at patch level (optional)
+  regex_search        str        — pre-built register-wildcard regex (informational)
 
 Dict keys (DexAddPatch):
   id           str

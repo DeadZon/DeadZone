@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ProcessManagerService.smali"
+CLASS_FALLBACK_NAMES = ['ProcessManagerService.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_isForceStopEnable_Lcom_android_server_am_ProcessRecord_I_Z",
         "method":      ".method public isForceStopEnable(Lcom/android/server/am/ProcessRecord;I)Z",
+        "method_name": 'isForceStopEnable',
         "type":        "method_replace",
         "search": """\
 .method public isForceStopEnable(Lcom/android/server/am/ProcessRecord;I)Z
@@ -152,6 +155,7 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['if-ne p2, v0, :cond_0', 'return v1', 'sget-boolean v0, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z', 'if-eqz v0, :cond_1', 'return v2', 'invoke-direct {p0, p1}, Lcom/android/server/am/ProcessManagerService;->isSystemApp(Lcom/android/server/am/ProcessRecord;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

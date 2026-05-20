@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ActivityManagerServiceImpl.smali"
+CLASS_FALLBACK_NAMES = ['ActivityManagerServiceImpl.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_ensureDeviceProvisioned_Landroid_content_Context__V",
         "method":      ".method private static ensureDeviceProvisioned(Landroid/content/Context;)V",
+        "method_name": 'ensureDeviceProvisioned',
         "type":        "method_replace",
         "search": """\
 .method private static ensureDeviceProvisioned(Landroid/content/Context;)V
@@ -234,12 +237,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-static {p0}, Lcom/android/server/am/ActivityManagerServiceImpl;->isDeviceProvisioned(Landroid/content/Context;)Z', 'move-result v0', 'if-nez v0, :cond_2', 'invoke-virtual {p0}, Landroid/content/Context;->getPackageManager()Landroid/content/pm/PackageManager;', 'move-result-object v0', 'sget-boolean v1, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkRunningCompatibility_Landroid_app_IApplicationThread_La",
         "method":      ".method public checkRunningCompatibility(Landroid/app/IApplicationThread;Landroid/content/pm/ActivityInfo;Landroid/content/Intent;ILjava/lang/String;)Z",
+        "method_name": 'checkRunningCompatibility',
         "type":        "method_replace",
         "search": """\
 .method public checkRunningCompatibility(Landroid/app/IApplicationThread;Landroid/content/pm/ActivityInfo;Landroid/content/Intent;ILjava/lang/String;)Z
@@ -505,12 +510,14 @@ PATCHES = [
     return p2
 .end method
 """,
+        "method_anchors": ['if-nez p2, :cond_0', 'return v0', 'iget-object v0, p0, Lcom/android/server/am/ActivityManagerServiceImpl;->mAmService:Lcom/android/server/am/ActivityManagerService;', 'iget-object v0, v0, Lcom/android/server/am/ActivityManagerService;->mActivityTaskManager:Lcom/android/server/wm/ActivityTaskManagerService;', 'invoke-static {v0, p1}, Lcom/android/server/wm/WindowProcessUtils;->getCallerInfo(Lcom/android/server/wm/ActivityTaskManagerService;Landroid/app/IApplicationThread;)Lmiui/security/CallerInfo;', 'move-result-object v3'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkRunningCompatibility_Landroid_content_ComponentName_III",
         "method":      ".method public checkRunningCompatibility(Landroid/content/ComponentName;III)Z",
+        "method_name": 'checkRunningCompatibility',
         "type":        "method_replace",
         "search": """\
 .method public checkRunningCompatibility(Landroid/content/ComponentName;III)Z
@@ -1140,12 +1147,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z', 'if-eqz v0, :cond_0', 'return v1', 'if-eqz p1, :cond_d', 'invoke-static {}, Landroid/miui/AppOpsUtils;->isXOptMode()Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_onProcessStart_IILjava_lang_String__V",
         "method":      ".method public onProcessStart(IILjava/lang/String;)V",
+        "method_name": 'onProcessStart',
         "type":        "method_replace",
         "search": """\
 .method public onProcessStart(IILjava/lang/String;)V
@@ -1207,6 +1216,7 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/server/appop/flags/Flags;->enableJingyue()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'sget-boolean v0, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z', 'if-nez v0, :cond_0', 'const-class v0, Lmiui/security/SecurityManagerInternal;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

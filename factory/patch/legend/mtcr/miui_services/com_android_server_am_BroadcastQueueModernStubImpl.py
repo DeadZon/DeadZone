@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/BroadcastQueueModernStubImpl.smali"
+CLASS_FALLBACK_NAMES = ['BroadcastQueueModernStubImpl.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_isInternationalSpecialAction_Ljava_lang_String_Landroid_cont",
         "method":      ".method private isInternationalSpecialAction(Ljava/lang/String;Landroid/content/pm/ResolveInfo;)Z",
+        "method_name": 'isInternationalSpecialAction',
         "type":        "method_replace",
         "search": """\
 .method private isInternationalSpecialAction(Ljava/lang/String;Landroid/content/pm/ResolveInfo;)Z
@@ -126,12 +129,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z', 'if-eqz v0, :cond_2', 'sget-object v0, Lcom/android/server/am/BroadcastQueueModernStubImpl;->mInternationalSpecialAction:Ljava/util/List;', 'invoke-interface {v0, p1}, Ljava/util/List;->contains(Ljava/lang/Object;)Z', 'move-result v0', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateBlockBroadcast__V",
         "method":      ".method private updateBlockBroadcast()V",
+        "method_name": 'updateBlockBroadcast',
         "type":        "method_replace",
         "search": """\
 .method private updateBlockBroadcast()V
@@ -261,12 +266,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/am/BroadcastQueueModernStubImpl;->mSecurityInternal:Lmiui/security/SecurityManagerInternal;', 'if-nez v0, :cond_0', 'const-class v0, Lmiui/security/SecurityManagerInternal;', 'invoke-static {v0}, Lcom/android/server/LocalServices;->getService(Ljava/lang/Class;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Lmiui/security/SecurityManagerInternal;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkApplicationAutoStart_Lcom_android_server_am_BroadcastQu",
         "method":      ".method public checkApplicationAutoStart(Lcom/android/server/am/BroadcastQueue;Lcom/android/server/am/BroadcastRecord;Landroid/content/pm/ResolveInfo;)Z",
+        "method_name": 'checkApplicationAutoStart',
         "type":        "method_replace",
         "search": """\
 .method public checkApplicationAutoStart(Lcom/android/server/am/BroadcastQueue;Lcom/android/server/am/BroadcastRecord;Landroid/content/pm/ResolveInfo;)Z
@@ -1460,12 +1467,14 @@ PATCHES = [
     return v17
 .end method
 """,
+        "method_anchors": ['if-eqz v6, :cond_16', 'iget-object v2, v6, Landroid/content/pm/ResolveInfo;->activityInfo:Landroid/content/pm/ActivityInfo;', 'if-eqz v2, :cond_16', 'iget-object v2, v6, Landroid/content/pm/ResolveInfo;->activityInfo:Landroid/content/pm/ActivityInfo;', 'iget-object v2, v2, Landroid/content/pm/ActivityInfo;->applicationInfo:Landroid/content/pm/ApplicationInfo;', 'if-nez v2, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkReceiverAppDealBroadcast_Lcom_android_server_am_Broadca",
         "method":      ".method public checkReceiverAppDealBroadcast(Lcom/android/server/am/BroadcastQueue;Lcom/android/server/am/BroadcastRecord;Lcom/android/server/am/ProcessRecord;Z)Z",
+        "method_name": 'checkReceiverAppDealBroadcast',
         "type":        "method_replace",
         "search": """\
 .method public checkReceiverAppDealBroadcast(Lcom/android/server/am/BroadcastQueue;Lcom/android/server/am/BroadcastRecord;Lcom/android/server/am/ProcessRecord;Z)Z
@@ -2289,6 +2298,7 @@ PATCHES = [
     return v3
 .end method
 """,
+        "method_anchors": ['if-eqz v2, :cond_c', 'if-eqz v1, :cond_c', 'iget-object v0, v1, Lcom/android/server/am/BroadcastRecord;->intent:Landroid/content/Intent;', 'if-nez v0, :cond_0', 'iget-object v0, v1, Lcom/android/server/am/BroadcastRecord;->intent:Landroid/content/Intent;', 'invoke-virtual {v0}, Landroid/content/Intent;->getAction()Ljava/lang/String;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

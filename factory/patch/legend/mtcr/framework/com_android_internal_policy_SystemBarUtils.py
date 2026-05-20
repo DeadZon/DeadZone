@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "com/android/internal/policy/SystemBarUtils.smali"
+CLASS_FALLBACK_NAMES = ['SystemBarUtils.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "add_method__init___V",
         "method":      ".method public constructor whitelist <init>()V",
+        "method_name": '<init>',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -34,6 +37,7 @@ PATCHES = [
     {
         "id":          "add_method_getDesktopViewAppHeaderHeightId__I",
         "method":      ".method public static whitelist getDesktopViewAppHeaderHeightId()I",
+        "method_name": 'getDesktopViewAppHeaderHeightId',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -51,6 +55,7 @@ PATCHES = [
     {
         "id":          "add_method_getDesktopViewAppHeaderHeightPx_Landroid_content_Context__I",
         "method":      ".method public static whitelist getDesktopViewAppHeaderHeightPx(Landroid/content/Context;)I",
+        "method_name": 'getDesktopViewAppHeaderHeightPx',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -78,6 +83,7 @@ PATCHES = [
     {
         "id":          "add_method_getQuickQsOffsetHeight_Landroid_content_Context__I",
         "method":      ".method public static whitelist getQuickQsOffsetHeight(Landroid/content/Context;)I",
+        "method_name": 'getQuickQsOffsetHeight',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -111,6 +117,7 @@ PATCHES = [
     {
         "id":          "add_method_getStatusBarHeight_Landroid_content_Context__I",
         "method":      ".method public static whitelist getStatusBarHeight(Landroid/content/Context;)I",
+        "method_name": 'getStatusBarHeight',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -151,6 +158,7 @@ PATCHES = [
     {
         "id":          "add_method_getStatusBarHeight_Landroid_content_res_Resources_Landroid_v",
         "method":      ".method public static whitelist getStatusBarHeight(Landroid/content/res/Resources;Landroid/view/DisplayCutout;)I",
+        "method_name": 'getStatusBarHeight',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -204,6 +212,7 @@ PATCHES = [
     {
         "id":          "add_method_getStatusBarHeightForRotation_Landroid_content_Context_I_I",
         "method":      ".method public static whitelist getStatusBarHeightForRotation(Landroid/content/Context;I)I",
+        "method_name": 'getStatusBarHeightForRotation',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -320,6 +329,7 @@ PATCHES = [
     {
         "id":          "add_method_getSystemSettingsHeight_Landroid_content_Context__I",
         "method":      ".method public static blacklist getSystemSettingsHeight(Landroid/content/Context;)I",
+        "method_name": 'getSystemSettingsHeight',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -364,6 +374,7 @@ PATCHES = [
     {
         "id":          "add_method_getTaskbarHeight_Landroid_content_res_Resources__I",
         "method":      ".method public static whitelist getTaskbarHeight(Landroid/content/res/Resources;)I",
+        "method_name": 'getTaskbarHeight',
         "type":        "method_add",
         "search":      None,
         "replacement": """\

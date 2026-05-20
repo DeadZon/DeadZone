@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/wm/WindowManagerService.smali"
+CLASS_FALLBACK_NAMES = ['WindowManagerService.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_addWindowChangeListener_Lcom_android_server_wm_WindowManager",
         "method":      ".method addWindowChangeListener(Lcom/android/server/wm/WindowManagerService$WindowChangeListener;)V",
+        "method_name": 'addWindowChangeListener',
         "type":        "method_replace",
         "search": """\
 .method addWindowChangeListener(Lcom/android/server/wm/WindowManagerService$WindowChangeListener;)V
@@ -125,12 +128,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowChangeListeners:Ljava/util/ArrayList;', 'invoke-virtual {v1, p1}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_addWindowFocusChangeListener_Lcom_android_server_wm_WindowMa",
         "method":      ".method addWindowFocusChangeListener(Lcom/android/server/wm/WindowManagerInternal$WindowFocusChangeListener;)V",
+        "method_name": 'addWindowFocusChangeListener',
         "type":        "method_replace",
         "search": """\
 .method addWindowFocusChangeListener(Lcom/android/server/wm/WindowManagerInternal$WindowFocusChangeListener;)V
@@ -239,12 +244,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowFocusChangeListeners:Ljava/util/ArrayList;', 'invoke-virtual {v1, p1}, Ljava/util/ArrayList;->add(Ljava/lang/Object;)Z', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkCallingPermission_Ljava_lang_String_Ljava_lang_String__",
         "method":      ".method checkCallingPermission(Ljava/lang/String;Ljava/lang/String;)Z",
+        "method_name": 'checkCallingPermission',
         "type":        "method_replace",
         "search": """\
 .method checkCallingPermission(Ljava/lang/String;Ljava/lang/String;)Z
@@ -287,12 +294,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, p2, v0}, Lcom/android/server/wm/WindowManagerService;->checkCallingPermission(Ljava/lang/String;Ljava/lang/String;Z)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkCallingPermission_Ljava_lang_String_Ljava_lang_String_Z",
         "method":      ".method checkCallingPermission(Ljava/lang/String;Ljava/lang/String;Z)Z",
+        "method_name": 'checkCallingPermission',
         "type":        "method_replace",
         "search": """\
 .method checkCallingPermission(Ljava/lang/String;Ljava/lang/String;Z)Z
@@ -619,12 +628,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/os/Binder;->getCallingPid()I', 'move-result v0', 'sget v1, Lcom/android/server/wm/WindowManagerService;->MY_PID:I', 'if-ne v0, v1, :cond_0', 'return v2', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mContext:Landroid/content/Context;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkDrawnWindowsLocked__V",
         "method":      ".method checkDrawnWindowsLocked()V",
+        "method_name": 'checkDrawnWindowsLocked',
         "type":        "method_replace",
         "search": """\
 .method checkDrawnWindowsLocked()V
@@ -1339,12 +1350,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v1, "com.android.server.wm.WindowManagerService.checkDrawnWindowsLocked()V"', 'invoke-static {v1}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v2, v0, Lcom/android/server/wm/WindowManagerService;->mWaitingForDrawnCallbacks:Landroid/util/ArrayMap;', 'invoke-virtual {v2}, Landroid/util/ArrayMap;->isEmpty()Z', 'move-result v2', 'if-eqz v2, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_clearPointerDownOutsideFocusRunnable__V",
         "method":      ".method clearPointerDownOutsideFocusRunnable()V",
+        "method_name": 'clearPointerDownOutsideFocusRunnable',
         "type":        "method_replace",
         "search": """\
 .method clearPointerDownOutsideFocusRunnable()V
@@ -1442,12 +1455,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mPointerDownOutsideFocusRunnable:Ljava/lang/Runnable;', 'if-nez v0, :cond_0', 'return-void', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mH:Lcom/android/server/wm/WindowManagerService$H;', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mPointerDownOutsideFocusRunnable:Ljava/lang/Runnable;', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/WindowManagerService$H;->removeCallbacks(Ljava/lang/Runnable;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_clearTouchableRegion_Lcom_android_server_wm_Session_Landroid",
         "method":      ".method clearTouchableRegion(Lcom/android/server/wm/Session;Landroid/view/IWindow;)V",
+        "method_name": 'clearTouchableRegion',
         "type":        "method_replace",
         "search": """\
 .method clearTouchableRegion(Lcom/android/server/wm/Session;Landroid/view/IWindow;)V
@@ -1607,12 +1622,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/os/Binder;->clearCallingIdentity()J', 'move-result-wide v0', 'iget-object v2, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v3}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v3'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_createWatermark__V",
         "method":      ".method createWatermark()V",
+        "method_name": 'createWatermark',
         "type":        "method_replace",
         "search": """\
 .method createWatermark()V
@@ -2132,12 +2149,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mWatermark:Lcom/android/server/wm/Watermark;', 'if-eqz v0, :cond_0', 'return-void', 'new-instance v0, Ljava/io/File;', 'const-string v1, "/system/etc/setup.conf"', 'invoke-direct {v0, v1}, Ljava/io/File;-><init>(Ljava/lang/String;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchImeInputTargetVisibilityChanged_Landroid_os_IBinder_",
         "method":      ".method dispatchImeInputTargetVisibilityChanged(Landroid/os/IBinder;ZZI)V",
+        "method_name": 'dispatchImeInputTargetVisibilityChanged',
         "type":        "method_replace",
         "search": """\
 .method dispatchImeInputTargetVisibilityChanged(Landroid/os/IBinder;ZZI)V
@@ -2483,12 +2502,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lcom/android/server/wm/WindowManagerDebugConfig;->DEBUG_INPUT_METHOD:Z', 'if-eqz v0, :cond_0', 'new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V', 'const-string v1, "onImeInputTargetVisibilityChanged, win="', 'invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchImeTargetOverlayVisibilityChanged_Landroid_os_IBinde",
         "method":      ".method dispatchImeTargetOverlayVisibilityChanged(Landroid/os/IBinder;IZZI)V",
+        "method_name": 'dispatchImeTargetOverlayVisibilityChanged',
         "type":        "method_replace",
         "search": """\
 .method dispatchImeTargetOverlayVisibilityChanged(Landroid/os/IBinder;IZZI)V
@@ -2921,12 +2942,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lcom/android/server/wm/WindowManagerDebugConfig;->DEBUG_INPUT_METHOD:Z', 'if-eqz v0, :cond_0', 'new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V', 'const-string v1, "onImeTargetOverlayVisibilityChanged, win="', 'invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchNewAnimatorScaleLocked_Lcom_android_server_wm_Sessio",
         "method":      ".method dispatchNewAnimatorScaleLocked(Lcom/android/server/wm/Session;)V",
+        "method_name": 'dispatchNewAnimatorScaleLocked',
         "type":        "method_replace",
         "search": """\
 .method dispatchNewAnimatorScaleLocked(Lcom/android/server/wm/Session;)V
@@ -3019,12 +3042,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.dispatchNewAnimatorScaleLocked(Lcom/android/server/wm/Session;)V"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mH:Lcom/android/server/wm/WindowManagerService$H;', 'invoke-virtual {v1, v2, p1}, Lcom/android/server/wm/WindowManagerService$H;->obtainMessage(ILjava/lang/Object;)Landroid/os/Message;', 'move-result-object v1', 'invoke-virtual {v1}, Landroid/os/Message;->sendToTarget()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dumpDebugLocked_Landroid_util_proto_ProtoOutputStream_I_V",
         "method":      ".method dumpDebugLocked(Landroid/util/proto/ProtoOutputStream;I)V",
+        "method_name": 'dumpDebugLocked',
         "type":        "method_replace",
         "search": """\
 .method dumpDebugLocked(Landroid/util/proto/ProtoOutputStream;I)V
@@ -3300,12 +3325,14 @@ PATCHES = [
     throw p1
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.dumpDebugLocked(Landroid/util/proto/ProtoOutputStream;I)V"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'const-string v1, "dumpDebugLocked"', 'invoke-static {v2, v3, v1}, Landroid/os/Trace;->traceBegin(JLjava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mPolicy:Lcom/android/server/policy/WindowManagerPolicy;', 'invoke-interface {v1, p1, v4, v5}, Lcom/android/server/policy/WindowManagerPolicy;->dumpDebug(Landroid/util/proto/ProtoOutputStream;J)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dumpSurfaceLeakInfo__V",
         "method":      ".method dumpSurfaceLeakInfo()V",
+        "method_name": 'dumpSurfaceLeakInfo',
         "type":        "method_replace",
         "search": """\
 .method dumpSurfaceLeakInfo()V
@@ -3326,12 +3353,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_enableScreenIfNeededLocked__V",
         "method":      ".method enableScreenIfNeededLocked()V",
+        "method_name": 'enableScreenIfNeededLocked',
         "type":        "method_replace",
         "search": """\
 .method enableScreenIfNeededLocked()V
@@ -3578,12 +3607,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.enableScreenIfNeededLocked()V"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'sget-object v1, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_BOOT_enabled:[Z', 'if-eqz v1, :cond_0', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowManagerService;->mDisplayEnabled:Z', 'iget-boolean v2, p0, Lcom/android/server/wm/WindowManagerService;->mForceDisplayEnabled:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_finishDrawingWindow_Lcom_android_server_wm_Session_Landroid_",
         "method":      ".method finishDrawingWindow(Lcom/android/server/wm/Session;Landroid/view/IWindow;Landroid/view/SurfaceControl$Transaction;I)V",
+        "method_name": 'finishDrawingWindow',
         "type":        "method_replace",
         "search": """\
 .method finishDrawingWindow(Lcom/android/server/wm/Session;Landroid/view/IWindow;Landroid/view/SurfaceControl$Transaction;I)V
@@ -3934,12 +3965,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz p3, :cond_0', 'invoke-static {}, Landroid/os/Binder;->getCallingPid()I', 'move-result v0', 'invoke-static {}, Landroid/os/Binder;->getCallingUid()I', 'move-result v1', 'invoke-virtual {p3, v0, v1}, Landroid/view/SurfaceControl$Transaction;->sanitize(II)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_generateDisplayHash_Lcom_android_server_wm_Session_Landroid_",
         "method":      ".method generateDisplayHash(Lcom/android/server/wm/Session;Landroid/view/IWindow;Landroid/graphics/Rect;Ljava/lang/String;Landroid/os/RemoteCallback;)V",
+        "method_name": 'generateDisplayHash',
         "type":        "method_replace",
         "search": """\
 .method generateDisplayHash(Lcom/android/server/wm/Session;Landroid/view/IWindow;Landroid/graphics/Rect;Ljava/lang/String;Landroid/os/RemoteCallback;)V
@@ -4498,12 +4531,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Landroid/graphics/Rect;', 'invoke-direct {v0, p3}, Landroid/graphics/Rect;-><init>(Landroid/graphics/Rect;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v0}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getBlurWallpaperBmp__Landroid_graphics_Bitmap_",
         "method":      ".method getBlurWallpaperBmp()Landroid/graphics/Bitmap;",
+        "method_name": 'getBlurWallpaperBmp',
         "type":        "method_replace",
         "search": """\
 .method getBlurWallpaperBmp()Landroid/graphics/Bitmap;
@@ -4550,12 +4585,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/server/wm/WindowManagerServiceStub;->get()Lcom/android/server/wm/WindowManagerServiceStub;', 'move-result-object v0', 'invoke-interface {v0}, Lcom/android/server/wm/WindowManagerServiceStub;->getBlurWallpaperBmp()Landroid/graphics/Bitmap;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getCaptureArgs_ILandroid_window_ScreenCapture_CaptureArgs__L",
         "method":      ".method getCaptureArgs(ILandroid/window/ScreenCapture$CaptureArgs;)Landroid/window/ScreenCapture$LayerCaptureArgs;",
+        "method_name": 'getCaptureArgs',
         "type":        "method_replace",
         "search": """\
 .method getCaptureArgs(ILandroid/window/ScreenCapture$CaptureArgs;)Landroid/window/ScreenCapture$LayerCaptureArgs;
@@ -4953,12 +4990,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'if-eqz v1, :cond_2'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDefaultDisplayContentLocked__Lcom_android_server_wm_Displ",
         "method":      ".method getDefaultDisplayContentLocked()Lcom/android/server/wm/DisplayContent;",
+        "method_name": 'getDefaultDisplayContentLocked',
         "type":        "method_replace",
         "search": """\
 .method getDefaultDisplayContentLocked()Lcom/android/server/wm/DisplayContent;
@@ -5047,12 +5086,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getDefaultDisplayContentLocked()Lcom/android/server/wm/DisplayContent;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, v2}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfEnd(Ljava/lang/String;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDisableSecureWindows__Z",
         "method":      ".method getDisableSecureWindows()Z",
+        "method_name": 'getDisableSecureWindows',
         "type":        "method_replace",
         "search": """\
 .method getDisableSecureWindows()Z
@@ -5082,12 +5123,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowManagerService;->mDisableSecureWindows:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDisplayAreaPolicyProvider__Lcom_android_server_wm_Display",
         "method":      ".method getDisplayAreaPolicyProvider()Lcom/android/server/wm/DisplayAreaPolicy$Provider;",
+        "method_name": 'getDisplayAreaPolicyProvider',
         "type":        "method_replace",
         "search": """\
 .method getDisplayAreaPolicyProvider()Lcom/android/server/wm/DisplayAreaPolicy$Provider;
@@ -5117,12 +5160,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mDisplayAreaPolicyProvider:Lcom/android/server/wm/DisplayAreaPolicy$Provider;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getFixedToUserRotation_I_I",
         "method":      ".method getFixedToUserRotation(I)I",
+        "method_name": 'getFixedToUserRotation',
         "type":        "method_replace",
         "search": """\
 .method getFixedToUserRotation(I)I
@@ -5306,12 +5351,14 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'if-nez v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getFocusedWindowLocked__Lcom_android_server_wm_WindowState_",
         "method":      ".method getFocusedWindowLocked()Lcom/android/server/wm/WindowState;",
+        "method_name": 'getFocusedWindowLocked',
         "type":        "method_replace",
         "search": """\
 .method getFocusedWindowLocked()Lcom/android/server/wm/WindowState;
@@ -5400,12 +5447,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getFocusedWindowLocked()Lcom/android/server/wm/WindowState;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1}, Lcom/android/server/wm/RootWindowContainer;->getTopFocusedDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'iget-object v1, v1, Lcom/android/server/wm/DisplayContent;->mCurrentFocus:Lcom/android/server/wm/WindowState;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getFoldedArea__Landroid_graphics_Rect_",
         "method":      ".method getFoldedArea()Landroid/graphics/Rect;",
+        "method_name": 'getFoldedArea',
         "type":        "method_replace",
         "search": """\
 .method getFoldedArea()Landroid/graphics/Rect;
@@ -5551,12 +5600,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/os/Binder;->clearCallingIdentity()J', 'move-result-wide v0', 'iget-object v2, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v3, p0, Lcom/android/server/wm/WindowManagerService;->mPolicy:Lcom/android/server/policy/WindowManagerPolicy;', 'invoke-interface {v3}, Lcom/android/server/policy/WindowManagerPolicy;->getFoldedArea()Landroid/graphics/Rect;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getImeFocusRootTaskLocked__Lcom_android_server_wm_Task_",
         "method":      ".method getImeFocusRootTaskLocked()Lcom/android/server/wm/Task;",
+        "method_name": 'getImeFocusRootTaskLocked',
         "type":        "method_replace",
         "search": """\
 .method getImeFocusRootTaskLocked()Lcom/android/server/wm/Task;
@@ -5689,12 +5740,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getImeFocusRootTaskLocked()Lcom/android/server/wm/Task;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1}, Lcom/android/server/wm/RootWindowContainer;->getTopFocusedDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'iget-object v2, v1, Lcom/android/server/wm/DisplayContent;->mFocusedApp:Lcom/android/server/wm/ActivityRecord;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getInputTargetFromToken_Landroid_os_IBinder__Lcom_android_se",
         "method":      ".method getInputTargetFromToken(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;",
+        "method_name": 'getInputTargetFromToken',
         "type":        "method_replace",
         "search": """\
 .method getInputTargetFromToken(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;
@@ -5823,12 +5876,14 @@ PATCHES = [
     return-object v2
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mInputToWindowMap:Ljava/util/HashMap;', 'invoke-virtual {v0, p1}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Lcom/android/server/wm/WindowState;', 'if-eqz v0, :cond_0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getInputTargetFromWindowTokenLocked_Landroid_os_IBinder__Lco",
         "method":      ".method getInputTargetFromWindowTokenLocked(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;",
+        "method_name": 'getInputTargetFromWindowTokenLocked',
         "type":        "method_replace",
         "search": """\
 .method getInputTargetFromWindowTokenLocked(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;
@@ -5943,12 +5998,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getInputTargetFromWindowTokenLocked(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowMap:Ljava/util/HashMap;', 'invoke-virtual {v1, p1}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;', 'move-result-object v1', 'check-cast v1, Lcom/android/server/wm/InputTarget;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getMostRecentActivityInAdjacent_Lcom_android_server_wm_Activ",
         "method":      ".method getMostRecentActivityInAdjacent(Lcom/android/server/wm/ActivityRecord;)Lcom/android/server/wm/ActivityRecord;",
+        "method_name": 'getMostRecentActivityInAdjacent',
         "type":        "method_replace",
         "search": """\
 .method getMostRecentActivityInAdjacent(Lcom/android/server/wm/ActivityRecord;)Lcom/android/server/wm/ActivityRecord;
@@ -6180,12 +6237,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/ActivityRecord;->getTaskFragment()Lcom/android/server/wm/TaskFragment;', 'move-result-object v0', 'if-nez v0, :cond_0', 'return-object p1', 'invoke-virtual {p1}, Lcom/android/server/wm/ActivityRecord;->isEmbedded()Z', 'move-result v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getMostRecentUsedEmbeddedWindowForBack_Lcom_android_server_w",
         "method":      ".method getMostRecentUsedEmbeddedWindowForBack(Lcom/android/server/wm/WindowState;)Lcom/android/server/wm/WindowState;",
+        "method_name": 'getMostRecentUsedEmbeddedWindowForBack',
         "type":        "method_replace",
         "search": """\
 .method getMostRecentUsedEmbeddedWindowForBack(Lcom/android/server/wm/WindowState;)Lcom/android/server/wm/WindowState;
@@ -6351,12 +6410,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/WindowState;->getActivityRecord()Lcom/android/server/wm/ActivityRecord;', 'move-result-object v0', 'if-nez v0, :cond_0', 'return-object p1', 'invoke-virtual {p0, v0}, Lcom/android/server/wm/WindowManagerService;->getMostRecentActivityInAdjacent(Lcom/android/server/wm/ActivityRecord;)Lcom/android/server/wm/ActivityRecord;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getPossibleDisplayInfoLocked_I_Ljava_util_List_",
         "method":      ".method getPossibleDisplayInfoLocked(I)Ljava/util/List;",
+        "method_name": 'getPossibleDisplayInfoLocked',
         "type":        "method_replace",
         "search": """\
 .method getPossibleDisplayInfoLocked(I)Ljava/util/List;
@@ -6457,12 +6518,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getPossibleDisplayInfoLocked(I)Ljava/util/List;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mPossibleDisplayInfoMapper:Lcom/android/server/wm/PossibleDisplayInfoMapper;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/PossibleDisplayInfoMapper;->getPossibleDisplayInfos(I)Ljava/util/List;', 'move-result-object v1', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfEnd(Ljava/lang/String;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getStableInsetsLocked_ILandroid_graphics_Rect__V",
         "method":      ".method getStableInsetsLocked(ILandroid/graphics/Rect;)V",
+        "method_name": 'getStableInsetsLocked',
         "type":        "method_replace",
         "search": """\
 .method getStableInsetsLocked(ILandroid/graphics/Rect;)V
@@ -6601,12 +6664,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getStableInsetsLocked(ILandroid/graphics/Rect;)V"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'invoke-virtual {p2}, Landroid/graphics/Rect;->setEmpty()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTaskWindowContainerInfoForRecordingSession_Landroid_view_",
         "method":      ".method getTaskWindowContainerInfoForRecordingSession(Landroid/view/ContentRecordingSession;)Lcom/android/server/wm/WindowManagerService$WindowContainerInfo;",
+        "method_name": 'getTaskWindowContainerInfoForRecordingSession',
         "type":        "method_replace",
         "search": """\
 .method getTaskWindowContainerInfoForRecordingSession(Landroid/view/ContentRecordingSession;)Lcom/android/server/wm/WindowManagerService$WindowContainerInfo;
@@ -7116,12 +7181,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Landroid/view/ContentRecordingSession;->getTokenToRecord()Landroid/os/IBinder;', 'move-result-object v3', 'const-string v4, "WindowManager"', 'if-eqz v3, :cond_2', 'invoke-virtual {p1}, Landroid/view/ContentRecordingSession;->getTokenToRecord()Landroid/os/IBinder;', 'move-result-object v3'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getUserAssignedToDisplay_I_I",
         "method":      ".method getUserAssignedToDisplay(I)I",
+        "method_name": 'getUserAssignedToDisplay',
         "type":        "method_replace",
         "search": """\
 .method getUserAssignedToDisplay(I)I
@@ -7164,12 +7231,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mUmInternal:Lcom/android/server/pm/UserManagerInternal;', 'invoke-virtual {v0, p1}, Lcom/android/server/pm/UserManagerInternal;->getUserAssignedToDisplay(I)I', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getUserMainDisplayContentLocked_I_Lcom_android_server_wm_Dis",
         "method":      ".method getUserMainDisplayContentLocked(I)Lcom/android/server/wm/DisplayContent;",
+        "method_name": 'getUserMainDisplayContentLocked',
         "type":        "method_replace",
         "search": """\
 .method getUserMainDisplayContentLocked(I)Lcom/android/server/wm/DisplayContent;
@@ -7288,12 +7357,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.getUserMainDisplayContentLocked(I)Lcom/android/server/wm/DisplayContent;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mUmInternal:Lcom/android/server/pm/UserManagerInternal;', 'invoke-virtual {v1, p1}, Lcom/android/server/pm/UserManagerInternal;->getMainDisplayAssignedToUser(I)I', 'move-result v1', 'if-ne v1, v2, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_grantEmbeddedWindowFocus_Lcom_android_server_wm_Session_Land",
         "method":      ".method grantEmbeddedWindowFocus(Lcom/android/server/wm/Session;Landroid/view/IWindow;Landroid/window/InputTransferToken;Z)V",
+        "method_name": 'grantEmbeddedWindowFocus',
         "type":        "method_replace",
         "search": """\
 .method grantEmbeddedWindowFocus(Lcom/android/server/wm/Session;Landroid/view/IWindow;Landroid/window/InputTransferToken;Z)V
@@ -7872,12 +7943,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v1}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v2', 'if-nez v2, :cond_0', 'const-string v1, "WindowManager"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_grantEmbeddedWindowFocus_Lcom_android_server_wm_Session_Land",
         "method":      ".method grantEmbeddedWindowFocus(Lcom/android/server/wm/Session;Landroid/window/InputTransferToken;Z)V",
+        "method_name": 'grantEmbeddedWindowFocus',
         "type":        "method_replace",
         "search": """\
 .method grantEmbeddedWindowFocus(Lcom/android/server/wm/Session;Landroid/window/InputTransferToken;Z)V
@@ -8597,12 +8670,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v3, v1, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v0, v1, Lcom/android/server/wm/WindowManagerService;->mEmbeddedWindowController:Lcom/android/server/wm/EmbeddedWindowController;', 'invoke-virtual {v0, v4}, Lcom/android/server/wm/EmbeddedWindowController;->getByInputTransferToken(Landroid/window/InputTransferToken;)Lcom/android/server/wm/EmbeddedWindowController$EmbeddedWindow;', 'move-result-object v0', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_grantInputChannel_Lcom_android_server_wm_Session_IIILandroid",
         "method":      ".method grantInputChannel(Lcom/android/server/wm/Session;IIILandroid/view/SurfaceControl;Landroid/os/IBinder;Landroid/window/InputTransferToken;IIIILandroid/os/IBinder;Landroid/window/InputTransferToken;Ljava/lang/String;Landroid/view/InputChannel;)V",
+        "method_name": 'grantInputChannel',
         "type":        "method_replace",
         "search": """\
 .method grantInputChannel(Lcom/android/server/wm/Session;IIILandroid/view/SurfaceControl;Landroid/os/IBinder;Landroid/window/InputTransferToken;IIIILandroid/os/IBinder;Landroid/window/InputTransferToken;Ljava/lang/String;Landroid/view/InputChannel;)V
@@ -9092,12 +9167,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {v1, v2, v5, v12, v15}, Lcom/android/server/wm/WindowManagerService;->sanitizeWindowType(Lcom/android/server/wm/Session;ILandroid/os/IBinder;I)I', 'move-result v7', 'invoke-static/range {p15 .. p15}, Ljava/util/Objects;->requireNonNull(Ljava/lang/Object;)Ljava/lang/Object;', 'invoke-static/range {p13 .. p13}, Ljava/util/Objects;->requireNonNull(Ljava/lang/Object;)Ljava/lang/Object;', 'iget-object v13, v1, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleTaskFocusChange_Lcom_android_server_wm_Task_Lcom_andro",
         "method":      ".method handleTaskFocusChange(Lcom/android/server/wm/Task;Lcom/android/server/wm/ActivityRecord;)V",
+        "method_name": 'handleTaskFocusChange',
         "type":        "method_replace",
         "search": """\
 .method handleTaskFocusChange(Lcom/android/server/wm/Task;Lcom/android/server/wm/ActivityRecord;)V
@@ -9515,12 +9592,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p1, :cond_0', 'return-void', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mResumeActivity:Ljava/lang/String;', 'if-eqz v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mResumeActivity:Ljava/lang/String;', 'const-string v1, ".remotediagnosis.RemoteDiagnosisDialogActivity"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasHdrSupport__Z",
         "method":      ".method hasHdrSupport()Z",
+        "method_name": 'hasHdrSupport',
         "type":        "method_replace",
         "search": """\
 .method hasHdrSupport()Z
@@ -9618,12 +9697,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowManagerService;->mHasHdrSupport:Z', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowManagerService;->hasWideColorGamutSupport()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasWideColorGamutSupport__Z",
         "method":      ".method hasWideColorGamutSupport()Z",
+        "method_name": 'hasWideColorGamutSupport',
         "type":        "method_replace",
         "search": """\
 .method hasWideColorGamutSupport()Z
@@ -9743,12 +9824,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowManagerService;->mHasWideColorGamutSupport:Z', 'if-eqz v0, :cond_0', 'const-string v0, "persist.sys.sf.native_mode"', 'invoke-static {v0, v1}, Landroid/os/SystemProperties;->getInt(Ljava/lang/String;I)I', 'move-result v0', 'if-eq v0, v2, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_initMiuiDesktopMode_Landroid_content_Context__V",
         "method":      ".method initMiuiDesktopMode(Landroid/content/Context;)V",
+        "method_name": 'initMiuiDesktopMode',
         "type":        "method_replace",
         "search": """\
 .method initMiuiDesktopMode(Landroid/content/Context;)V
@@ -9791,12 +9874,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/server/wm/MiuiFreeformServiceStub;->getInstance()Lcom/android/server/wm/MiuiFreeformServiceStub;', 'move-result-object v0', 'invoke-interface {v0, p1}, Lcom/android/server/wm/MiuiFreeformServiceStub;->initDesktop(Landroid/content/Context;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isIgnoreOrientationRequestDisabled__Z",
         "method":      ".method isIgnoreOrientationRequestDisabled()Z",
+        "method_name": 'isIgnoreOrientationRequestDisabled',
         "type":        "method_replace",
         "search": """\
 .method isIgnoreOrientationRequestDisabled()Z
@@ -9915,12 +10000,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowManagerService;->mIsIgnoreOrientationRequestDisabled:Z', 'if-nez v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mAppCompatConfiguration:Lcom/android/server/wm/AppCompatConfiguration;', 'invoke-virtual {v0}, Lcom/android/server/wm/AppCompatConfiguration;->isIgnoreOrientationRequestAllowed()Z', 'move-result v0', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isUserVisible_I_Z",
         "method":      ".method isUserVisible(I)Z",
+        "method_name": 'isUserVisible',
         "type":        "method_replace",
         "search": """\
 .method isUserVisible(I)Z
@@ -9963,12 +10050,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mUmInternal:Lcom/android/server/pm/UserManagerInternal;', 'invoke-virtual {v0, p1}, Lcom/android/server/pm/UserManagerInternal;->isUserVisible(I)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isValidExpandedPictureInPictureAspectRatio_Lcom_android_serv",
         "method":      ".method isValidExpandedPictureInPictureAspectRatio(Lcom/android/server/wm/DisplayContent;F)Z",
+        "method_name": 'isValidExpandedPictureInPictureAspectRatio',
         "type":        "method_replace",
         "search": """\
 .method isValidExpandedPictureInPictureAspectRatio(Lcom/android/server/wm/DisplayContent;F)Z
@@ -10015,12 +10104,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/DisplayContent;->getPinnedTaskController()Lcom/android/server/wm/PinnedTaskController;', 'move-result-object v0', 'invoke-virtual {v0, p2}, Lcom/android/server/wm/PinnedTaskController;->isValidExpandedPictureInPictureAspectRatio(F)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isValidPictureInPictureAspectRatio_Lcom_android_server_wm_Di",
         "method":      ".method isValidPictureInPictureAspectRatio(Lcom/android/server/wm/DisplayContent;F)Z",
+        "method_name": 'isValidPictureInPictureAspectRatio',
         "type":        "method_replace",
         "search": """\
 .method isValidPictureInPictureAspectRatio(Lcom/android/server/wm/DisplayContent;F)Z
@@ -10067,12 +10158,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/DisplayContent;->getPinnedTaskController()Lcom/android/server/wm/PinnedTaskController;', 'move-result-object v0', 'invoke-virtual {v0, p2}, Lcom/android/server/wm/PinnedTaskController;->isValidPictureInPictureAspectRatio(F)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_makeSurfaceBuilder__Landroid_view_SurfaceControl_Builder_",
         "method":      ".method makeSurfaceBuilder()Landroid/view/SurfaceControl$Builder;",
+        "method_name": 'makeSurfaceBuilder',
         "type":        "method_replace",
         "search": """\
 .method makeSurfaceBuilder()Landroid/view/SurfaceControl$Builder;
@@ -10124,12 +10217,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mSurfaceControlFactory:Ljava/util/function/Supplier;', 'invoke-interface {v0}, Ljava/util/function/Supplier;->get()Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Landroid/view/SurfaceControl$Builder;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_mapOrientationRequest_I_I",
         "method":      ".method mapOrientationRequest(I)I",
+        "method_name": 'mapOrientationRequest',
         "type":        "method_replace",
         "search": """\
 .method mapOrientationRequest(I)I
@@ -10204,12 +10299,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowManagerService;->mIsIgnoreOrientationRequestDisabled:Z', 'if-nez v0, :cond_0', 'return p1', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mOrientationMapping:Landroid/util/SparseIntArray;', 'invoke-virtual {v0, p1, p1}, Landroid/util/SparseIntArray;->get(II)I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_moveDisplayToTopInternal_I_V",
         "method":      ".method moveDisplayToTopInternal(I)V",
+        "method_name": 'moveDisplayToTopInternal',
         "type":        "method_replace",
         "search": """\
 .method moveDisplayToTopInternal(I)V
@@ -10612,12 +10709,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'if-eqz v1, :cond_4'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_moveFocusToActivity_Lcom_android_server_wm_ActivityRecord__V",
         "method":      ".method moveFocusToActivity(Lcom/android/server/wm/ActivityRecord;)V",
+        "method_name": 'moveFocusToActivity',
         "type":        "method_replace",
         "search": """\
 .method moveFocusToActivity(Lcom/android/server/wm/ActivityRecord;)V
@@ -10682,12 +10781,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/ActivityRecord;->getDisplayId()I', 'move-result v0', 'invoke-virtual {p0, v0}, Lcom/android/server/wm/WindowManagerService;->moveDisplayToTopInternal(I)V', 'invoke-virtual {p1}, Lcom/android/server/wm/ActivityRecord;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'invoke-virtual {p0, v0, p1}, Lcom/android/server/wm/WindowManagerService;->handleTaskFocusChange(Lcom/android/server/wm/Task;Lcom/android/server/wm/ActivityRecord;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_moveFocusToAdjacentEmbeddedWindow_Lcom_android_server_wm_Win",
         "method":      ".method moveFocusToAdjacentEmbeddedWindow(Lcom/android/server/wm/WindowState;)Z",
+        "method_name": 'moveFocusToAdjacentEmbeddedWindow',
         "type":        "method_replace",
         "search": """\
 .method moveFocusToAdjacentEmbeddedWindow(Lcom/android/server/wm/WindowState;)Z
@@ -10951,12 +11052,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/WindowState;->getActivityRecord()Lcom/android/server/wm/ActivityRecord;', 'move-result-object v0', 'if-eqz v0, :cond_2', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->isVisible()Z', 'move-result v1', 'if-nez v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_moveFocusToAdjacentWindow_Lcom_android_server_wm_WindowState",
         "method":      ".method moveFocusToAdjacentWindow(Lcom/android/server/wm/WindowState;I)Z",
+        "method_name": 'moveFocusToAdjacentWindow',
         "type":        "method_replace",
         "search": """\
 .method moveFocusToAdjacentWindow(Lcom/android/server/wm/WindowState;I)Z
@@ -11608,12 +11711,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lcom/android/server/wm/WindowState;->isFocused()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return v1', 'invoke-virtual {p1}, Lcom/android/server/wm/WindowState;->getTaskFragment()Lcom/android/server/wm/TaskFragment;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_notifyHardKeyboardStatusChange__V",
         "method":      ".method notifyHardKeyboardStatusChange()V",
+        "method_name": 'notifyHardKeyboardStatusChange',
         "type":        "method_replace",
         "search": """\
 .method notifyHardKeyboardStatusChange()V
@@ -11745,12 +11850,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mHardKeyboardStatusChangeListener:Lcom/android/server/wm/WindowManagerInternal$OnHardKeyboardStatusChangeListener;', 'iget-boolean v2, p0, Lcom/android/server/wm/WindowManagerService;->mHardKeyboardAvailable:Z', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'if-eqz v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_notifyScreenshotListeners_I_Ljava_util_List_",
         "method":      ".method public notifyScreenshotListeners(I)Ljava/util/List;",
+        "method_name": 'notifyScreenshotListeners',
         "type":        "method_replace",
         "search": """\
 .method public notifyScreenshotListeners(I)Ljava/util/List;
@@ -11963,12 +12070,14 @@ PATCHES = [
     throw v0
 .end method
 """,
+        "method_anchors": ['const-string v0, "android.permission.STATUS_BAR_SERVICE"', 'const-string v1, "notifyScreenshotListeners()"', 'invoke-virtual {p0, v0, v1}, Lcom/android/server/wm/WindowManagerService;->checkCallingPermission(Ljava/lang/String;Ljava/lang/String;)Z', 'move-result v0', 'if-eqz v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onAnimationFinished__V",
         "method":      ".method onAnimationFinished()V",
+        "method_name": 'onAnimationFinished',
         "type":        "method_replace",
         "search": """\
 .method onAnimationFinished()V
@@ -12077,12 +12186,14 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-virtual {v1}, Ljava/lang/Object;->notifyAll()V', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onProcessActivityVisibilityChanged_IZ_V",
         "method":      ".method onProcessActivityVisibilityChanged(IZ)V",
+        "method_name": 'onProcessActivityVisibilityChanged',
         "type":        "method_replace",
         "search": """\
 .method onProcessActivityVisibilityChanged(IZ)V
@@ -12121,12 +12232,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mScreenRecordingCallbackController:Lcom/android/server/wm/ScreenRecordingCallbackController;', 'invoke-virtual {v0, p1, p2}, Lcom/android/server/wm/ScreenRecordingCallbackController;->onProcessActivityVisibilityChanged(IZ)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_postWindowRemoveCleanupLocked_Lcom_android_server_wm_WindowS",
         "method":      ".method postWindowRemoveCleanupLocked(Lcom/android/server/wm/WindowState;)V",
+        "method_name": 'postWindowRemoveCleanupLocked',
         "type":        "method_replace",
         "search": """\
 .method postWindowRemoveCleanupLocked(Lcom/android/server/wm/WindowState;)V
@@ -12892,12 +13005,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.postWindowRemoveCleanupLocked(Lcom/android/server/wm/WindowState;)V"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'sget-object v1, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_ADD_REMOVE_enabled:[Z', 'if-eqz v1, :cond_0', 'invoke-static {p1}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeClientToken_Lcom_android_server_wm_Session_Landroid_os",
         "method":      ".method removeClientToken(Lcom/android/server/wm/Session;Landroid/os/IBinder;)V",
+        "method_name": 'removeClientToken',
         "type":        "method_replace",
         "search": """\
 .method removeClientToken(Lcom/android/server/wm/Session;Landroid/os/IBinder;)V
@@ -13129,12 +13244,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v0}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/os/IBinder;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v0', 'if-eqz v5, :cond_2', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mWmsExt:Lcom/mediatek/server/wm/WmsExt;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeWindowChangeListener_Lcom_android_server_wm_WindowMana",
         "method":      ".method removeWindowChangeListener(Lcom/android/server/wm/WindowManagerService$WindowChangeListener;)V",
+        "method_name": 'removeWindowChangeListener',
         "type":        "method_replace",
         "search": """\
 .method removeWindowChangeListener(Lcom/android/server/wm/WindowManagerService$WindowChangeListener;)V
@@ -13243,12 +13360,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowChangeListeners:Ljava/util/ArrayList;', 'invoke-virtual {v1, p1}, Ljava/util/ArrayList;->remove(Ljava/lang/Object;)Z', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeWindowFocusChangeListener_Lcom_android_server_wm_Windo",
         "method":      ".method removeWindowFocusChangeListener(Lcom/android/server/wm/WindowManagerInternal$WindowFocusChangeListener;)V",
+        "method_name": 'removeWindowFocusChangeListener',
         "type":        "method_replace",
         "search": """\
 .method removeWindowFocusChangeListener(Lcom/android/server/wm/WindowManagerInternal$WindowFocusChangeListener;)V
@@ -13357,12 +13476,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowFocusChangeListeners:Ljava/util/ArrayList;', 'invoke-virtual {v1, p1}, Ljava/util/ArrayList;->remove(Ljava/lang/Object;)Z', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeWindowToken_Landroid_os_IBinder_ZZI_V",
         "method":      ".method removeWindowToken(Landroid/os/IBinder;ZZI)V",
+        "method_name": 'removeWindowToken',
         "type":        "method_replace",
         "search": """\
 .method removeWindowToken(Landroid/os/IBinder;ZZI)V
@@ -13693,12 +13814,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, p4}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'if-nez v1, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reportDecorViewGestureChanged_Lcom_android_server_wm_Session",
         "method":      ".method reportDecorViewGestureChanged(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)V",
+        "method_name": 'reportDecorViewGestureChanged',
         "type":        "method_replace",
         "search": """\
 .method reportDecorViewGestureChanged(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)V
@@ -13874,12 +13997,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v1}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v1', 'if-nez v1, :cond_0', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reportFocusChanged_Landroid_os_IBinder_Landroid_os_IBinder__",
         "method":      ".method reportFocusChanged(Landroid/os/IBinder;Landroid/os/IBinder;)V",
+        "method_name": 'reportFocusChanged',
         "type":        "method_replace",
         "search": """\
 .method reportFocusChanged(Landroid/os/IBinder;Landroid/os/IBinder;)V
@@ -14363,12 +14488,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1}, Lcom/android/server/wm/WindowManagerService;->getInputTargetFromToken(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;', 'move-result-object v1', 'invoke-virtual {p0, p2}, Lcom/android/server/wm/WindowManagerService;->getInputTargetFromToken(Landroid/os/IBinder;)Lcom/android/server/wm/InputTarget;', 'move-result-object v2'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reportKeepClearAreasChanged_Lcom_android_server_wm_Session_L",
         "method":      ".method reportKeepClearAreasChanged(Lcom/android/server/wm/Session;Landroid/view/IWindow;Ljava/util/List;Ljava/util/List;)V",
+        "method_name": 'reportKeepClearAreasChanged',
         "type":        "method_replace",
         "search": """\
 .method reportKeepClearAreasChanged(Lcom/android/server/wm/Session;Landroid/view/IWindow;Ljava/util/List;Ljava/util/List;)V
@@ -14620,12 +14747,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v1}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v1', 'if-nez v1, :cond_0', 'const-string v2, "WindowManager"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reportSystemGestureExclusionChanged_Lcom_android_server_wm_S",
         "method":      ".method reportSystemGestureExclusionChanged(Lcom/android/server/wm/Session;Landroid/view/IWindow;Ljava/util/List;)V",
+        "method_name": 'reportSystemGestureExclusionChanged',
         "type":        "method_replace",
         "search": """\
 .method reportSystemGestureExclusionChanged(Lcom/android/server/wm/Session;Landroid/view/IWindow;Ljava/util/List;)V
@@ -14945,12 +15074,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, p1, p2, v1}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v1', 'if-nez v1, :cond_0', 'const-string v2, "WindowManager"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_requestTraversal__V",
         "method":      ".method requestTraversal()V",
+        "method_name": 'requestTraversal',
         "type":        "method_replace",
         "search": """\
 .method requestTraversal()V
@@ -14989,12 +15120,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mWindowPlacerLocked:Lcom/android/server/wm/WindowSurfacePlacer;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowSurfacePlacer;->requestTraversal()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetFreezeRecentTaskListReordering__V",
         "method":      ".method resetFreezeRecentTaskListReordering()V",
+        "method_name": 'resetFreezeRecentTaskListReordering',
         "type":        "method_replace",
         "search": """\
 .method resetFreezeRecentTaskListReordering()V
@@ -15127,12 +15260,14 @@ PATCHES = [
     throw v0
 .end method
 """,
+        "method_anchors": ['const-string v0, "android.permission.MANAGE_ACTIVITY_TASKS"', 'const-string v1, "resetFreezeRecentTaskListReordering()"', 'invoke-virtual {p0, v0, v1}, Lcom/android/server/wm/WindowManagerService;->checkCallingPermission(Ljava/lang/String;Ljava/lang/String;)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mAtmService:Lcom/android/server/wm/ActivityTaskManagerService;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetIgnoreOrientationRequest_I_Ljava_lang_Boolean_",
         "method":      ".method resetIgnoreOrientationRequest(I)Ljava/lang/Boolean;",
+        "method_name": 'resetIgnoreOrientationRequest',
         "type":        "method_replace",
         "search": """\
 .method resetIgnoreOrientationRequest(I)Ljava/lang/Boolean;
@@ -15328,12 +15463,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/RootWindowContainer;->getDisplayContent(I)Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'if-nez v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_saveANRStateLocked_Lcom_android_server_wm_ActivityRecord_Lco",
         "method":      ".method saveANRStateLocked(Lcom/android/server/wm/ActivityRecord;Lcom/android/server/wm/WindowState;Ljava/lang/String;)V",
+        "method_name": 'saveANRStateLocked',
         "type":        "method_replace",
         "search": """\
 .method saveANRStateLocked(Lcom/android/server/wm/ActivityRecord;Lcom/android/server/wm/WindowState;Ljava/lang/String;)V
@@ -16243,12 +16380,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v4, "com.android.server.wm.WindowManagerService.saveANRStateLocked(Lcom/android/server/wm/ActivityRecord;Lcom/android/server/wm/WindowState;Ljava/lang/String;)V"', 'invoke-static {v4}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'new-instance v5, Ljava/io/StringWriter;', 'invoke-direct {v5}, Ljava/io/StringWriter;-><init>()V', 'new-instance v6, Lcom/android/internal/util/FastPrintWriter;', 'invoke-direct {v6, v5, v7, v8}, Lcom/android/internal/util/FastPrintWriter;-><init>(Ljava/io/Writer;ZI)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_scheduleAnimationLocked__V",
         "method":      ".method scheduleAnimationLocked()V",
+        "method_name": 'scheduleAnimationLocked',
         "type":        "method_replace",
         "search": """\
 .method scheduleAnimationLocked()V
@@ -16329,12 +16468,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.scheduleAnimationLocked()V"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mAnimator:Lcom/android/server/wm/WindowAnimator;', 'invoke-virtual {v1}, Lcom/android/server/wm/WindowAnimator;->scheduleAnimation()V', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfEnd(Ljava/lang/String;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setForceDesktopModeOnExternalDisplays_Z_V",
         "method":      ".method setForceDesktopModeOnExternalDisplays(Z)V",
+        "method_name": 'setForceDesktopModeOnExternalDisplays',
         "type":        "method_replace",
         "search": """\
 .method setForceDesktopModeOnExternalDisplays(Z)V
@@ -16447,12 +16588,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iput-boolean p1, p0, Lcom/android/server/wm/WindowManagerService;->mForceDesktopModeOnExternalDisplays:Z', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mRoot:Lcom/android/server/wm/RootWindowContainer;', 'invoke-virtual {v1}, Lcom/android/server/wm/RootWindowContainer;->updateDisplayImePolicyCache()V', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setInsetsWindow_Lcom_android_server_wm_Session_Landroid_view",
         "method":      ".method setInsetsWindow(Lcom/android/server/wm/Session;Landroid/view/IWindow;ILandroid/graphics/Rect;Landroid/graphics/Rect;Landroid/graphics/Region;)V",
+        "method_name": 'setInsetsWindow',
         "type":        "method_replace",
         "search": """\
 .method setInsetsWindow(Lcom/android/server/wm/Session;Landroid/view/IWindow;ILandroid/graphics/Rect;Landroid/graphics/Rect;Landroid/graphics/Region;)V
@@ -17156,12 +17299,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/os/Binder;->getCallingUid()I', 'move-result v0', 'invoke-static {}, Landroid/os/Binder;->clearCallingIdentity()J', 'move-result-wide v1', 'iget-object v3, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setIsPc_Z_V",
         "method":      ".method setIsPc(Z)V",
+        "method_name": 'setIsPc',
         "type":        "method_replace",
         "search": """\
 .method setIsPc(Z)V
@@ -17266,12 +17411,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iput-boolean p1, p0, Lcom/android/server/wm/WindowManagerService;->mIsPc:Z', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V', 'return-void', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->resetPriorityAfterLockedSection()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setOrientationRequestPolicy_Z_I_I_V",
         "method":      ".method setOrientationRequestPolicy(Z[I[I)V",
+        "method_name": 'setOrientationRequestPolicy',
         "type":        "method_replace",
         "search": """\
 .method setOrientationRequestPolicy(Z[I[I)V
@@ -17598,12 +17745,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mOrientationMapping:Landroid/util/SparseIntArray;', 'invoke-virtual {v0}, Landroid/util/SparseIntArray;->clear()V', 'if-eqz p2, :cond_0', 'if-eqz p3, :cond_0', 'if-ne v0, v1, :cond_0', 'if-ge v0, v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setOverrideFoldedArea_Landroid_graphics_Rect__V",
         "method":      ".method setOverrideFoldedArea(Landroid/graphics/Rect;)V",
+        "method_name": 'setOverrideFoldedArea',
         "type":        "method_replace",
         "search": """\
 .method setOverrideFoldedArea(Landroid/graphics/Rect;)V
@@ -17831,12 +17980,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mContext:Landroid/content/Context;', 'const-string v1, "android.permission.WRITE_SECURE_SETTINGS"', 'invoke-virtual {v0, v1}, Landroid/content/Context;->checkCallingOrSelfPermission(Ljava/lang/String;)I', 'move-result v0', 'if-nez v0, :cond_0', 'invoke-static {}, Landroid/os/Binder;->clearCallingIdentity()J'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setSandboxDisplayApis_IZ_V",
         "method":      ".method setSandboxDisplayApis(IZ)V",
+        "method_name": 'setSandboxDisplayApis',
         "type":        "method_replace",
         "search": """\
 .method setSandboxDisplayApis(IZ)V
@@ -18078,12 +18229,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mContext:Landroid/content/Context;', 'const-string v1, "android.permission.WRITE_SECURE_SETTINGS"', 'invoke-virtual {v0, v1}, Landroid/content/Context;->checkCallingOrSelfPermission(Ljava/lang/String;)I', 'move-result v0', 'if-nez v0, :cond_1', 'invoke-static {}, Landroid/os/Binder;->clearCallingIdentity()J'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldPlacePrimaryHomeOnDisplay_I_Z",
         "method":      ".method shouldPlacePrimaryHomeOnDisplay(I)Z",
+        "method_name": 'shouldPlacePrimaryHomeOnDisplay',
         "type":        "method_replace",
         "search": """\
 .method shouldPlacePrimaryHomeOnDisplay(I)Z
@@ -18139,12 +18292,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mUmInternal:Lcom/android/server/pm/UserManagerInternal;', 'invoke-virtual {v0, p1}, Lcom/android/server/pm/UserManagerInternal;->getUserAssignedToDisplay(I)I', 'move-result v0', 'invoke-virtual {p0, p1, v0}, Lcom/android/server/wm/WindowManagerService;->shouldPlacePrimaryHomeOnDisplay(II)Z', 'move-result v1', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldPlacePrimaryHomeOnDisplay_II_Z",
         "method":      ".method shouldPlacePrimaryHomeOnDisplay(II)Z",
+        "method_name": 'shouldPlacePrimaryHomeOnDisplay',
         "type":        "method_replace",
         "search": """\
 .method shouldPlacePrimaryHomeOnDisplay(II)Z
@@ -18230,12 +18385,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mUmInternal:Lcom/android/server/pm/UserManagerInternal;', 'invoke-virtual {v0, p2}, Lcom/android/server/pm/UserManagerInternal;->getMainDisplayAssignedToUser(I)I', 'move-result v0', 'if-ne v0, p1, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldRestoreImeVisibility_Landroid_os_IBinder__Z",
         "method":      ".method shouldRestoreImeVisibility(Landroid/os/IBinder;)Z",
+        "method_name": 'shouldRestoreImeVisibility',
         "type":        "method_replace",
         "search": """\
 .method shouldRestoreImeVisibility(Landroid/os/IBinder;)Z
@@ -18524,12 +18681,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowMap:Ljava/util/HashMap;', 'invoke-virtual {v1, p1}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;', 'move-result-object v1', 'check-cast v1, Lcom/android/server/wm/WindowState;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateFocusedWindowLocked_IZ_Z",
         "method":      ".method updateFocusedWindowLocked(IZ)Z",
+        "method_name": 'updateFocusedWindowLocked',
         "type":        "method_replace",
         "search": """\
 .method updateFocusedWindowLocked(IZ)Z
@@ -18668,12 +18827,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.updateFocusedWindowLocked(IZ)Z"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'invoke-static {}, Lcom/android/server/wm/WindowManagerServiceStub;->get()Lcom/android/server/wm/WindowManagerServiceStub;', 'move-result-object v1', 'iget-object v2, p0, Lcom/android/server/wm/WindowManagerService;->mResumeActivity:Ljava/lang/String;', 'invoke-interface {v1, v2}, Lcom/android/server/wm/WindowManagerServiceStub;->isUpdateFocusedWindowLocked(Ljava/lang/String;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateInputChannel_Landroid_os_IBinder_ILandroid_view_Surfac",
         "method":      ".method updateInputChannel(Landroid/os/IBinder;ILandroid/view/SurfaceControl;IIILandroid/graphics/Region;)V",
+        "method_name": 'updateInputChannel',
         "type":        "method_replace",
         "search": """\
 .method updateInputChannel(Landroid/os/IBinder;ILandroid/view/SurfaceControl;IIILandroid/graphics/Region;)V
@@ -18997,12 +19158,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v2, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mEmbeddedWindowController:Lcom/android/server/wm/EmbeddedWindowController;', 'invoke-virtual {v0, v3}, Lcom/android/server/wm/EmbeddedWindowController;->get(Landroid/os/IBinder;)Lcom/android/server/wm/EmbeddedWindowController$EmbeddedWindow;', 'move-result-object v0', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateNonSystemOverlayWindowsVisibilityIfNeeded_Lcom_android",
         "method":      ".method updateNonSystemOverlayWindowsVisibilityIfNeeded(Lcom/android/server/wm/WindowState;Z)V",
+        "method_name": 'updateNonSystemOverlayWindowsVisibilityIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method updateNonSystemOverlayWindowsVisibilityIfNeeded(Lcom/android/server/wm/WindowState;Z)V
@@ -19758,12 +19921,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz p2, :cond_0', 'invoke-virtual {p1}, Lcom/android/server/wm/WindowState;->hideNonSystemOverlayWindowsWhenVisible()Z', 'move-result v2', 'if-eqz v2, :cond_0', 'iget-object v3, p0, Lcom/android/server/wm/WindowManagerService;->mHidingNonSystemOverlayWindows:Ljava/util/ArrayList;', 'invoke-virtual {v3, p1}, Ljava/util/ArrayList;->contains(Ljava/lang/Object;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateTapExcludeRegion_Landroid_view_IWindow_Landroid_graphi",
         "method":      ".method updateTapExcludeRegion(Landroid/view/IWindow;Landroid/graphics/Region;)V",
+        "method_name": 'updateTapExcludeRegion',
         "type":        "method_replace",
         "search": """\
 .method updateTapExcludeRegion(Landroid/view/IWindow;Landroid/graphics/Region;)V
@@ -19974,12 +20139,14 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowManagerService;->mGlobalLock:Lcom/android/server/wm/WindowManagerGlobalLock;', 'invoke-static {}, Lcom/android/server/wm/WindowManagerService;->boostPriorityForLockedSection()V', 'invoke-virtual {p0, v1, p1, v2}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v1', 'if-nez v1, :cond_1', 'sget-object v3, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_ERROR_enabled:[Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_viewServerGetFocusedWindow_Ljava_net_Socket__Z",
         "method":      ".method viewServerGetFocusedWindow(Ljava/net/Socket;)Z",
+        "method_name": 'viewServerGetFocusedWindow',
         "type":        "method_replace",
         "search": """\
 .method viewServerGetFocusedWindow(Ljava/net/Socket;)Z
@@ -20334,12 +20501,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowManagerService;->isSystemSecure()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v0', 'invoke-direct {p0}, Lcom/android/server/wm/WindowManagerService;->getFocusedWindow()Lcom/android/server/wm/WindowState;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_viewServerListWindows_Ljava_net_Socket__Z",
         "method":      ".method viewServerListWindows(Ljava/net/Socket;)Z",
+        "method_name": 'viewServerListWindows',
         "type":        "method_replace",
         "search": """\
 .method viewServerListWindows(Ljava/net/Socket;)Z
@@ -20837,12 +21006,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowManagerService;->isSystemSecure()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v1', 'new-instance v2, Ljava/util/ArrayList;', 'invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_viewServerWindowCommand_Ljava_net_Socket_Ljava_lang_String_L",
         "method":      ".method viewServerWindowCommand(Ljava/net/Socket;Ljava/lang/String;Ljava/lang/String;)Z",
+        "method_name": 'viewServerWindowCommand',
         "type":        "method_replace",
         "search": """\
 .method viewServerWindowCommand(Ljava/net/Socket;Ljava/lang/String;Ljava/lang/String;)Z
@@ -21896,12 +22067,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct/range {p0 .. p0}, Lcom/android/server/wm/WindowManagerService;->isSystemSecure()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v2', 'invoke-virtual {v1, v0}, Ljava/lang/String;->indexOf(I)I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_windowForClientLocked_Lcom_android_server_wm_Session_Landroi",
         "method":      ".method final windowForClientLocked(Lcom/android/server/wm/Session;Landroid/os/IBinder;Z)Lcom/android/server/wm/WindowState;",
+        "method_name": 'windowForClientLocked',
         "type":        "method_replace",
         "search": """\
 .method final windowForClientLocked(Lcom/android/server/wm/Session;Landroid/os/IBinder;Z)Lcom/android/server/wm/WindowState;
@@ -22431,12 +22604,14 @@ PATCHES = [
     throw p1
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.windowForClientLocked(Lcom/android/server/wm/Session;Landroid/os/IBinder;Z)Lcom/android/server/wm/WindowState;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'iget-object v1, p0, Lcom/android/server/wm/WindowManagerService;->mWindowMap:Ljava/util/HashMap;', 'invoke-virtual {v1, p2}, Ljava/util/HashMap;->get(Ljava/lang/Object;)Ljava/lang/Object;', 'move-result-object v1', 'check-cast v1, Lcom/android/server/wm/WindowState;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_windowForClientLocked_Lcom_android_server_wm_Session_Landroi",
         "method":      ".method final windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;",
+        "method_name": 'windowForClientLocked',
         "type":        "method_replace",
         "search": """\
 .method final windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;
@@ -22525,6 +22700,7 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "com.android.server.wm.WindowManagerService.windowForClientLocked(Lcom/android/server/wm/Session;Landroid/view/IWindow;Z)Lcom/android/server/wm/WindowState;"', 'invoke-static {v0}, Lcom/android/server/LockPerfHelper;->onPerfStart(Ljava/lang/String;)V', 'invoke-interface {p2}, Landroid/view/IWindow;->asBinder()Landroid/os/IBinder;', 'move-result-object v1', 'invoke-virtual {p0, p1, v1, p3}, Lcom/android/server/wm/WindowManagerService;->windowForClientLocked(Lcom/android/server/wm/Session;Landroid/os/IBinder;Z)Lcom/android/server/wm/WindowState;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

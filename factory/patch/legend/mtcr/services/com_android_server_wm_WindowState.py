@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/wm/WindowState.smali"
+CLASS_FALLBACK_NAMES = ['WindowState.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_adjustDims__V",
         "method":      ".method adjustDims()V",
+        "method_name": 'adjustDims',
         "type":        "method_replace",
         "search": """\
 .method adjustDims()V
@@ -55,12 +58,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowState;->applyDims()V', 'invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->adjustDims()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_adjustStartingWindowFlags__V",
         "method":      ".method adjustStartingWindowFlags()V",
+        "method_name": 'adjustStartingWindowFlags',
         "type":        "method_replace",
         "search": """\
 .method adjustStartingWindowFlags()V
@@ -490,12 +495,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-ne v0, v1, :cond_2', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_2', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_applySizeOverride_Landroid_content_res_Configuration_Landroi",
         "method":      ".method applySizeOverride(Landroid/content/res/Configuration;Landroid/content/res/Configuration;)V",
+        "method_name": 'applySizeOverride',
         "type":        "method_replace",
         "search": """\
 .method applySizeOverride(Landroid/content/res/Configuration;Landroid/content/res/Configuration;)V
@@ -702,12 +709,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mSession:Lcom/android/server/wm/Session;', 'iget-object v1, v1, Lcom/android/server/wm/Session;->mProcess:Lcom/android/server/wm/WindowProcessController;', 'iget-object v1, v1, Lcom/android/server/wm/WindowProcessController;->mInfo:Landroid/content/pm/ApplicationInfo;', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_applyWithNextDraw_Ljava_util_function_Consumer__V",
         "method":      ".method applyWithNextDraw(Ljava/util/function/Consumer;)V",
+        "method_name": 'applyWithNextDraw',
         "type":        "method_replace",
         "search": """\
 .method applyWithNextDraw(Ljava/util/function/Consumer;)V
@@ -1069,12 +1078,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mSyncState:I', 'if-eqz v0, :cond_0', 'new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V', 'const-string v1, "applyWithNextDraw with mSyncState="', 'invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_areAppWindowBoundsLetterboxed__Z",
         "method":      ".method areAppWindowBoundsLetterboxed()Z",
+        "method_name": 'areAppWindowBoundsLetterboxed',
         "type":        "method_replace",
         "search": """\
 .method areAppWindowBoundsLetterboxed()Z
@@ -1289,12 +1300,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_1', 'invoke-direct {p0}, Lcom/android/server/wm/WindowState;->isStartingWindowAssociatedToTask()Z', 'move-result v0', 'if-nez v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_asWindowState__Lcom_android_server_wm_WindowState_",
         "method":      ".method asWindowState()Lcom/android/server/wm/WindowState;",
+        "method_name": 'asWindowState',
         "type":        "method_replace",
         "search": """\
 .method asWindowState()Lcom/android/server/wm/WindowState;
@@ -1315,12 +1328,14 @@ PATCHES = [
     return-object p0
 .end method
 """,
+        "method_anchors": ['return-object p0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_assignLayer_Landroid_view_SurfaceControl_Transaction_I_V",
         "method":      ".method assignLayer(Landroid/view/SurfaceControl$Transaction;I)V",
+        "method_name": 'assignLayer',
         "type":        "method_replace",
         "search": """\
 .method assignLayer(Landroid/view/SurfaceControl$Transaction;I)V
@@ -1520,12 +1535,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mStartingData:Lcom/android/server/wm/StartingData;', 'if-eqz v0, :cond_1', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mSyncState:I', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getSyncTransaction()Landroid/view/SurfaceControl$Transaction;', 'move-result-object p1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_canAffectSystemUiFlags__Z",
         "method":      ".method canAffectSystemUiFlags()Z",
+        "method_name": 'canAffectSystemUiFlags',
         "type":        "method_replace",
         "search": """\
 .method canAffectSystemUiFlags()Z
@@ -1929,12 +1946,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isFullyTransparent()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-nez v0, :cond_4'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_canBeHiddenByKeyguard__Z",
         "method":      ".method canBeHiddenByKeyguard()Z",
+        "method_name": 'canBeHiddenByKeyguard',
         "type":        "method_replace",
         "search": """\
 .method canBeHiddenByKeyguard()Z
@@ -2214,12 +2233,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isHoldOn()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_canBeImeTarget__Z",
         "method":      ".method canBeImeTarget()Z",
+        "method_name": 'canBeImeTarget',
         "type":        "method_replace",
         "search": """\
 .method canBeImeTarget()Z
@@ -4409,12 +4430,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/server/wm/MiuiSplitInputMethodStub;->getInstance()Lcom/android/server/wm/MiuiSplitInputMethodStub;', 'move-result-object v0', 'invoke-interface {v0, p0}, Lcom/android/server/wm/MiuiSplitInputMethodStub;->shouldUpdateImeTargetForBackScreen(Lcom/android/server/wm/InputTarget;)Z', 'move-result v0', 'const-string v1, "WindowManager"', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_canReceiveKeys__Z",
         "method":      ".method canReceiveKeys()Z",
+        "method_name": 'canReceiveKeys',
         "type":        "method_replace",
         "search": """\
 .method canReceiveKeys()Z
@@ -4457,12 +4480,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, v0}, Lcom/android/server/wm/WindowState;->canReceiveKeys(Z)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_canReceiveTouchInput__Z",
         "method":      ".method canReceiveTouchInput()Z",
+        "method_name": 'canReceiveTouchInput',
         "type":        "method_replace",
         "search": """\
 .method canReceiveTouchInput()Z
@@ -4821,12 +4846,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_4', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_checkPolicyVisibilityChange__V",
         "method":      ".method checkPolicyVisibilityChange()V",
+        "method_name": 'checkPolicyVisibilityChange',
         "type":        "method_replace",
         "search": """\
 .method checkPolicyVisibilityChange()V
@@ -5345,12 +5372,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowState;->isLegacyPolicyVisibility()Z', 'move-result v0', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mLegacyPolicyVisibilityAfterAnim:Z', 'if-eq v0, v1, :cond_4', 'sget-boolean v0, Lcom/android/server/wm/WindowManagerDebugConfig;->DEBUG_VISIBILITY:Z', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_cleanupAnimatingExitWindow__V",
         "method":      ".method cleanupAnimatingExitWindow()V",
+        "method_name": 'cleanupAnimatingExitWindow',
         "type":        "method_replace",
         "search": """\
 .method cleanupAnimatingExitWindow()V
@@ -5531,12 +5560,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mAnimatingExit:Z', 'if-eqz v0, :cond_1', 'invoke-direct {p0}, Lcom/android/server/wm/WindowState;->shouldFinishAnimatingExit()Z', 'move-result v0', 'if-eqz v0, :cond_1', 'sget-object v0, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_APP_TRANSITIONS_enabled:[Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_clearClientTouchableRegion__V",
         "method":      ".method clearClientTouchableRegion()V",
+        "method_name": 'clearClientTouchableRegion',
         "type":        "method_replace",
         "search": """\
 .method clearClientTouchableRegion()V
@@ -5593,12 +5624,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput v0, p0, Lcom/android/server/wm/WindowState;->mTouchableInsets:I', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mGivenTouchableRegion:Landroid/graphics/Region;', 'invoke-virtual {v0}, Landroid/graphics/Region;->setEmpty()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_clearFrozenInsetsState__V",
         "method":      ".method clearFrozenInsetsState()V",
+        "method_name": 'clearFrozenInsetsState',
         "type":        "method_replace",
         "search": """\
 .method clearFrozenInsetsState()V
@@ -5637,12 +5670,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-object v0, p0, Lcom/android/server/wm/WindowState;->mFrozenInsetsState:Landroid/view/InsetsState;', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_clearPolicyVisibilityFlag_I_V",
         "method":      ".method clearPolicyVisibilityFlag(I)V",
+        "method_name": 'clearPolicyVisibilityFlag',
         "type":        "method_replace",
         "search": """\
 .method clearPolicyVisibilityFlag(I)V
@@ -5717,12 +5752,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mPolicyVisibility:I', 'iput v0, p0, Lcom/android/server/wm/WindowState;->mPolicyVisibility:I', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowManagerService;->scheduleAnimationLocked()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_commitFinishDrawing_Landroid_view_SurfaceControl_Transaction",
         "method":      ".method commitFinishDrawing(Landroid/view/SurfaceControl$Transaction;)Z",
+        "method_name": 'commitFinishDrawing',
         "type":        "method_replace",
         "search": """\
 .method commitFinishDrawing(Landroid/view/SurfaceControl$Transaction;)Z
@@ -6059,12 +6096,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowStateAnimator;->commitFinishDrawingLocked()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'invoke-virtual {v1, p1}, Lcom/android/server/wm/WindowStateAnimator;->prepareSurfaceLocked(Landroid/view/SurfaceControl$Transaction;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_destroySurface_ZZ_Z",
         "method":      ".method destroySurface(ZZ)Z",
+        "method_name": 'destroySurface',
         "type":        "method_replace",
         "search": """\
 .method destroySurface(ZZ)Z
@@ -6693,12 +6732,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'iget-object v0, v0, Lcom/android/server/wm/ActivityRecord;->mHyperStub:Lcom/android/server/wm/ActivityRecordStub;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecordStub;->isCastMode()Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_destroySurfaceUnchecked__V",
         "method":      ".method destroySurfaceUnchecked()V",
+        "method_name": 'destroySurfaceUnchecked',
         "type":        "method_replace",
         "search": """\
 .method destroySurfaceUnchecked()V
@@ -6912,12 +6953,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mTmpTransaction:Landroid/view/SurfaceControl$Transaction;', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/WindowStateAnimator;->destroySurfaceLocked(Landroid/view/SurfaceControl$Transaction;)V', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mTmpTransaction:Landroid/view/SurfaceControl$Transaction;', 'invoke-virtual {v0}, Landroid/view/SurfaceControl$Transaction;->apply()V', 'iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mAnimatingExit:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchFreeFormStackModeChanged_ILmiui_app_MiuiFreeFormMana",
         "method":      ".method dispatchFreeFormStackModeChanged(ILmiui/app/MiuiFreeFormManager$MiuiFreeFormStackInfo;)V",
+        "method_name": 'dispatchFreeFormStackModeChanged',
         "type":        "method_replace",
         "search": """\
 .method dispatchFreeFormStackModeChanged(ILmiui/app/MiuiFreeFormManager$MiuiFreeFormStackInfo;)V
@@ -6969,12 +7012,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mClient:Landroid/view/IWindow;', 'invoke-interface {v0, p1, p2}, Landroid/view/IWindow;->dispatchFreeFormStackModeChanged(ILmiui/app/MiuiFreeFormManager$MiuiFreeFormStackInfo;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_disposeInputChannel__V",
         "method":      ".method disposeInputChannel()V",
+        "method_name": 'disposeInputChannel',
         "type":        "method_replace",
         "search": """\
 .method disposeInputChannel()V
@@ -7162,12 +7207,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mInputChannelToken:Landroid/os/IBinder;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget-object v0, v0, Lcom/android/server/wm/WindowManagerService;->mInputManager:Lcom/android/server/input/InputManagerService;', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mInputChannelToken:Landroid/os/IBinder;', 'invoke-virtual {v0, v2}, Lcom/android/server/input/InputManagerService;->removeInputChannel(Landroid/os/IBinder;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dump_Ljava_io_PrintWriter_Ljava_lang_String_Z_V",
         "method":      ".method dump(Ljava/io/PrintWriter;Ljava/lang/String;Z)V",
+        "method_name": 'dump',
         "type":        "method_replace",
         "search": """\
 .method dump(Ljava/io/PrintWriter;Ljava/lang/String;Z)V
@@ -15251,12 +15298,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V', 'invoke-virtual {v0, p2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;', 'move-result-object v0', 'const-string v1, "mDisplayId="', 'invoke-virtual {v0, v1}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_executeDrawHandlers_Landroid_view_SurfaceControl_Transaction",
         "method":      ".method executeDrawHandlers(Landroid/view/SurfaceControl$Transaction;I)Z",
+        "method_name": 'executeDrawHandlers',
         "type":        "method_replace",
         "search": """\
 .method executeDrawHandlers(Landroid/view/SurfaceControl$Transaction;I)Z
@@ -15669,12 +15718,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p1, :cond_0', 'iget-object p1, p0, Lcom/android/server/wm/WindowState;->mTmpTransaction:Landroid/view/SurfaceControl$Transaction;', 'new-instance v2, Ljava/util/ArrayList;', 'invoke-direct {v2}, Ljava/util/ArrayList;-><init>()V', 'iget-object v4, p0, Lcom/android/server/wm/WindowState;->mDrawHandlers:Ljava/util/List;', 'invoke-interface {v4}, Ljava/util/List;->size()I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_fillClientWindowFramesAndConfiguration_Landroid_window_Clien",
         "method":      ".method fillClientWindowFramesAndConfiguration(Landroid/window/ClientWindowFrames;Landroid/util/MergedConfiguration;Landroid/window/ActivityWindowInfo;ZZ)V",
+        "method_name": 'fillClientWindowFramesAndConfiguration',
         "type":        "method_replace",
         "search": """\
 .method fillClientWindowFramesAndConfiguration(Landroid/window/ClientWindowFrames;Landroid/util/MergedConfiguration;Landroid/window/ActivityWindowInfo;ZZ)V
@@ -16761,12 +16812,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowStateStub:Lcom/android/server/wm/WindowStateStub;', 'invoke-virtual {v0, p1}, Lcom/android/server/wm/WindowStateStub;->fillSizeCompatFrame(Landroid/window/ClientWindowFrames;)Z', 'move-result v0', 'if-nez v0, :cond_0', 'iget-object v0, p1, Landroid/window/ClientWindowFrames;->frame:Landroid/graphics/Rect;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_fillInsetsSourceControls_Landroid_view_InsetsSourceControl_A",
         "method":      ".method fillInsetsSourceControls(Landroid/view/InsetsSourceControl$Array;Z)V",
+        "method_name": 'fillInsetsSourceControls',
         "type":        "method_replace",
         "search": """\
 .method fillInsetsSourceControls(Landroid/view/InsetsSourceControl$Array;Z)V
@@ -17387,12 +17440,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mLastReportedActiveControls:Landroid/view/InsetsSourceControl$Array;', 'invoke-virtual {v0}, Landroid/view/InsetsSourceControl$Array;->getSeq()I', 'move-result v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'invoke-virtual {v1}, Lcom/android/server/wm/DisplayContent;->getInsetsStateController()Lcom/android/server/wm/InsetsStateController;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_fillInsetsState_Landroid_view_InsetsState_Z_V",
         "method":      ".method fillInsetsState(Landroid/view/InsetsState;Z)V",
+        "method_name": 'fillInsetsState',
         "type":        "method_replace",
         "search": """\
 .method fillInsetsState(Landroid/view/InsetsState;Z)V
@@ -17529,12 +17584,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mLastReportedInsetsState:Landroid/view/InsetsState;', 'invoke-virtual {v0}, Landroid/view/InsetsState;->getSeq()I', 'move-result v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getCompatInsetsState()Landroid/view/InsetsState;', 'move-result-object v1', 'invoke-virtual {p1, v1, p2}, Landroid/view/InsetsState;->set(Landroid/view/InsetsState;Z)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_fillsDisplay__Z",
         "method":      ".method fillsDisplay()Z",
+        "method_name": 'fillsDisplay',
         "type":        "method_replace",
         "search": """\
 .method fillsDisplay()Z
@@ -17773,12 +17830,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayInfo()Landroid/view/DisplayInfo;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v1, v1, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'iget v1, v1, Landroid/graphics/Rect;->left:I', 'if-gtz v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_fillsParent__Z",
         "method":      ".method fillsParent()Z",
+        "method_name": 'fillsParent',
         "type":        "method_replace",
         "search": """\
 .method fillsParent()Z
@@ -17869,12 +17928,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-ne v0, v1, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_finishDrawing_Landroid_view_SurfaceControl_Transaction_I_Z",
         "method":      ".method finishDrawing(Landroid/view/SurfaceControl$Transaction;I)Z",
+        "method_name": 'finishDrawing',
         "type":        "method_replace",
         "search": """\
 .method finishDrawing(Landroid/view/SurfaceControl$Transaction;I)Z
@@ -19203,12 +19264,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-wide v3, v0, Lcom/android/server/wm/WindowState;->mOrientationChangeRedrawRequestTime:J', 'const-string v4, "ms"', 'const-string v7, " "', 'const-string v8, "WindowManager"', 'if-lez v3, :cond_0', 'invoke-static {}, Landroid/os/SystemClock;->elapsedRealtime()J'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_finishSync_Landroid_view_SurfaceControl_Transaction_Lcom_and",
         "method":      ".method finishSync(Landroid/view/SurfaceControl$Transaction;Lcom/android/server/wm/BLASTSyncEngine$SyncGroup;Z)V",
+        "method_name": 'finishSync',
         "type":        "method_replace",
         "search": """\
 .method finishSync(Landroid/view/SurfaceControl$Transaction;Lcom/android/server/wm/BLASTSyncEngine$SyncGroup;Z)V
@@ -19324,12 +19387,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p2}, Lcom/android/server/wm/WindowState;->isDifferentSyncGroup(Lcom/android/server/wm/BLASTSyncEngine$SyncGroup;)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return-void', 'iput v0, p0, Lcom/android/server/wm/WindowState;->mPrepareSyncSeqId:I', 'if-eqz p3, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_forAllWindows_Lcom_android_internal_util_ToBooleanFunction_Z",
         "method":      ".method forAllWindows(Lcom/android/internal/util/ToBooleanFunction;Z)Z",
+        "method_name": 'forAllWindows',
         "type":        "method_replace",
         "search": """\
 .method forAllWindows(Lcom/android/internal/util/ToBooleanFunction;Z)Z
@@ -19473,12 +19538,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;', 'invoke-virtual {v0}, Ljava/util/ArrayList;->isEmpty()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'invoke-direct {p0, p1, p2}, Lcom/android/server/wm/WindowState;->applyInOrderWithImeWindows(Lcom/android/internal/util/ToBooleanFunction;Z)Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_forceReportingResized__V",
         "method":      ".method forceReportingResized()V",
+        "method_name": 'forceReportingResized',
         "type":        "method_replace",
         "search": """\
 .method forceReportingResized()V
@@ -19517,12 +19584,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowFrames;->forceReportingResized()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_freezeInsetsState__V",
         "method":      ".method freezeInsetsState()V",
+        "method_name": 'freezeInsetsState',
         "type":        "method_replace",
         "search": """\
 .method freezeInsetsState()V
@@ -19615,12 +19684,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mFrozenInsetsState:Landroid/view/InsetsState;', 'if-nez v0, :cond_0', 'new-instance v0, Landroid/view/InsetsState;', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getInsetsState()Landroid/view/InsetsState;', 'move-result-object v1', 'invoke-direct {v0, v1, v2}, Landroid/view/InsetsState;-><init>(Landroid/view/InsetsState;Z)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getAnimationFrames_Landroid_graphics_Rect_Landroid_graphics_",
         "method":      ".method getAnimationFrames(Landroid/graphics/Rect;Landroid/graphics/Rect;Landroid/graphics/Rect;Landroid/graphics/Rect;)V",
+        "method_name": 'getAnimationFrames',
         "type":        "method_replace",
         "search": """\
 .method getAnimationFrames(Landroid/graphics/Rect;Landroid/graphics/Rect;Landroid/graphics/Rect;Landroid/graphics/Rect;)V
@@ -19994,12 +20065,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->inFreeformWindowingMode()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getFrame()Landroid/graphics/Rect;', 'move-result-object v0', 'invoke-virtual {p1, v0}, Landroid/graphics/Rect;->set(Landroid/graphics/Rect;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getClientViewRootSurface__Landroid_view_SurfaceControl_",
         "method":      ".method getClientViewRootSurface()Landroid/view/SurfaceControl;",
+        "method_name": 'getClientViewRootSurface',
         "type":        "method_replace",
         "search": """\
 .method getClientViewRootSurface()Landroid/view/SurfaceControl;
@@ -20038,12 +20111,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'iget-object v0, v0, Lcom/android/server/wm/WindowStateAnimator;->mSurfaceControl:Landroid/view/SurfaceControl;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getCompatInsetsState__Landroid_view_InsetsState_",
         "method":      ".method getCompatInsetsState()Landroid/view/InsetsState;",
+        "method_name": 'getCompatInsetsState',
         "type":        "method_replace",
         "search": """\
 .method getCompatInsetsState()Landroid/view/InsetsState;
@@ -20172,12 +20247,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getInsetsState()Landroid/view/InsetsState;', 'move-result-object v0', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mInvGlobalScale:F', 'if-eqz v1, :cond_0', 'new-instance v1, Landroid/view/InsetsState;', 'invoke-direct {v1, v0, v2}, Landroid/view/InsetsState;-><init>(Landroid/view/InsetsState;Z)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getCompatScaleForClient__F",
         "method":      ".method getCompatScaleForClient()F",
+        "method_name": 'getCompatScaleForClient',
         "type":        "method_replace",
         "search": """\
 .method getCompatScaleForClient()F
@@ -20263,12 +20340,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->hasSizeCompatBounds()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mCompatScale:F', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getCreateTime__J",
         "method":      ".method getCreateTime()J",
+        "method_name": 'getCreateTime',
         "type":        "method_replace",
         "search": """\
 .method getCreateTime()J
@@ -20298,12 +20377,14 @@ PATCHES = [
     return-wide v0
 .end method
 """,
+        "method_anchors": ['iget-wide v0, p0, Lcom/android/server/wm/WindowState;->mCreateTime:J', 'return-wide v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDimmer__Lcom_android_server_wm_Dimmer_",
         "method":      ".method getDimmer()Lcom/android/server/wm/Dimmer;",
+        "method_name": 'getDimmer',
         "type":        "method_replace",
         "search": """\
 .method getDimmer()Lcom/android/server/wm/Dimmer;
@@ -20416,12 +20497,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowStateStub:Lcom/android/server/wm/WindowStateStub;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowStateStub;->isMultiDimLayerEnable()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowStateStub:Lcom/android/server/wm/WindowStateStub;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowStateStub;->getDimmer()Lcom/android/server/wm/Dimmer;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDisableFlags__I",
         "method":      ".method getDisableFlags()I",
+        "method_name": 'getDisableFlags',
         "type":        "method_replace",
         "search": """\
 .method getDisableFlags()I
@@ -20451,12 +20534,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mDisableFlags:I', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDisplayFrame__Landroid_graphics_Rect_",
         "method":      ".method getDisplayFrame()Landroid/graphics/Rect;",
+        "method_name": 'getDisplayFrame',
         "type":        "method_replace",
         "search": """\
 .method getDisplayFrame()Landroid/graphics/Rect;
@@ -20495,12 +20580,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mDisplayFrame:Landroid/graphics/Rect;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDisplayFrames_Lcom_android_server_wm_DisplayFrames__Lcom_",
         "method":      ".method getDisplayFrames(Lcom/android/server/wm/DisplayFrames;)Lcom/android/server/wm/DisplayFrames;",
+        "method_name": 'getDisplayFrames',
         "type":        "method_replace",
         "search": """\
 .method getDisplayFrames(Lcom/android/server/wm/DisplayFrames;)Lcom/android/server/wm/DisplayFrames;
@@ -20566,12 +20653,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->getFixedRotationTransformDisplayFrames()Lcom/android/server/wm/DisplayFrames;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'return-object v0', 'return-object p1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDisplayInfo__Landroid_view_DisplayInfo_",
         "method":      ".method getDisplayInfo()Landroid/view/DisplayInfo;",
+        "method_name": 'getDisplayInfo',
         "type":        "method_replace",
         "search": """\
 .method getDisplayInfo()Landroid/view/DisplayInfo;
@@ -20663,12 +20752,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->getFixedRotationTransformDisplayInfo()Landroid/view/DisplayInfo;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'return-object v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDrawnStateEvaluated__Z",
         "method":      ".method getDrawnStateEvaluated()Z",
+        "method_name": 'getDrawnStateEvaluated',
         "type":        "method_replace",
         "search": """\
 .method getDrawnStateEvaluated()Z
@@ -20698,12 +20789,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mDrawnStateEvaluated:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getEffectiveTouchableRegion_Landroid_graphics_Region__V",
         "method":      ".method getEffectiveTouchableRegion(Landroid/graphics/Region;)V",
+        "method_name": 'getEffectiveTouchableRegion',
         "type":        "method_replace",
         "search": """\
 .method getEffectiveTouchableRegion(Landroid/graphics/Region;)V
@@ -20845,12 +20938,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'invoke-virtual {v1}, Landroid/view/WindowManager$LayoutParams;->isModal()Z', 'move-result v1', 'if-eqz v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getFrame__Landroid_graphics_Rect_",
         "method":      ".method getFrame()Landroid/graphics/Rect;",
+        "method_name": 'getFrame',
         "type":        "method_replace",
         "search": """\
 .method getFrame()Landroid/graphics/Rect;
@@ -20889,12 +20984,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getFrozenInsetsState__Landroid_view_InsetsState_",
         "method":      ".method getFrozenInsetsState()Landroid/view/InsetsState;",
+        "method_name": 'getFrozenInsetsState',
         "type":        "method_replace",
         "search": """\
 .method getFrozenInsetsState()Landroid/view/InsetsState;
@@ -20924,12 +21021,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mFrozenInsetsState:Landroid/view/InsetsState;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getImeInputTarget__Lcom_android_server_wm_WindowState_",
         "method":      ".method getImeInputTarget()Lcom/android/server/wm/WindowState;",
+        "method_name": 'getImeInputTarget',
         "type":        "method_replace",
         "search": """\
 .method getImeInputTarget()Lcom/android/server/wm/WindowState;
@@ -21019,12 +21118,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDisplayContent:Lcom/android/server/wm/DisplayContent;', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayContent;->getImeInputTarget()Lcom/android/server/wm/InputTarget;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-interface {v0}, Lcom/android/server/wm/InputTarget;->getWindowState()Lcom/android/server/wm/WindowState;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getImeLayeringTarget__Lcom_android_server_wm_WindowState_",
         "method":      ".method getImeLayeringTarget()Lcom/android/server/wm/WindowState;",
+        "method_name": 'getImeLayeringTarget',
         "type":        "method_replace",
         "search": """\
 .method getImeLayeringTarget()Lcom/android/server/wm/WindowState;
@@ -21127,12 +21228,14 @@ PATCHES = [
     return-object v1
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/DisplayContent;->getImeTarget(I)Lcom/android/server/wm/InsetsControlTarget;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-interface {v0}, Lcom/android/server/wm/InsetsControlTarget;->getWindow()Lcom/android/server/wm/WindowState;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getInsetsState__Landroid_view_InsetsState_",
         "method":      ".method getInsetsState()Landroid/view/InsetsState;",
+        "method_name": 'getInsetsState',
         "type":        "method_replace",
         "search": """\
 .method getInsetsState()Landroid/view/InsetsState;
@@ -21175,12 +21278,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, v0}, Lcom/android/server/wm/WindowState;->getInsetsState(Z)Landroid/view/InsetsState;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getInsetsState_Z_Landroid_view_InsetsState_",
         "method":      ".method getInsetsState(Z)Landroid/view/InsetsState;",
+        "method_name": 'getInsetsState',
         "type":        "method_replace",
         "search": """\
 .method getInsetsState(Z)Landroid/view/InsetsState;
@@ -21415,12 +21520,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->getFixedRotationTransformInsetsState()Landroid/view/InsetsState;', 'move-result-object v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v1', 'invoke-virtual {v1}, Lcom/android/server/wm/DisplayContent;->getInsetsPolicy()Lcom/android/server/wm/InsetsPolicy;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getInsetsStateWithVisibilityOverride__Landroid_view_InsetsSt",
         "method":      ".method getInsetsStateWithVisibilityOverride()Landroid/view/InsetsState;",
+        "method_name": 'getInsetsStateWithVisibilityOverride',
         "type":        "method_replace",
         "search": """\
 .method getInsetsStateWithVisibilityOverride()Landroid/view/InsetsState;
@@ -21612,12 +21719,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Landroid/view/InsetsState;', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getInsetsState()Landroid/view/InsetsState;', 'move-result-object v1', 'invoke-direct {v0, v1, v2}, Landroid/view/InsetsState;-><init>(Landroid/view/InsetsState;Z)V', 'invoke-virtual {v0}, Landroid/view/InsetsState;->sourceSize()I', 'move-result v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getKeepClearAreas_Ljava_util_Collection_Ljava_util_Collectio",
         "method":      ".method getKeepClearAreas(Ljava/util/Collection;Ljava/util/Collection;)V",
+        "method_name": 'getKeepClearAreas',
         "type":        "method_replace",
         "search": """\
 .method getKeepClearAreas(Ljava/util/Collection;Ljava/util/Collection;)V
@@ -21705,12 +21814,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Landroid/graphics/Matrix;', 'invoke-direct {v0}, Landroid/graphics/Matrix;-><init>()V', 'invoke-virtual {p0, p1, p2, v0, v1}, Lcom/android/server/wm/WindowState;->getKeepClearAreas(Ljava/util/Collection;Ljava/util/Collection;Landroid/graphics/Matrix;[F)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getKeepClearAreas_Ljava_util_Collection_Ljava_util_Collectio",
         "method":      ".method getKeepClearAreas(Ljava/util/Collection;Ljava/util/Collection;Landroid/graphics/Matrix;[F)V",
+        "method_name": 'getKeepClearAreas',
         "type":        "method_replace",
         "search": """\
 .method getKeepClearAreas(Ljava/util/Collection;Ljava/util/Collection;Landroid/graphics/Matrix;[F)V
@@ -21819,12 +21930,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mKeepClearAreas:Ljava/util/List;', 'invoke-virtual {p0, v0, p3, p4}, Lcom/android/server/wm/WindowState;->getRectsInScreenSpace(Ljava/util/List;Landroid/graphics/Matrix;[F)Ljava/util/List;', 'move-result-object v0', 'invoke-interface {p1, v0}, Ljava/util/Collection;->addAll(Ljava/util/Collection;)Z', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mUnrestrictedKeepClearAreas:Ljava/util/List;', 'invoke-virtual {p0, v0, p3, p4}, Lcom/android/server/wm/WindowState;->getRectsInScreenSpace(Ljava/util/List;Landroid/graphics/Matrix;[F)Ljava/util/List;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getKeyInterceptionInfo__Lcom_android_internal_policy_KeyInte",
         "method":      ".method getKeyInterceptionInfo()Lcom/android/internal/policy/KeyInterceptionInfo;",
+        "method_name": 'getKeyInterceptionInfo',
         "type":        "method_replace",
         "search": """\
 .method getKeyInterceptionInfo()Lcom/android/internal/policy/KeyInterceptionInfo;
@@ -22163,12 +22276,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mKeyInterceptionInfo:Lcom/android/internal/policy/KeyInterceptionInfo;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mKeyInterceptionInfo:Lcom/android/internal/policy/KeyInterceptionInfo;', 'iget v0, v0, Lcom/android/internal/policy/KeyInterceptionInfo;->layoutParamsPrivateFlags:I', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v1, v1, Landroid/view/WindowManager$LayoutParams;->privateFlags:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getName__Ljava_lang_String_",
         "method":      ".method getName()Ljava/lang/String;",
+        "method_name": 'getName',
         "type":        "method_replace",
         "search": """\
 .method getName()Ljava/lang/String;
@@ -22307,12 +22422,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V', 'invoke-static {p0}, Ljava/lang/System;->identityHashCode(Ljava/lang/Object;)I', 'move-result v1', 'invoke-static {v1}, Ljava/lang/Integer;->toHexString(I)Ljava/lang/String;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getOnBackInvokedCallbackInfo__Landroid_window_OnBackInvokedC",
         "method":      ".method getOnBackInvokedCallbackInfo()Landroid/window/OnBackInvokedCallbackInfo;",
+        "method_name": 'getOnBackInvokedCallbackInfo',
         "type":        "method_replace",
         "search": """\
 .method getOnBackInvokedCallbackInfo()Landroid/window/OnBackInvokedCallbackInfo;
@@ -22342,12 +22459,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mOnBackInvokedCallbackInfo:Landroid/window/OnBackInvokedCallbackInfo;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getOwningUid__I",
         "method":      ".method getOwningUid()I",
+        "method_name": 'getOwningUid',
         "type":        "method_replace",
         "search": """\
 .method getOwningUid()I
@@ -22377,12 +22496,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mOwnerUid:I', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getParentFrame__Landroid_graphics_Rect_",
         "method":      ".method getParentFrame()Landroid/graphics/Rect;",
+        "method_name": 'getParentFrame',
         "type":        "method_replace",
         "search": """\
 .method getParentFrame()Landroid/graphics/Rect;
@@ -22421,12 +22542,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mParentFrame:Landroid/graphics/Rect;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getParentWindow__Lcom_android_server_wm_WindowState_",
         "method":      ".method getParentWindow()Lcom/android/server/wm/WindowState;",
+        "method_name": 'getParentWindow',
         "type":        "method_replace",
         "search": """\
 .method getParentWindow()Lcom/android/server/wm/WindowState;
@@ -22512,12 +22635,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mIsChildWindow:Z', 'if-eqz v0, :cond_0', 'invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->getParent()Lcom/android/server/wm/WindowContainer;', 'move-result-object v0', 'check-cast v0, Lcom/android/server/wm/WindowState;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProcess__Lcom_android_server_wm_WindowProcessController_",
         "method":      ".method getProcess()Lcom/android/server/wm/WindowProcessController;",
+        "method_name": 'getProcess',
         "type":        "method_replace",
         "search": """\
 .method getProcess()Lcom/android/server/wm/WindowProcessController;
@@ -22556,12 +22681,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mSession:Lcom/android/server/wm/Session;', 'iget-object v0, v0, Lcom/android/server/wm/Session;->mProcess:Lcom/android/server/wm/WindowProcessController;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProtoFieldId__J",
         "method":      ".method getProtoFieldId()J",
+        "method_name": 'getProtoFieldId',
         "type":        "method_replace",
         "search": """\
 .method getProtoFieldId()J
@@ -22591,12 +22718,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['return-wide v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getRectsInScreenSpace_Ljava_util_List_Landroid_graphics_Matr",
         "method":      ".method getRectsInScreenSpace(Ljava/util/List;Landroid/graphics/Matrix;[F)Ljava/util/List;",
+        "method_name": 'getRectsInScreenSpace',
         "type":        "method_replace",
         "search": """\
 .method getRectsInScreenSpace(Ljava/util/List;Landroid/graphics/Matrix;[F)Ljava/util/List;
@@ -22815,12 +22944,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p3, p2}, Lcom/android/server/wm/WindowState;->getTransformationMatrix([FLandroid/graphics/Matrix;)V', 'new-instance v0, Ljava/util/ArrayList;', 'invoke-direct {v0}, Ljava/util/ArrayList;-><init>()V', 'new-instance v1, Landroid/graphics/RectF;', 'invoke-direct {v1}, Landroid/graphics/RectF;-><init>()V', 'invoke-interface {p1}, Ljava/util/List;->iterator()Ljava/util/Iterator;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getRelativeFrame__Landroid_graphics_Rect_",
         "method":      ".method getRelativeFrame()Landroid/graphics/Rect;",
+        "method_name": 'getRelativeFrame',
         "type":        "method_replace",
         "search": """\
 .method getRelativeFrame()Landroid/graphics/Rect;
@@ -22859,12 +22990,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mRelFrame:Landroid/graphics/Rect;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getRootTask__Lcom_android_server_wm_Task_",
         "method":      ".method getRootTask()Lcom/android/server/wm/Task;",
+        "method_name": 'getRootTask',
         "type":        "method_replace",
         "search": """\
 .method getRootTask()Lcom/android/server/wm/Task;
@@ -23046,12 +23179,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-virtual {v0}, Lcom/android/server/wm/Task;->getRootTask()Lcom/android/server/wm/Task;', 'move-result-object v1', 'return-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getRotationAnimationHint__I",
         "method":      ".method getRotationAnimationHint()I",
+        "method_name": 'getRotationAnimationHint',
         "type":        "method_replace",
         "search": """\
 .method getRotationAnimationHint()I
@@ -23131,12 +23266,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'iget v0, v0, Lcom/android/server/wm/ActivityRecord;->mRotationAnimationHint:I', 'return v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getSurfaceTouchableRegion_Landroid_graphics_Region_Landroid_",
         "method":      ".method getSurfaceTouchableRegion(Landroid/graphics/Region;Landroid/view/WindowManager$LayoutParams;)V",
+        "method_name": 'getSurfaceTouchableRegion',
         "type":        "method_replace",
         "search": """\
 .method getSurfaceTouchableRegion(Landroid/graphics/Region;Landroid/view/WindowManager$LayoutParams;)V
@@ -23738,12 +23875,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p2}, Landroid/view/WindowManager$LayoutParams;->isModal()Z', 'move-result v0', 'if-eqz v0, :cond_1', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v1, :cond_0', 'invoke-direct {p0, p1}, Lcom/android/server/wm/WindowState;->updateRegionForModalActivityWindow(Landroid/graphics/Region;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getSyncMethod__I",
         "method":      ".method getSyncMethod()I",
+        "method_name": 'getSyncMethod',
         "type":        "method_replace",
         "search": """\
 .method getSyncMethod()I
@@ -23868,12 +24007,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getSyncGroup()Lcom/android/server/wm/BLASTSyncEngine$SyncGroup;', 'move-result-object v0', 'if-nez v0, :cond_0', 'return v1', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mSyncMethodOverride:I', 'if-eq v1, v2, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getSystemGestureExclusion__Ljava_util_List_",
         "method":      ".method getSystemGestureExclusion()Ljava/util/List;",
+        "method_name": 'getSystemGestureExclusion',
         "type":        "method_replace",
         "search": """\
 .method getSystemGestureExclusion()Ljava/util/List;
@@ -23919,12 +24060,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mExclusionRects:Ljava/util/List;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTapExcludeRegion_Landroid_graphics_Region__V",
         "method":      ".method getTapExcludeRegion(Landroid/graphics/Region;)V",
+        "method_name": 'getTapExcludeRegion',
         "type":        "method_replace",
         "search": """\
 .method getTapExcludeRegion(Landroid/graphics/Region;)V
@@ -24116,12 +24259,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mTmpRect:Landroid/graphics/Rect;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v1, v1, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'invoke-virtual {v0, v1}, Landroid/graphics/Rect;->set(Landroid/graphics/Rect;)V', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mTmpRect:Landroid/graphics/Rect;', 'invoke-virtual {v0, v1, v1}, Landroid/graphics/Rect;->offsetTo(II)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTask__Lcom_android_server_wm_Task_",
         "method":      ".method getTask()Lcom/android/server/wm/Task;",
+        "method_name": 'getTask',
         "type":        "method_replace",
         "search": """\
 .method getTask()Lcom/android/server/wm/Task;
@@ -24207,12 +24352,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTaskFragment__Lcom_android_server_wm_TaskFragment_",
         "method":      ".method getTaskFragment()Lcom/android/server/wm/TaskFragment;",
+        "method_name": 'getTaskFragment',
         "type":        "method_replace",
         "search": """\
 .method getTaskFragment()Lcom/android/server/wm/TaskFragment;
@@ -24298,12 +24445,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->getTaskFragment()Lcom/android/server/wm/TaskFragment;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTopParentWindow__Lcom_android_server_wm_WindowState_",
         "method":      ".method getTopParentWindow()Lcom/android/server/wm/WindowState;",
+        "method_name": 'getTopParentWindow',
         "type":        "method_replace",
         "search": """\
 .method getTopParentWindow()Lcom/android/server/wm/WindowState;
@@ -24423,12 +24572,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz v0, :cond_1', 'iget-boolean v2, v0, Lcom/android/server/wm/WindowState;->mIsChildWindow:Z', 'if-eqz v2, :cond_1', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowState;->getParentWindow()Lcom/android/server/wm/WindowState;', 'move-result-object v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTouchOcclusionMode__I",
         "method":      ".method getTouchOcclusionMode()I",
+        "method_name": 'getTouchOcclusionMode',
         "type":        "method_replace",
         "search": """\
 .method getTouchOcclusionMode()I
@@ -24612,12 +24763,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'invoke-static {v0}, Landroid/view/WindowManager$LayoutParams;->isSystemAlertWindowType(I)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTouchableRegion_Landroid_graphics_Region__V",
         "method":      ".method getTouchableRegion(Landroid/graphics/Region;)V",
+        "method_name": 'getTouchableRegion',
         "type":        "method_replace",
         "search": """\
 .method getTouchableRegion(Landroid/graphics/Region;)V
@@ -24879,12 +25032,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mTouchableInsets:I', 'invoke-virtual {p1, v0}, Landroid/graphics/Region;->set(Landroid/graphics/Rect;)Z', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mGivenTouchableRegion:Landroid/graphics/Region;', 'invoke-virtual {p1, v1}, Landroid/graphics/Region;->set(Landroid/graphics/Region;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTransformationMatrix__FLandroid_graphics_Matrix__V",
         "method":      ".method getTransformationMatrix([FLandroid/graphics/Matrix;)V",
+        "method_name": 'getTransformationMatrix',
         "type":        "method_replace",
         "search": """\
 .method getTransformationMatrix([FLandroid/graphics/Matrix;)V
@@ -25541,12 +25696,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v1, p0, Lcom/android/server/wm/WindowState;->mGlobalScale:F', 'iget v2, p0, Lcom/android/server/wm/WindowState;->mGlobalScale:F', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mTmpPoint:Landroid/graphics/Point;', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget-object v2, v2, Landroid/view/WindowManager$LayoutParams;->surfaceInsets:Landroid/graphics/Rect;', 'invoke-direct {p0, v0, v2}, Lcom/android/server/wm/WindowState;->transformSurfaceInsetsPosition(Landroid/graphics/Point;Landroid/graphics/Rect;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getVisibleBounds_Landroid_graphics_Rect__V",
         "method":      ".method getVisibleBounds(Landroid/graphics/Rect;)V",
+        "method_name": 'getVisibleBounds',
         "type":        "method_replace",
         "search": """\
 .method getVisibleBounds(Landroid/graphics/Rect;)V
@@ -25923,12 +26080,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-virtual {v0}, Lcom/android/server/wm/Task;->cropWindowsToRootTaskBounds()Z', 'move-result v1', 'if-eqz v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getWindow_Ljava_util_function_Predicate__Lcom_android_server",
         "method":      ".method getWindow(Ljava/util/function/Predicate;)Lcom/android/server/wm/WindowState;",
+        "method_name": 'getWindow',
         "type":        "method_replace",
         "search": """\
 .method getWindow(Ljava/util/function/Predicate;)Lcom/android/server/wm/WindowState;
@@ -26443,12 +26602,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;', 'invoke-virtual {v0}, Ljava/util/ArrayList;->isEmpty()Z', 'move-result v0', 'if-eqz v0, :cond_1', 'invoke-interface {p1, p0}, Ljava/util/function/Predicate;->test(Ljava/lang/Object;)Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getWindowFrames__Lcom_android_server_wm_WindowFrames_",
         "method":      ".method getWindowFrames()Lcom/android/server/wm/WindowFrames;",
+        "method_name": 'getWindowFrames',
         "type":        "method_replace",
         "search": """\
 .method getWindowFrames()Lcom/android/server/wm/WindowFrames;
@@ -26478,12 +26639,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getWindowInfo__Landroid_view_WindowInfo_",
         "method":      ".method getWindowInfo()Landroid/view/WindowInfo;",
+        "method_name": 'getWindowInfo',
         "type":        "method_replace",
         "search": """\
 .method getWindowInfo()Landroid/view/WindowInfo;
@@ -27225,12 +27388,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/view/WindowInfo;->obtain()Landroid/view/WindowInfo;', 'move-result-object v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayId()I', 'move-result v1', 'iput v1, v0, Landroid/view/WindowInfo;->displayId:I', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getWindowTag__Ljava_lang_CharSequence_",
         "method":      ".method getWindowTag()Ljava/lang/CharSequence;",
+        "method_name": 'getWindowTag',
         "type":        "method_replace",
         "search": """\
 .method getWindowTag()Ljava/lang/CharSequence;
@@ -27332,12 +27497,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'invoke-virtual {v0}, Landroid/view/WindowManager$LayoutParams;->getTitle()Ljava/lang/CharSequence;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-interface {v0}, Ljava/lang/CharSequence;->length()I', 'move-result v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleCompleteDeferredRemoval__Z",
         "method":      ".method handleCompleteDeferredRemoval()Z",
+        "method_name": 'handleCompleteDeferredRemoval',
         "type":        "method_replace",
         "search": """\
 .method handleCompleteDeferredRemoval()Z
@@ -27455,12 +27622,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mRemoveOnExit:Z', 'if-eqz v0, :cond_0', 'invoke-virtual {p0, v1, v0}, Lcom/android/server/wm/WindowState;->isSelfAnimating(II)Z', 'move-result v0', 'if-nez v0, :cond_0', 'iput-boolean v1, p0, Lcom/android/server/wm/WindowState;->mRemoveOnExit:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleWindowMovedIfNeeded__V",
         "method":      ".method handleWindowMovedIfNeeded()V",
+        "method_name": 'handleWindowMovedIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method handleWindowMovedIfNeeded()V
@@ -27788,12 +27957,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowState;->hasMoved()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return-void', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasAppShownWindows__Z",
         "method":      ".method hasAppShownWindows()Z",
+        "method_name": 'hasAppShownWindows',
         "type":        "method_replace",
         "search": """\
 .method hasAppShownWindows()Z
@@ -27932,12 +28103,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'iget-boolean v0, v0, Lcom/android/server/wm/ActivityRecord;->firstWindowDrawn:Z', 'if-nez v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasCompatScale__Z",
         "method":      ".method hasCompatScale()Z",
+        "method_name": 'hasCompatScale',
         "type":        "method_replace",
         "search": """\
 .method hasCompatScale()Z
@@ -28234,12 +28407,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-ne v0, v1, :cond_0', 'return v2', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget-object v0, v0, Lcom/android/server/wm/WindowManagerService;->mAtmService:Lcom/android/server/wm/ActivityTaskManagerService;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasDrawn__Z",
         "method":      ".method hasDrawn()Z",
+        "method_name": 'hasDrawn',
         "type":        "method_replace",
         "search": """\
 .method hasDrawn()Z
@@ -28334,12 +28509,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'iget v0, v0, Lcom/android/server/wm/WindowStateAnimator;->mDrawState:I', 'if-ne v0, v1, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasWallpaper__Z",
         "method":      ".method hasWallpaper()Z",
+        "method_name": 'hasWallpaper',
         "type":        "method_replace",
         "search": """\
 .method hasWallpaper()Z
@@ -28476,12 +28653,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->flags:I', 'if-nez v0, :cond_1', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->hasWallpaperForLetterboxBackground()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasWallpaperForLetterboxBackground__Z",
         "method":      ".method hasWallpaperForLetterboxBackground()Z",
+        "method_name": 'hasWallpaperForLetterboxBackground',
         "type":        "method_replace",
         "search": """\
 .method hasWallpaperForLetterboxBackground()Z
@@ -28588,12 +28767,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->hasWallpaperBackgroundForLetterbox()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hide_ZZ_Z",
         "method":      ".method hide(ZZ)Z",
+        "method_name": 'hide',
         "type":        "method_replace",
         "search": """\
 .method hide(ZZ)Z
@@ -29175,12 +29356,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz p1, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->okToAnimate()Z', 'move-result v0', 'if-nez v0, :cond_0', 'if-eqz p1, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hideNonSystemOverlayWindowsWhenVisible__Z",
         "method":      ".method hideNonSystemOverlayWindowsWhenVisible()Z",
+        "method_name": 'hideNonSystemOverlayWindowsWhenVisible',
         "type":        "method_replace",
         "search": """\
 .method hideNonSystemOverlayWindowsWhenVisible()Z
@@ -29310,12 +29493,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->privateFlags:I', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mSession:Lcom/android/server/wm/Session;', 'iget-boolean v0, v0, Lcom/android/server/wm/Session;->mCanHideNonSystemOverlayWindows:Z', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_immediatelyNotifyBlastSync__V",
         "method":      ".method immediatelyNotifyBlastSync()V",
+        "method_name": 'immediatelyNotifyBlastSync',
         "type":        "method_replace",
         "search": """\
 .method immediatelyNotifyBlastSync()V
@@ -29399,12 +29584,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, v0, v1}, Lcom/android/server/wm/WindowState;->finishDrawing(Landroid/view/SurfaceControl$Transaction;I)Z', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget-object v0, v0, Lcom/android/server/wm/WindowManagerService;->mH:Lcom/android/server/wm/WindowManagerService$H;', 'invoke-virtual {v0, v1, p0}, Lcom/android/server/wm/WindowManagerService$H;->removeMessages(ILjava/lang/Object;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_inRelaunchingActivity__Z",
         "method":      ".method inRelaunchingActivity()Z",
+        "method_name": 'inRelaunchingActivity',
         "type":        "method_replace",
         "search": """\
 .method inRelaunchingActivity()Z
@@ -29511,12 +29698,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->isRelaunching()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_initAppOpsState__V",
         "method":      ".method initAppOpsState()V",
+        "method_name": 'initAppOpsState',
         "type":        "method_replace",
         "search": """\
 .method initAppOpsState()V
@@ -29757,12 +29946,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mAppOp:I', 'if-eq v0, v1, :cond_2', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mAppOpVisibility:Z', 'if-nez v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget-object v1, v0, Lcom/android/server/wm/WindowManagerService;->mAppOps:Landroid/app/AppOpsManager;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isAlive__Z",
         "method":      ".method isAlive()Z",
+        "method_name": 'isAlive',
         "type":        "method_replace",
         "search": """\
 .method isAlive()Z
@@ -29818,12 +30009,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mClient:Landroid/view/IWindow;', 'invoke-interface {v0}, Landroid/view/IWindow;->asBinder()Landroid/os/IBinder;', 'move-result-object v0', 'invoke-interface {v0}, Landroid/os/IBinder;->isBinderAlive()Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isAnimationRunningSelfOrParent__Z",
         "method":      ".method isAnimationRunningSelfOrParent()Z",
+        "method_name": 'isAnimationRunningSelfOrParent',
         "type":        "method_replace",
         "search": """\
 .method isAnimationRunningSelfOrParent()Z
@@ -29925,12 +30118,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->inTransitionSelfOrParent()Z', 'move-result v0', 'if-nez v0, :cond_0', 'invoke-virtual {p0, v0, v1}, Lcom/android/server/wm/WindowState;->isAnimating(II)Z', 'move-result v1', 'if-eqz v1, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isChildWindow__Z",
         "method":      ".method isChildWindow()Z",
+        "method_name": 'isChildWindow',
         "type":        "method_replace",
         "search": """\
 .method isChildWindow()Z
@@ -29960,12 +30155,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mIsChildWindow:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isClientLocal__Z",
         "method":      ".method isClientLocal()Z",
+        "method_name": 'isClientLocal',
         "type":        "method_replace",
         "search": """\
 .method isClientLocal()Z
@@ -30004,12 +30201,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mClient:Landroid/view/IWindow;', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDimming__Z",
         "method":      ".method isDimming()Z",
+        "method_name": 'isDimming',
         "type":        "method_replace",
         "search": """\
 .method isDimming()Z
@@ -30039,12 +30238,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mIsDimming:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDisplayed__Z",
         "method":      ".method isDisplayed()Z",
+        "method_name": 'isDisplayed',
         "type":        "method_replace",
         "search": """\
 .method isDisplayed()Z
@@ -30246,12 +30447,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isDrawn()Z', 'move-result v1', 'if-eqz v1, :cond_2', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisibleByPolicy()Z', 'move-result v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDragResizeChanged__Z",
         "method":      ".method isDragResizeChanged()Z",
+        "method_name": 'isDragResizeChanged',
         "type":        "method_replace",
         "search": """\
 .method isDragResizeChanged()Z
@@ -30337,12 +30540,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mDragResizing:Z', 'invoke-direct {p0}, Lcom/android/server/wm/WindowState;->computeDragResizing()Z', 'move-result v1', 'if-eq v0, v1, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDragResizing__Z",
         "method":      ".method isDragResizing()Z",
+        "method_name": 'isDragResizing',
         "type":        "method_replace",
         "search": """\
 .method isDragResizing()Z
@@ -30372,12 +30577,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mDragResizing:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDreamWindow__Z",
         "method":      ".method isDreamWindow()Z",
+        "method_name": 'isDreamWindow',
         "type":        "method_replace",
         "search": """\
 .method isDreamWindow()Z
@@ -30493,12 +30700,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0}, Lcom/android/server/wm/ActivityRecord;->getActivityType()I', 'move-result v0', 'if-ne v0, v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isFocused__Z",
         "method":      ".method isFocused()Z",
+        "method_name": 'isFocused',
         "type":        "method_replace",
         "search": """\
 .method isFocused()Z
@@ -30584,12 +30793,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'iget-object v0, v0, Lcom/android/server/wm/DisplayContent;->mCurrentFocus:Lcom/android/server/wm/WindowState;', 'if-ne v0, p0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isForceHiddenNonSystemOverlayWindow__Z",
         "method":      ".method isForceHiddenNonSystemOverlayWindow()Z",
+        "method_name": 'isForceHiddenNonSystemOverlayWindow',
         "type":        "method_replace",
         "search": """\
 .method isForceHiddenNonSystemOverlayWindow()Z
@@ -30619,12 +30830,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mForceHideNonSystemOverlayWindow:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isFullyTransparent__Z",
         "method":      ".method isFullyTransparent()Z",
+        "method_name": 'isFullyTransparent',
         "type":        "method_replace",
         "search": """\
 .method isFullyTransparent()Z
@@ -30724,12 +30937,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->alpha:F', 'if-nez v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isFullyTransparentBarAllowed_Landroid_graphics_Rect__Z",
         "method":      ".method isFullyTransparentBarAllowed(Landroid/graphics/Rect;)Z",
+        "method_name": 'isFullyTransparentBarAllowed',
         "type":        "method_replace",
         "search": """\
 .method isFullyTransparentBarAllowed(Landroid/graphics/Rect;)Z
@@ -30848,12 +31063,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0, p1}, Lcom/android/server/wm/ActivityRecord;->isFullyTransparentBarAllowed(Landroid/graphics/Rect;)Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isImeLayeringTarget__Z",
         "method":      ".method isImeLayeringTarget()Z",
+        "method_name": 'isImeLayeringTarget',
         "type":        "method_replace",
         "search": """\
 .method isImeLayeringTarget()Z
@@ -30932,12 +31149,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/DisplayContent;->getImeTarget(I)Lcom/android/server/wm/InsetsControlTarget;', 'move-result-object v0', 'if-ne v0, p0, :cond_0', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isImeOverlayLayeringTarget__Z",
         "method":      ".method isImeOverlayLayeringTarget()Z",
+        "method_name": 'isImeOverlayLayeringTarget',
         "type":        "method_replace",
         "search": """\
 .method isImeOverlayLayeringTarget()Z
@@ -31062,12 +31281,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isImeLayeringTarget()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->flags:I', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isImplicitlyExcludingAllSystemGestures__Z",
         "method":      ".method isImplicitlyExcludingAllSystemGestures()Z",
+        "method_name": 'isImplicitlyExcludingAllSystemGestures',
         "type":        "method_replace",
         "search": """\
 .method isImplicitlyExcludingAllSystemGestures()Z
@@ -31356,12 +31577,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget-object v0, v0, Landroid/view/WindowManager$LayoutParams;->insetsFlags:Landroid/view/InsetsFlags;', 'iget v0, v0, Landroid/view/InsetsFlags;->behavior:I', 'if-ne v0, v1, :cond_0', 'invoke-static {}, Landroid/view/WindowInsets$Type;->navigationBars()I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isInsetsAnimationRunning__Z",
         "method":      ".method isInsetsAnimationRunning()Z",
+        "method_name": 'isInsetsAnimationRunning',
         "type":        "method_replace",
         "search": """\
 .method isInsetsAnimationRunning()Z
@@ -31391,12 +31614,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mInsetsAnimationRunning:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isInteresting__Z",
         "method":      ".method isInteresting()Z",
+        "method_name": 'isInteresting',
         "type":        "method_replace",
         "search": """\
 .method isInteresting()Z
@@ -31490,12 +31715,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mViewVisibility:I', 'if-nez v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isLaidOut__Z",
         "method":      ".method isLaidOut()Z",
+        "method_name": 'isLaidOut',
         "type":        "method_replace",
         "search": """\
 .method isLaidOut()Z
@@ -31577,12 +31804,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mLayoutSeq:I', 'if-eq v0, v1, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isLastConfigReportedToClient__Z",
         "method":      ".method isLastConfigReportedToClient()Z",
+        "method_name": 'isLastConfigReportedToClient',
         "type":        "method_replace",
         "search": """\
 .method isLastConfigReportedToClient()Z
@@ -31612,12 +31841,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mLastConfigReportedToClient:Z', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isLetterboxedForDisplayCutout__Z",
         "method":      ".method isLetterboxedForDisplayCutout()Z",
+        "method_name": 'isLetterboxedForDisplayCutout',
         "type":        "method_replace",
         "search": """\
 .method isLetterboxedForDisplayCutout()Z
@@ -31896,12 +32127,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-nez v0, :cond_0', 'return v1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowFrames;->parentFrameWasClippedByDisplayCutout()Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isObscuringDisplay__Z",
         "method":      ".method isObscuringDisplay()Z",
+        "method_name": 'isObscuringDisplay',
         "type":        "method_replace",
         "search": """\
 .method isObscuringDisplay()Z
@@ -32053,12 +32286,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-virtual {v0}, Lcom/android/server/wm/Task;->fillsParent()Z', 'move-result v2', 'if-nez v2, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isOnScreen__Z",
         "method":      ".method isOnScreen()Z",
+        "method_name": 'isOnScreen',
         "type":        "method_replace",
         "search": """\
 .method isOnScreen()Z
@@ -33187,12 +33422,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getWindowType()I', 'move-result v0', 'const-string v2, "WindowManager"', 'if-ne v0, v1, :cond_0', 'invoke-static {}, Lcom/android/server/wm/MiuiFreeFormManagerServiceStub;->getInstance()Lcom/android/server/wm/MiuiFreeFormManagerServiceStub;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isParentWindowHidden__Z",
         "method":      ".method isParentWindowHidden()Z",
+        "method_name": 'isParentWindowHidden',
         "type":        "method_replace",
         "search": """\
 .method isParentWindowHidden()Z
@@ -33290,12 +33527,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getParentWindow()Lcom/android/server/wm/WindowState;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'iget-boolean v1, v0, Lcom/android/server/wm/WindowState;->mHidden:Z', 'if-eqz v1, :cond_0', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isPotentialDragTarget_Z_Z",
         "method":      ".method isPotentialDragTarget(Z)Z",
+        "method_name": 'isPotentialDragTarget',
         "type":        "method_replace",
         "search": """\
 .method isPotentialDragTarget(Z)Z
@@ -33449,12 +33688,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p1, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisibleNow()Z', 'move-result v0', 'if-eqz v0, :cond_1', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mRemoved:Z', 'if-nez v0, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isPresentation__Z",
         "method":      ".method isPresentation()Z",
+        "method_name": 'isPresentation',
         "type":        "method_replace",
         "search": """\
 .method isPresentation()Z
@@ -33596,12 +33837,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-eq v0, v1, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-ne v0, v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isReadyForDisplay__Z",
         "method":      ".method isReadyForDisplay()Z",
+        "method_name": 'isReadyForDisplay',
         "type":        "method_replace",
         "search": """\
 .method isReadyForDisplay()Z
@@ -34175,12 +34418,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isParentWindowHidden()Z', 'move-result v0', 'if-nez v0, :cond_0', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mViewVisibility:I', 'if-nez v0, :cond_0', 'iget-object v3, p0, Lcom/android/server/wm/WindowState;->mTransitionController:Lcom/android/server/wm/TransitionController;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isReadyToDispatchInsetsState__Z",
         "method":      ".method isReadyToDispatchInsetsState()Z",
+        "method_name": 'isReadyToDispatchInsetsState',
         "type":        "method_replace",
         "search": """\
 .method isReadyToDispatchInsetsState()Z
@@ -34350,12 +34595,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mStartingData:Lcom/android/server/wm/StartingData;', 'if-eqz v0, :cond_0', 'return v1', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->shouldCheckTokenVisibleRequested()Z', 'move-result v0', 'if-eqz v0, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isSecureLocked__Z",
         "method":      ".method isSecureLocked()Z",
+        "method_name": 'isSecureLocked',
         "type":        "method_replace",
         "search": """\
 .method isSecureLocked()Z
@@ -34674,12 +34921,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowManagerService;->getDisableSecureWindows()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isSelfAnimating_II_Z",
         "method":      ".method protected isSelfAnimating(II)Z",
+        "method_name": 'isSelfAnimating',
         "type":        "method_replace",
         "search": """\
 .method protected isSelfAnimating(II)Z
@@ -34754,12 +35003,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mControllableInsetProvider:Lcom/android/server/wm/InsetsSourceProvider;', 'if-eqz v0, :cond_0', 'return v0', 'invoke-super {p0, p1, p2}, Lcom/android/server/wm/WindowContainer;->isSelfAnimating(II)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isSelfOrAncestorWindowAnimatingExit__Z",
         "method":      ".method isSelfOrAncestorWindowAnimatingExit()Z",
+        "method_name": 'isSelfOrAncestorWindowAnimatingExit',
         "type":        "method_replace",
         "search": """\
 .method isSelfOrAncestorWindowAnimatingExit()Z
@@ -34866,12 +35117,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v1, v0, Lcom/android/server/wm/WindowState;->mAnimatingExit:Z', 'if-eqz v1, :cond_1', 'return v1', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowState;->getParentWindow()Lcom/android/server/wm/WindowState;', 'move-result-object v0', 'if-nez v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isSyncFinished_Lcom_android_server_wm_BLASTSyncEngine_SyncGr",
         "method":      ".method isSyncFinished(Lcom/android/server/wm/BLASTSyncEngine$SyncGroup;)Z",
+        "method_name": 'isSyncFinished',
         "type":        "method_replace",
         "search": """\
 .method isSyncFinished(Lcom/android/server/wm/BLASTSyncEngine$SyncGroup;)Z
@@ -35194,12 +35447,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisibleRequested()Z', 'move-result v0', 'if-eqz v0, :cond_3', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isFullyTransparent()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isTrustedOverlay__Z",
         "method":      ".method isTrustedOverlay()Z",
+        "method_name": 'isTrustedOverlay',
         "type":        "method_replace",
         "search": """\
 .method isTrustedOverlay()Z
@@ -35396,12 +35651,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/internal/hidden_from_bootclasspath/com/android/window/flags/Flags;->surfaceTrustedOverlay()Z', 'move-result v0', 'if-eqz v0, :cond_2', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getParentWindow()Lcom/android/server/wm/WindowState;', 'move-result-object v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isWindowTrustedOverlay()Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isVisibleByPolicy__Z",
         "method":      ".method isVisibleByPolicy()Z",
+        "method_name": 'isVisibleByPolicy',
         "type":        "method_replace",
         "search": """\
 .method isVisibleByPolicy()Z
@@ -35492,12 +35749,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mPolicyVisibility:I', 'if-ne v0, v1, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isVisibleNow__Z",
         "method":      ".method isVisibleNow()Z",
+        "method_name": 'isVisibleNow',
         "type":        "method_replace",
         "search": """\
 .method isVisibleNow()Z
@@ -35649,12 +35908,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->isVisible()Z', 'move-result v0', 'if-nez v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isVisibleRequested__Z",
         "method":      ".method isVisibleRequested()Z",
+        "method_name": 'isVisibleRequested',
         "type":        "method_replace",
         "search": """\
 .method isVisibleRequested()Z
@@ -35830,12 +36091,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowState;->wouldBeVisibleRequestedIfPolicyIgnored()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'invoke-direct {p0}, Lcom/android/server/wm/WindowState;->isVisibleByPolicyOrInsets()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isVisibleRequestedOrAdding__Z",
         "method":      ".method isVisibleRequestedOrAdding()Z",
+        "method_name": 'isVisibleRequestedOrAdding',
         "type":        "method_replace",
         "search": """\
 .method isVisibleRequestedOrAdding()Z
@@ -36092,12 +36355,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mHasSurface:Z', 'if-nez v1, :cond_0', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mRelayoutCalled:Z', 'if-nez v1, :cond_2', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mViewVisibility:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isWindowTrustedOverlay__Z",
         "method":      ".method isWindowTrustedOverlay()Z",
+        "method_name": 'isWindowTrustedOverlay',
         "type":        "method_replace",
         "search": """\
 .method isWindowTrustedOverlay()Z
@@ -36417,12 +36682,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowStateStub:Lcom/android/server/wm/WindowStateStub;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/WindowStateStub;->isForceWindowTrustedOverlay(Lcom/android/server/wm/ActivityRecord;)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_layoutForART__Z",
         "method":      ".method layoutForART()Z",
+        "method_name": 'layoutForART',
         "type":        "method_replace",
         "search": """\
 .method layoutForART()Z
@@ -37011,12 +37278,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mNeedHWResizer:Z', 'if-eqz v0, :cond_2', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getOwningPackage()Ljava/lang/String;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_markRedrawForSyncReported__V",
         "method":      ".method markRedrawForSyncReported()V",
+        "method_name": 'markRedrawForSyncReported',
         "type":        "method_replace",
         "search": """\
 .method markRedrawForSyncReported()V
@@ -37055,12 +37324,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mRedrawForSyncReported:Z', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_matchesDisplayAreaBounds__Z",
         "method":      ".method matchesDisplayAreaBounds()Z",
+        "method_name": 'matchesDisplayAreaBounds',
         "type":        "method_replace",
         "search": """\
 .method matchesDisplayAreaBounds()Z
@@ -37279,12 +37550,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->getFixedRotationTransformDisplayBounds()Landroid/graphics/Rect;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getBounds()Landroid/graphics/Rect;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_mightAffectAllDrawn__Z",
         "method":      ".method mightAffectAllDrawn()Z",
+        "method_name": 'mightAffectAllDrawn',
         "type":        "method_replace",
         "search": """\
 .method mightAffectAllDrawn()Z
@@ -37527,12 +37800,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'iget v0, v0, Lcom/android/server/wm/WindowStateAnimator;->mAttrType:I', 'if-eq v0, v2, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'iget v0, v0, Lcom/android/server/wm/WindowStateAnimator;->mAttrType:I', 'if-ne v0, v3, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_needsRelativeLayeringToIme__Z",
         "method":      ".method needsRelativeLayeringToIme()Z",
+        "method_name": 'needsRelativeLayeringToIme',
         "type":        "method_replace",
         "search": """\
 .method needsRelativeLayeringToIme()Z
@@ -38264,12 +38539,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDisplayContent:Lcom/android/server/wm/DisplayContent;', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayContent;->shouldImeAttachedToApp()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v1', 'invoke-static {}, Lcom/android/server/wm/MiuiFreeformServiceStub;->getInstance()Lcom/android/server/wm/MiuiFreeformServiceStub;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_notifyInsetsChanged__V",
         "method":      ".method notifyInsetsChanged()V",
+        "method_name": 'notifyInsetsChanged',
         "type":        "method_replace",
         "search": """\
 .method notifyInsetsChanged()V
@@ -38582,12 +38859,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-object v0, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_WINDOW_INSETS_enabled:[Z', 'if-eqz v0, :cond_0', 'invoke-static {p0}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v0', 'sget-object v2, Lcom/android/internal/protolog/WmProtoLogGroups;->WM_DEBUG_WINDOW_INSETS:Lcom/android/internal/protolog/WmProtoLogGroups;', 'filled-new-array {v0}, [Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onAnimationFinished_ILcom_android_server_wm_AnimationAdapter",
         "method":      ".method protected onAnimationFinished(ILcom/android/server/wm/AnimationAdapter;)V",
+        "method_name": 'onAnimationFinished',
         "type":        "method_replace",
         "search": """\
 .method protected onAnimationFinished(ILcom/android/server/wm/AnimationAdapter;)V
@@ -38635,12 +38914,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-super {p0, p1, p2}, Lcom/android/server/wm/WindowContainer;->onAnimationFinished(ILcom/android/server/wm/AnimationAdapter;)V', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWinAnimator:Lcom/android/server/wm/WindowStateAnimator;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowStateAnimator;->onAnimationFinished()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onAppCommitInvisible__V",
         "method":      ".method onAppCommitInvisible()V",
+        "method_name": 'onAppCommitInvisible',
         "type":        "method_replace",
         "search": """\
 .method onAppCommitInvisible()V
@@ -38911,12 +39192,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;', 'invoke-virtual {v0}, Ljava/util/ArrayList;->size()I', 'move-result v0', 'if-ltz v0, :cond_0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;', 'invoke-virtual {v1, v0}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onDisplayChanged_Lcom_android_server_wm_DisplayContent__V",
         "method":      ".method onDisplayChanged(Lcom/android/server/wm/DisplayContent;)V",
+        "method_name": 'onDisplayChanged',
         "type":        "method_replace",
         "search": """\
 .method onDisplayChanged(Lcom/android/server/wm/DisplayContent;)V
@@ -39204,12 +39487,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz p1, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDisplayContent:Lcom/android/server/wm/DisplayContent;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDisplayContent:Lcom/android/server/wm/DisplayContent;', 'if-eq p1, v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDisplayContent:Lcom/android/server/wm/DisplayContent;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onExitAnimationDone__V",
         "method":      ".method onExitAnimationDone()V",
+        "method_name": 'onExitAnimationDone',
         "type":        "method_replace",
         "search": """\
 .method onExitAnimationDone()V
@@ -40586,12 +40871,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-object v0, Lcom/android/internal/protolog/WmProtoLogGroups;->WM_DEBUG_ANIM:Lcom/android/internal/protolog/WmProtoLogGroups;', 'sget-object v1, Lcom/android/internal/protolog/common/LogLevel;->VERBOSE:Lcom/android/internal/protolog/common/LogLevel;', 'invoke-static {v0, v1}, Lcom/android/internal/protolog/ProtoLogImpl_232878649;->isEnabled(Lcom/android/internal/protolog/common/IProtoLogGroup;Lcom/android/internal/protolog/common/LogLevel;)Z', 'move-result v0', 'if-eqz v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mSurfaceAnimator:Lcom/android/server/wm/SurfaceAnimator;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onMovedByResize__V",
         "method":      ".method onMovedByResize()V",
+        "method_name": 'onMovedByResize',
         "type":        "method_replace",
         "search": """\
 .method onMovedByResize()V
@@ -40733,12 +41020,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-object v0, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_RESIZE_enabled:[Z', 'if-eqz v0, :cond_0', 'invoke-static {p0}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v0', 'sget-object v2, Lcom/android/internal/protolog/WmProtoLogGroups;->WM_DEBUG_RESIZE:Lcom/android/internal/protolog/WmProtoLogGroups;', 'filled-new-array {v0}, [Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onParentChanged_Lcom_android_server_wm_ConfigurationContaine",
         "method":      ".method onParentChanged(Lcom/android/server/wm/ConfigurationContainer;Lcom/android/server/wm/ConfigurationContainer;)V",
+        "method_name": 'onParentChanged',
         "type":        "method_replace",
         "search": """\
 .method onParentChanged(Lcom/android/server/wm/ConfigurationContainer;Lcom/android/server/wm/ConfigurationContainer;)V
@@ -40808,12 +41097,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-super {p0, p1, p2}, Lcom/android/server/wm/WindowContainer;->onParentChanged(Lcom/android/server/wm/ConfigurationContainer;Lcom/android/server/wm/ConfigurationContainer;)V', 'invoke-virtual {p0, v0}, Lcom/android/server/wm/WindowState;->setDrawnStateEvaluated(Z)V', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayContent;->reapplyMagnificationSpec()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onResize__V",
         "method":      ".method onResize()V",
+        "method_name": 'onResize',
         "type":        "method_replace",
         "search": """\
 .method onResize()V
@@ -41100,12 +41391,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowContainerStub:Lcom/android/server/wm/WindowContainerStub;', 'const-string v1, "onResize"', 'invoke-interface {v0, p0, v1}, Lcom/android/server/wm/WindowContainerStub;->isTaskFragmentChanging(Lcom/android/server/wm/WindowState;Ljava/lang/String;)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onResizeHandled__V",
         "method":      ".method onResizeHandled()V",
+        "method_name": 'onResizeHandled',
         "type":        "method_replace",
         "search": """\
 .method onResizeHandled()V
@@ -41144,12 +41437,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowFrames;->onResizeHandled()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onSetAppExiting_Z_Z",
         "method":      ".method onSetAppExiting(Z)Z",
+        "method_name": 'onSetAppExiting',
         "type":        "method_replace",
         "search": """\
 .method onSetAppExiting(Z)Z
@@ -41528,12 +41823,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'if-nez p1, :cond_0', 'iput-boolean v2, p0, Lcom/android/server/wm/WindowState;->mPermanentlyHidden:Z', 'invoke-virtual {p0, v3, v3}, Lcom/android/server/wm/WindowState;->hide(ZZ)Z', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisibleNow()Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onSurfaceShownChanged_Z_V",
         "method":      ".method onSurfaceShownChanged(Z)V",
+        "method_name": 'onSurfaceShownChanged',
         "type":        "method_replace",
         "search": """\
 .method onSurfaceShownChanged(Z)V
@@ -42306,12 +42603,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mLastShownChangedReported:Z', 'if-ne v0, p1, :cond_0', 'return-void', 'iput-boolean p1, p0, Lcom/android/server/wm/WindowState;->mLastShownChangedReported:Z', 'if-eqz p1, :cond_1', 'invoke-direct {p0}, Lcom/android/server/wm/WindowState;->initExclusionRestrictions()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_openInputChannel_Landroid_view_InputChannel__V",
         "method":      ".method openInputChannel(Landroid/view/InputChannel;)V",
+        "method_name": 'openInputChannel',
         "type":        "method_replace",
         "search": """\
 .method openInputChannel(Landroid/view/InputChannel;)V
@@ -42538,12 +42837,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mInputChannelToken:Landroid/os/IBinder;', 'if-nez v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getName()Ljava/lang/String;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget-object v1, v1, Lcom/android/server/wm/WindowManagerService;->mInputManager:Lcom/android/server/input/InputManagerService;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_performShowLocked__Z",
         "method":      ".method performShowLocked()Z",
+        "method_name": 'performShowLocked',
         "type":        "method_replace",
         "search": """\
 .method performShowLocked()Z
@@ -43726,12 +44027,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->showToCurrentUser()Z', 'move-result v0', 'const-string v1, "WindowManager"', 'if-nez v0, :cond_1', 'sget-boolean v0, Lcom/android/server/wm/WindowManagerDebugConfig;->DEBUG_VISIBILITY:Z', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_prepareSurfaces__V",
         "method":      ".method prepareSurfaces()V",
+        "method_name": 'prepareSurfaces',
         "type":        "method_replace",
         "search": """\
 .method prepareSurfaces()V
@@ -44061,12 +44364,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mIsDimming:Z', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowStateStub:Lcom/android/server/wm/WindowStateStub;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowStateStub;->isMultiDimLayerEnable()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDimmer()Lcom/android/server/wm/Dimmer;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_prepareSync__Z",
         "method":      ".method prepareSync()Z",
+        "method_name": 'prepareSync',
         "type":        "method_replace",
         "search": """\
 .method prepareSync()Z
@@ -44794,12 +45099,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDrawHandlers:Ljava/util/List;', 'invoke-interface {v0}, Ljava/util/List;->isEmpty()Z', 'move-result v0', 'if-nez v0, :cond_0', 'new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_prepareWindowToDisplayDuringRelayout_Z_V",
         "method":      ".method prepareWindowToDisplayDuringRelayout(Z)V",
+        "method_name": 'prepareWindowToDisplayDuringRelayout',
         "type":        "method_replace",
         "search": """\
 .method prepareWindowToDisplayDuringRelayout(Z)V
@@ -45860,12 +46167,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->flags:I', 'if-nez v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_providesDisplayDecorInsets__Z",
         "method":      ".method providesDisplayDecorInsets()Z",
+        "method_name": 'providesDisplayDecorInsets',
         "type":        "method_replace",
         "search": """\
 .method providesDisplayDecorInsets()Z
@@ -46135,12 +46444,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mInsetsSourceProviders:Landroid/util/SparseArray;', 'if-nez v0, :cond_0', 'return v1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget v0, v0, Lcom/android/server/wm/WindowManagerService;->mConfigTypes:I', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_relayoutVisibleWindow_I_I",
         "method":      ".method relayoutVisibleWindow(I)I",
+        "method_name": 'relayoutVisibleWindow',
         "type":        "method_replace",
         "search": """\
 .method relayoutVisibleWindow(I)I
@@ -46787,12 +47098,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisible()Z', 'move-result v0', 'if-eqz v0, :cond_1', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isDrawn()Z', 'move-result v3', 'if-nez v3, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeIfPossible__V",
         "method":      ".method removeIfPossible()V",
+        "method_name": 'removeIfPossible',
         "type":        "method_replace",
         "search": """\
 .method removeIfPossible()V
@@ -48695,12 +49008,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, v1, Lcom/android/server/wm/WindowState;->mWindowRemovalAllowed:Z', 'sget-object v2, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_ADD_REMOVE_enabled:[Z', 'if-eqz v2, :cond_0', 'invoke-static {v1}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v2', 'invoke-static {v4}, Landroid/os/Debug;->getCallers(I)Ljava/lang/String;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeImmediately__V",
         "method":      ".method removeImmediately()V",
+        "method_name": 'removeImmediately',
         "type":        "method_replace",
         "search": """\
 .method removeImmediately()V
@@ -50233,12 +50548,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mRemoved:Z', 'if-eqz v0, :cond_1', 'sget-object v0, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_ADD_REMOVE_enabled:[Z', 'if-eqz v0, :cond_0', 'invoke-static {p0}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reparentSurfaceControl_Landroid_view_SurfaceControl_Transact",
         "method":      ".method protected reparentSurfaceControl(Landroid/view/SurfaceControl$Transaction;Landroid/view/SurfaceControl;)V",
+        "method_name": 'reparentSurfaceControl',
         "type":        "method_replace",
         "search": """\
 .method protected reparentSurfaceControl(Landroid/view/SurfaceControl$Transaction;Landroid/view/SurfaceControl;)V
@@ -50304,12 +50621,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowState;->isStartingWindowAssociatedToTask()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return-void', 'invoke-super {p0, p1, p2}, Lcom/android/server/wm/WindowContainer;->reparentSurfaceControl(Landroid/view/SurfaceControl$Transaction;Landroid/view/SurfaceControl;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reportFocusChangedSerialized_Z_V",
         "method":      ".method reportFocusChangedSerialized(Z)V",
+        "method_name": 'reportFocusChangedSerialized',
         "type":        "method_replace",
         "search": """\
 .method reportFocusChangedSerialized(Z)V
@@ -50542,12 +50861,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mFocusCallbacks:Landroid/os/RemoteCallbackList;', 'if-eqz v0, :cond_2', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mFocusCallbacks:Landroid/os/RemoteCallbackList;', 'invoke-virtual {v0}, Landroid/os/RemoteCallbackList;->beginBroadcast()I', 'move-result v0', 'if-ge v1, v0, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_reportResized__V",
         "method":      ".method reportResized()V",
+        "method_name": 'reportResized',
         "type":        "method_replace",
         "search": """\
 .method reportResized()V
@@ -51981,12 +52302,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {v0}, Lcom/android/server/wm/WindowState;->inRelaunchingActivity()Z', 'move-result v1', 'if-eqz v1, :cond_0', 'iget-object v1, v0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v1, v1, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-eq v1, v2, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_requestDrawIfNeeded_Ljava_util_List__V",
         "method":      ".method requestDrawIfNeeded(Ljava/util/List;)V",
+        "method_name": 'requestDrawIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method requestDrawIfNeeded(Ljava/util/List;)V
@@ -52462,12 +52785,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisible()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return-void', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->asWallpaperToken()Lcom/android/server/wm/WallpaperWindowToken;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_requestRedrawForSync__V",
         "method":      ".method requestRedrawForSync()V",
+        "method_name": 'requestRedrawForSync',
         "type":        "method_replace",
         "search": """\
 .method requestRedrawForSync()V
@@ -52506,12 +52831,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mRedrawForSyncReported:Z', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_requestUpdateWallpaperIfNeeded__V",
         "method":      ".method requestUpdateWallpaperIfNeeded()V",
+        "method_name": 'requestUpdateWallpaperIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method requestUpdateWallpaperIfNeeded()V
@@ -52798,12 +53125,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'if-eqz v0, :cond_2', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mIsWallpaper:Z', 'if-eqz v1, :cond_0', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mLastConfigReportedToClient:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetAppOpsState__V",
         "method":      ".method resetAppOpsState()V",
+        "method_name": 'resetAppOpsState',
         "type":        "method_replace",
         "search": """\
 .method resetAppOpsState()V
@@ -52948,12 +53277,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mAppOp:I', 'if-eq v0, v1, :cond_0', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mAppOpVisibility:Z', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'iget-object v0, v0, Lcom/android/server/wm/WindowManagerService;->mAppOps:Landroid/app/AppOpsManager;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetContentChanged__V",
         "method":      ".method resetContentChanged()V",
+        "method_name": 'resetContentChanged',
         "type":        "method_replace",
         "search": """\
 .method resetContentChanged()V
@@ -53001,12 +53332,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/WindowFrames;->setContentChanged(Z)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetDragResizingChangeReported__V",
         "method":      ".method resetDragResizingChangeReported()V",
+        "method_name": 'resetDragResizingChangeReported',
         "type":        "method_replace",
         "search": """\
 .method resetDragResizingChangeReported()V
@@ -53054,12 +53387,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mDragResizingChangeReported:Z', 'invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->resetDragResizingChangeReported()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetFreeformModeChangeReported__V",
         "method":      ".method resetFreeformModeChangeReported()V",
+        "method_name": 'resetFreeformModeChangeReported',
         "type":        "method_replace",
         "search": """\
 .method resetFreeformModeChangeReported()V
@@ -53107,12 +53442,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mFreeformModeChangeReported:Z', 'invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->resetFreeformModeChangeReported()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_resetScaleChangeReported__V",
         "method":      ".method resetScaleChangeReported()V",
+        "method_name": 'resetScaleChangeReported',
         "type":        "method_replace",
         "search": """\
 .method resetScaleChangeReported()V
@@ -53160,12 +53497,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mScaleChangeReported:Z', 'invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->resetScaleChangeReported()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendAppVisibilityToClients__V",
         "method":      ".method sendAppVisibilityToClients()V",
+        "method_name": 'sendAppVisibilityToClients',
         "type":        "method_replace",
         "search": """\
 .method sendAppVisibilityToClients()V
@@ -53749,12 +54088,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "WindowManager"', 'invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->sendAppVisibilityToClients()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v1}, Lcom/android/server/wm/WindowToken;->isClientVisible()Z', 'move-result v1', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setDisplayLayoutNeeded__V",
         "method":      ".method setDisplayLayoutNeeded()V",
+        "method_name": 'setDisplayLayoutNeeded',
         "type":        "method_replace",
         "search": """\
 .method setDisplayLayoutNeeded()V
@@ -53811,12 +54152,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayContent;->setLayoutNeeded()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setDragResizing__V",
         "method":      ".method setDragResizing()V",
+        "method_name": 'setDragResizing',
         "type":        "method_replace",
         "search": """\
 .method setDragResizing()V
@@ -53891,12 +54234,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Lcom/android/server/wm/WindowState;->computeDragResizing()Z', 'move-result v0', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mDragResizing:Z', 'if-ne v0, v1, :cond_0', 'return-void', 'iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mDragResizing:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setDrawnStateEvaluated_Z_V",
         "method":      ".method setDrawnStateEvaluated(Z)V",
+        "method_name": 'setDrawnStateEvaluated',
         "type":        "method_replace",
         "search": """\
 .method setDrawnStateEvaluated(Z)V
@@ -53926,12 +54271,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean p1, p0, Lcom/android/server/wm/WindowState;->mDrawnStateEvaluated:Z', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setForceHideNonSystemOverlayWindowIfNeeded_Z_V",
         "method":      ".method setForceHideNonSystemOverlayWindowIfNeeded(Z)V",
+        "method_name": 'setForceHideNonSystemOverlayWindowIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method setForceHideNonSystemOverlayWindowIfNeeded(Z)V
@@ -54257,12 +54604,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getBaseType()I', 'move-result v0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mSession:Lcom/android/server/wm/Session;', 'iget-boolean v1, v1, Lcom/android/server/wm/Session;->mCanAddInternalSystemWindow:Z', 'if-nez v1, :cond_4', 'invoke-static {v0}, Landroid/view/WindowManager$LayoutParams;->isSystemAlertWindowType(I)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setFrames_Landroid_window_ClientWindowFrames_II_V",
         "method":      ".method setFrames(Landroid/window/ClientWindowFrames;II)V",
+        "method_name": 'setFrames',
         "type":        "method_replace",
         "search": """\
 .method setFrames(Landroid/window/ClientWindowFrames;II)V
@@ -55668,12 +56017,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mComputeFrameBounds:Landroid/graphics/Rect;', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getBounds()Landroid/graphics/Rect;', 'move-result-object v1', 'invoke-virtual {v0, v1}, Landroid/graphics/Rect;->set(Landroid/graphics/Rect;)V', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mTmpRect:Landroid/graphics/Rect;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setHasSurface_Z_V",
         "method":      ".method setHasSurface(Z)V",
+        "method_name": 'setHasSurface',
         "type":        "method_replace",
         "search": """\
 .method setHasSurface(Z)V
@@ -55703,12 +56054,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean p1, p0, Lcom/android/server/wm/WindowState;->mHasSurface:Z', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setHiddenWhileSuspended_Z_V",
         "method":      ".method setHiddenWhileSuspended(Z)V",
+        "method_name": 'setHiddenWhileSuspended',
         "type":        "method_replace",
         "search": """\
 .method setHiddenWhileSuspended(Z)V
@@ -55948,12 +56301,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mOwnerCanAddInternalSystemWindow:Z', 'if-nez v0, :cond_3', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'invoke-static {v0}, Landroid/view/WindowManager$LayoutParams;->isSystemAlertWindowType(I)Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setImeChildrenExcludeRegion_Landroid_graphics_Region__V",
         "method":      ".method setImeChildrenExcludeRegion(Landroid/graphics/Region;)V",
+        "method_name": 'setImeChildrenExcludeRegion',
         "type":        "method_replace",
         "search": """\
 .method setImeChildrenExcludeRegion(Landroid/graphics/Region;)V
@@ -56156,12 +56511,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mIsImWindow:Z', 'if-nez v0, :cond_0', 'return-void', 'new-instance v0, Landroid/graphics/Region;', 'invoke-direct {v0}, Landroid/graphics/Region;-><init>()V', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setInitialSurfaceControlProperties_Landroid_view_SurfaceCont",
         "method":      ".method setInitialSurfaceControlProperties(Landroid/view/SurfaceControl$Builder;)V",
+        "method_name": 'setInitialSurfaceControlProperties',
         "type":        "method_replace",
         "search": """\
 .method setInitialSurfaceControlProperties(Landroid/view/SurfaceControl$Builder;)V
@@ -56385,12 +56742,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-super {p0, p1}, Lcom/android/server/wm/WindowContainer;->setInitialSurfaceControlProperties(Landroid/view/SurfaceControl$Builder;)V', 'invoke-static {}, Lcom/android/internal/hidden_from_bootclasspath/com/android/window/flags/Flags;->surfaceTrustedOverlay()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isWindowTrustedOverlay()Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setKeepClearAreas_Ljava_util_List_Ljava_util_List__Z",
         "method":      ".method setKeepClearAreas(Ljava/util/List;Ljava/util/List;)Z",
+        "method_name": 'setKeepClearAreas',
         "type":        "method_replace",
         "search": """\
 .method setKeepClearAreas(Ljava/util/List;Ljava/util/List;)Z
@@ -56648,12 +57007,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mKeepClearAreas:Ljava/util/List;', 'invoke-interface {v0, p1}, Ljava/util/List;->equals(Ljava/lang/Object;)Z', 'move-result v0', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mUnrestrictedKeepClearAreas:Ljava/util/List;', 'invoke-interface {v2, p2}, Ljava/util/List;->equals(Ljava/lang/Object;)Z', 'move-result v2'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setLastExclusionHeights_III_V",
         "method":      ".method setLastExclusionHeights(III)V",
+        "method_name": 'setLastExclusionHeights',
         "type":        "method_replace",
         "search": """\
 .method setLastExclusionHeights(III)V
@@ -56859,12 +57220,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mLastGrantedExclusionHeight:[I', 'if-ne v0, p3, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mLastRequestedExclusionHeight:[I', 'if-eq v0, p2, :cond_0', 'if-eqz v0, :cond_3', 'iget-boolean v1, p0, Lcom/android/server/wm/WindowState;->mLastShownChangedReported:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setOnBackInvokedCallbackInfo_Landroid_window_OnBackInvokedCa",
         "method":      ".method setOnBackInvokedCallbackInfo(Landroid/window/OnBackInvokedCallbackInfo;)V",
+        "method_name": 'setOnBackInvokedCallbackInfo',
         "type":        "method_replace",
         "search": """\
 .method setOnBackInvokedCallbackInfo(Landroid/window/OnBackInvokedCallbackInfo;)V
@@ -57010,12 +57373,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-object v0, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_DEBUG_BACK_PREVIEW_enabled:[Z', 'if-eqz v0, :cond_0', 'invoke-static {p0}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v0', 'invoke-static {p1}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setPolicyVisibilityFlag_I_V",
         "method":      ".method setPolicyVisibilityFlag(I)V",
+        "method_name": 'setPolicyVisibilityFlag',
         "type":        "method_replace",
         "search": """\
 .method setPolicyVisibilityFlag(I)V
@@ -57081,12 +57446,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mPolicyVisibility:I', 'iput v0, p0, Lcom/android/server/wm/WindowState;->mPolicyVisibility:I', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWmService:Lcom/android/server/wm/WindowManagerService;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowManagerService;->scheduleAnimationLocked()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setReportResizeHints__Z",
         "method":      ".method setReportResizeHints()Z",
+        "method_name": 'setReportResizeHints',
         "type":        "method_replace",
         "search": """\
 .method setReportResizeHints()Z
@@ -57129,12 +57496,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowFrames;->setReportResizeHints()Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setRequestedSize_II_V",
         "method":      ".method setRequestedSize(II)V",
+        "method_name": 'setRequestedSize',
         "type":        "method_replace",
         "search": """\
 .method setRequestedSize(II)V
@@ -57299,12 +57668,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mRequestedWidth:I', 'if-ne v0, p1, :cond_0', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mRequestedHeight:I', 'if-eq v0, p2, :cond_1', 'iput-boolean v0, p0, Lcom/android/server/wm/WindowState;->mLayoutNeeded:Z', 'iput p1, p0, Lcom/android/server/wm/WindowState;->mRequestedWidth:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setRequestedVisibleTypes_I_I",
         "method":      ".method setRequestedVisibleTypes(I)I",
+        "method_name": 'setRequestedVisibleTypes',
         "type":        "method_replace",
         "search": """\
 .method setRequestedVisibleTypes(I)I
@@ -57722,12 +58093,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mRequestedVisibleTypes:I', 'if-eq v0, p1, :cond_1', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mRequestedVisibleTypes:I', 'iput p1, p0, Lcom/android/server/wm/WindowState;->mRequestedVisibleTypes:I', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getTask()Lcom/android/server/wm/Task;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setRequestedVisibleTypes_II_I",
         "method":      ".method setRequestedVisibleTypes(II)I",
+        "method_name": 'setRequestedVisibleTypes',
         "type":        "method_replace",
         "search": """\
 .method setRequestedVisibleTypes(II)I
@@ -57806,12 +58179,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mRequestedVisibleTypes:I', 'invoke-virtual {p0, v0}, Lcom/android/server/wm/WindowState;->setRequestedVisibleTypes(I)I', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setSecureLocked_Z_V",
         "method":      ".method setSecureLocked(Z)V",
+        "method_name": 'setSecureLocked',
         "type":        "method_replace",
         "search": """\
 .method setSecureLocked(Z)V
@@ -58153,12 +58528,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-object v0, Lcom/android/internal/protolog/ProtoLogImpl_232878649$Cache;->WM_SHOW_TRANSACTIONS_enabled:[Z', 'if-eqz v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getName()Ljava/lang/String;', 'move-result-object v1', 'invoke-static {v1}, Ljava/lang/String;->valueOf(Ljava/lang/Object;)Ljava/lang/String;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setSurfaceTranslationY_I_V",
         "method":      ".method setSurfaceTranslationY(I)V",
+        "method_name": 'setSurfaceTranslationY',
         "type":        "method_replace",
         "search": """\
 .method setSurfaceTranslationY(I)V
@@ -58188,12 +58565,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput p1, p0, Lcom/android/server/wm/WindowState;->mSurfaceTranslationY:I', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setSystemGestureExclusion_Ljava_util_List__Z",
         "method":      ".method setSystemGestureExclusion(Ljava/util/List;)Z",
+        "method_name": 'setSystemGestureExclusion',
         "type":        "method_replace",
         "search": """\
 .method setSystemGestureExclusion(Ljava/util/List;)Z
@@ -58329,12 +58708,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mExclusionRects:Ljava/util/List;', 'invoke-interface {v0, p1}, Ljava/util/List;->equals(Ljava/lang/Object;)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mExclusionRects:Ljava/util/List;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setViewVisibility_I_V",
         "method":      ".method setViewVisibility(I)V",
+        "method_name": 'setViewVisibility',
         "type":        "method_replace",
         "search": """\
 .method setViewVisibility(I)V
@@ -58893,12 +59274,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mViewVisibility:I', 'if-eq v0, p1, :cond_3', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mSession:Lcom/android/server/wm/Session;', 'if-eqz v0, :cond_3', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setWallpaperOffset_IIF_Z",
         "method":      ".method setWallpaperOffset(IIF)Z",
+        "method_name": 'setWallpaperOffset',
         "type":        "method_replace",
         "search": """\
 .method setWallpaperOffset(IIF)Z
@@ -59078,12 +59461,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mXOffset:I', 'if-ne v0, p1, :cond_0', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mYOffset:I', 'if-ne v0, p2, :cond_0', 'iget v0, p0, Lcom/android/server/wm/WindowState;->mWallpaperScale:F', 'invoke-static {v0, p3}, Ljava/lang/Float;->compare(FF)I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setWindowScale_II_V",
         "method":      ".method setWindowScale(II)V",
+        "method_name": 'setWindowScale',
         "type":        "method_replace",
         "search": """\
 .method setWindowScale(II)V
@@ -59433,12 +59818,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->flags:I', 'if-eqz v0, :cond_0', 'if-eqz v0, :cond_3', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v2, v2, Landroid/view/WindowManager$LayoutParams;->width:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldCheckTokenVisibleRequested__Z",
         "method":      ".method shouldCheckTokenVisibleRequested()Z",
+        "method_name": 'shouldCheckTokenVisibleRequested',
         "type":        "method_replace",
         "search": """\
 .method shouldCheckTokenVisibleRequested()Z
@@ -59557,12 +59944,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-nez v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mToken:Lcom/android/server/wm/WindowToken;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowToken;->asWallpaperToken()Lcom/android/server/wm/WallpaperWindowToken;', 'move-result-object v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldMagnify__Z",
         "method":      ".method shouldMagnify()Z",
+        "method_name": 'shouldMagnify',
         "type":        "method_replace",
         "search": """\
 .method shouldMagnify()Z
@@ -59917,12 +60306,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-eq v0, v1, :cond_2', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-eq v0, v1, :cond_2'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldSyncWithBuffers__Z",
         "method":      ".method shouldSyncWithBuffers()Z",
+        "method_name": 'shouldSyncWithBuffers',
         "type":        "method_replace",
         "search": """\
 .method shouldSyncWithBuffers()Z
@@ -60044,12 +60435,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDrawHandlers:Ljava/util/List;', 'invoke-interface {v0}, Ljava/util/List;->isEmpty()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return v1', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getSyncMethod()I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_shouldUpdateSyncOnReparent__Z",
         "method":      ".method protected shouldUpdateSyncOnReparent()Z",
+        "method_name": 'shouldUpdateSyncOnReparent',
         "type":        "method_replace",
         "search": """\
 .method protected shouldUpdateSyncOnReparent()Z
@@ -60143,12 +60536,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mSyncState:I', 'if-eqz v0, :cond_0', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mLastConfigReportedToClient:Z', 'if-nez v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_show_ZZ_Z",
         "method":      ".method show(ZZ)Z",
+        "method_name": 'show',
         "type":        "method_replace",
         "search": """\
 .method show(ZZ)Z
@@ -61001,12 +61396,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Lcom/android/server/wm/BarFollowAnimationStub;->getInstance()Lcom/android/server/wm/BarFollowAnimationStub;', 'move-result-object v0', 'invoke-virtual {v0, p0}, Lcom/android/server/wm/BarFollowAnimationStub;->showStatusBarIfNeed(Lcom/android/server/wm/WindowState;)Z', 'move-result v0', 'if-nez v0, :cond_0', 'return v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_showForAllUsers__Z",
         "method":      ".method showForAllUsers()Z",
+        "method_name": 'showForAllUsers',
         "type":        "method_replace",
         "search": """\
 .method showForAllUsers()Z
@@ -61173,12 +61570,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->type:I', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v0, v0, Landroid/view/WindowManager$LayoutParams;->privateFlags:I', 'if-nez v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_showToCurrentUser__Z",
         "method":      ".method showToCurrentUser()Z",
+        "method_name": 'showToCurrentUser',
         "type":        "method_replace",
         "search": """\
 .method showToCurrentUser()Z
@@ -61652,12 +62051,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getTopParentWindow()Lcom/android/server/wm/WindowState;', 'move-result-object v0', 'iget-object v1, v0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget v1, v1, Landroid/view/WindowManager$LayoutParams;->type:I', 'if-ge v1, v2, :cond_0', 'iget-object v1, v0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_showWallpaper__Z",
         "method":      ".method showWallpaper()Z",
+        "method_name": 'showWallpaper',
         "type":        "method_replace",
         "search": """\
 .method showWallpaper()Z
@@ -61773,12 +62174,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isVisibleRequested()Z', 'move-result v0', 'if-eqz v0, :cond_1', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->inMultiWindowMode()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_skipLayout__Z",
         "method":      ".method skipLayout()Z",
+        "method_name": 'skipLayout',
         "type":        "method_replace",
         "search": """\
 .method skipLayout()Z
@@ -61881,12 +62284,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'iget-boolean v0, v0, Lcom/android/server/wm/ActivityRecord;->mWaitForEnteringPinnedMode:Z', 'if-eqz v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_startAnimation_Landroid_view_animation_Animation__V",
         "method":      ".method startAnimation(Landroid/view/animation/Animation;)V",
+        "method_name": 'startAnimation',
         "type":        "method_replace",
         "search": """\
 .method startAnimation(Landroid/view/animation/Animation;)V
@@ -62408,12 +62813,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mControllableInsetProvider:Lcom/android/server/wm/InsetsSourceProvider;', 'if-eqz v0, :cond_0', 'return-void', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayInfo()Landroid/view/DisplayInfo;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_surfaceInsetsChanging__Z",
         "method":      ".method surfaceInsetsChanging()Z",
+        "method_name": 'surfaceInsetsChanging',
         "type":        "method_replace",
         "search": """\
 .method surfaceInsetsChanging()Z
@@ -62483,12 +62890,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mLastSurfaceInsets:Landroid/graphics/Rect;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mAttrs:Landroid/view/WindowManager$LayoutParams;', 'iget-object v1, v1, Landroid/view/WindowManager$LayoutParams;->surfaceInsets:Landroid/graphics/Rect;', 'invoke-virtual {v0, v1}, Landroid/graphics/Rect;->equals(Ljava/lang/Object;)Z', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_switchUser_I_V",
         "method":      ".method switchUser(I)V",
+        "method_name": 'switchUser',
         "type":        "method_replace",
         "search": """\
 .method switchUser(I)V
@@ -62787,12 +63196,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-super {p0, p1}, Lcom/android/server/wm/WindowContainer;->switchUser(I)V', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->showToCurrentUser()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'invoke-virtual {p0, v1}, Lcom/android/server/wm/WindowState;->setPolicyVisibilityFlag(I)V', 'sget-boolean v0, Lcom/android/server/wm/WindowManagerDebugConfig;->DEBUG_VISIBILITY:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_syncNextBuffer__Z",
         "method":      ".method syncNextBuffer()Z",
+        "method_name": 'syncNextBuffer',
         "type":        "method_replace",
         "search": """\
 .method syncNextBuffer()Z
@@ -62915,12 +63326,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-super {p0}, Lcom/android/server/wm/WindowContainer;->syncNextBuffer()Z', 'move-result v0', 'if-nez v0, :cond_1', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mDrawHandlers:Ljava/util/List;', 'invoke-interface {v0}, Ljava/util/List;->size()I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_transformFrameToSurfacePosition_IILandroid_graphics_Point__V",
         "method":      ".method transformFrameToSurfacePosition(IILandroid/graphics/Point;)V",
+        "method_name": 'transformFrameToSurfacePosition',
         "type":        "method_replace",
         "search": """\
 .method transformFrameToSurfacePosition(IILandroid/graphics/Point;)V
@@ -63761,12 +64174,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p3, p1, p2}, Landroid/graphics/Point;->set(II)V', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getParent()Lcom/android/server/wm/WindowContainer;', 'move-result-object v0', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isChildWindow()Z', 'move-result v1', 'if-eqz v1, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_translateToWindowX_F_F",
         "method":      ".method translateToWindowX(F)F",
+        "method_name": 'translateToWindowX',
         "type":        "method_replace",
         "search": """\
 .method translateToWindowX(F)F
@@ -63891,12 +64306,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'iget v0, v0, Landroid/graphics/Rect;->left:I', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mGlobalScale:F', 'if-eqz v1, :cond_0', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mInvGlobalScale:F'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_translateToWindowY_F_F",
         "method":      ".method translateToWindowY(F)F",
+        "method_name": 'translateToWindowY',
         "type":        "method_replace",
         "search": """\
 .method translateToWindowY(F)F
@@ -64021,12 +64438,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'iget v0, v0, Landroid/graphics/Rect;->top:I', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mGlobalScale:F', 'if-eqz v1, :cond_0', 'iget v1, p0, Lcom/android/server/wm/WindowState;->mInvGlobalScale:F'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateAboveInsetsState_Landroid_view_InsetsState_Landroid_ut",
         "method":      ".method updateAboveInsetsState(Landroid/view/InsetsState;Landroid/util/SparseArray;Landroid/util/ArraySet;)V",
+        "method_name": 'updateAboveInsetsState',
         "type":        "method_replace",
         "search": """\
 .method updateAboveInsetsState(Landroid/view/InsetsState;Landroid/util/SparseArray;Landroid/util/ArraySet;)V
@@ -64129,12 +64548,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mLocalInsetsSources:Landroid/util/SparseArray;', 'invoke-static {p2, v0}, Lcom/android/server/wm/WindowState;->createMergedSparseArray(Landroid/util/SparseArray;Landroid/util/SparseArray;)Landroid/util/SparseArray;', 'move-result-object v0', 'new-instance v1, Lcom/android/server/wm/WindowState$$ExternalSyntheticLambda2;', 'invoke-direct {v1, p1, p3, v0}, Lcom/android/server/wm/WindowState$$ExternalSyntheticLambda2;-><init>(Landroid/view/InsetsState;Landroid/util/ArraySet;Landroid/util/SparseArray;)V', 'invoke-virtual {p0, v1, v2}, Lcom/android/server/wm/WindowState;->forAllWindows(Ljava/util/function/Consumer;Z)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateAppOpsState__V",
         "method":      ".method updateAppOpsState()V",
+        "method_name": 'updateAppOpsState',
         "type":        "method_replace",
         "search": """\
 .method updateAppOpsState()V
@@ -64506,12 +64927,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/wm/WindowState;->mAppOp:I', 'if-ne v0, v1, :cond_0', 'return-void', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getOwningUid()I', 'move-result v4', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getOwningPackage()Ljava/lang/String;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateFrameRateSelectionPriorityIfNeeded__V",
         "method":      ".method updateFrameRateSelectionPriorityIfNeeded()V",
+        "method_name": 'updateFrameRateSelectionPriorityIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method updateFrameRateSelectionPriorityIfNeeded()V
@@ -64803,12 +65226,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayContent;->getDisplayPolicy()Lcom/android/server/wm/DisplayPolicy;', 'move-result-object v0', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayPolicy;->getRefreshRatePolicy()Lcom/android/server/wm/RefreshRatePolicy;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateGlobalScale__V",
         "method":      ".method updateGlobalScale()V",
+        "method_name": 'updateGlobalScale',
         "type":        "method_replace",
         "search": """\
 .method updateGlobalScale()V
@@ -65354,12 +65779,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->layoutForART()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return-void', 'invoke-static {}, Lcom/android/server/wm/AppRTWmsStub;->getInstance()Lcom/android/server/wm/AppRTWmsStub;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateLastFrames__V",
         "method":      ".method updateLastFrames()V",
+        "method_name": 'updateLastFrames',
         "type":        "method_replace",
         "search": """\
 .method updateLastFrames()V
@@ -65470,12 +65897,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mLastFrame:Landroid/graphics/Rect;', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v1, v1, Lcom/android/server/wm/WindowFrames;->mFrame:Landroid/graphics/Rect;', 'invoke-virtual {v0, v1}, Landroid/graphics/Rect;->set(Landroid/graphics/Rect;)V', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateReportedVisibility_Lcom_android_server_wm_WindowState_",
         "method":      ".method updateReportedVisibility(Lcom/android/server/wm/WindowState$UpdateReportedVisibilityResults;)V",
+        "method_name": 'updateReportedVisibility',
         "type":        "method_replace",
         "search": """\
 .method updateReportedVisibility(Lcom/android/server/wm/WindowState$UpdateReportedVisibilityResults;)V
@@ -66552,12 +66981,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;', 'invoke-virtual {v0}, Ljava/util/ArrayList;->size()I', 'move-result v0', 'if-ltz v0, :cond_0', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mChildren:Ljava/util/ArrayList;', 'invoke-virtual {v2, v0}, Ljava/util/ArrayList;->get(I)Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateResizingWindowIfNeeded__V",
         "method":      ".method updateResizingWindowIfNeeded()V",
+        "method_name": 'updateResizingWindowIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method updateResizingWindowIfNeeded()V
@@ -68755,12 +69186,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, v1, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'invoke-virtual {v0}, Lcom/android/server/wm/WindowFrames;->hasInsetsChanged()Z', 'move-result v0', 'if-nez v0, :cond_1', 'invoke-static {}, Landroid/view/WindowInsets$Type;->ime()I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateSourceFrame_Landroid_graphics_Rect__V",
         "method":      ".method updateSourceFrame(Landroid/graphics/Rect;)V",
+        "method_name": 'updateSourceFrame',
         "type":        "method_replace",
         "search": """\
 .method updateSourceFrame(Landroid/graphics/Rect;)V
@@ -68981,12 +69414,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->hasInsetsSourceProvider()Z', 'move-result v0', 'if-nez v0, :cond_0', 'return-void', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mGivenInsetsPending:Z', 'if-eqz v0, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateSurfacePosition_Landroid_view_SurfaceControl_Transacti",
         "method":      ".method updateSurfacePosition(Landroid/view/SurfaceControl$Transaction;)V",
+        "method_name": 'updateSurfacePosition',
         "type":        "method_replace",
         "search": """\
 .method updateSurfacePosition(Landroid/view/SurfaceControl$Transaction;)V
@@ -70675,12 +71110,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mSurfaceControl:Landroid/view/SurfaceControl;', 'if-eqz v0, :cond_f', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mIsSurfacePositionPaused:Z', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/wm/WindowState;->mActivityRecord:Lcom/android/server/wm/ActivityRecord;', 'if-eqz v0, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateSurfacePositionIfNeeded__V",
         "method":      ".method updateSurfacePositionIfNeeded()V",
+        "method_name": 'updateSurfacePositionIfNeeded',
         "type":        "method_replace",
         "search": """\
 .method updateSurfacePositionIfNeeded()V
@@ -70866,12 +71303,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v0, v0, Lcom/android/server/wm/WindowFrames;->mRelFrame:Landroid/graphics/Rect;', 'iget v0, v0, Landroid/graphics/Rect;->top:I', 'iget-object v1, p0, Lcom/android/server/wm/WindowState;->mWindowFrames:Lcom/android/server/wm/WindowFrames;', 'iget-object v1, v1, Lcom/android/server/wm/WindowFrames;->mLastRelFrame:Landroid/graphics/Rect;', 'iget v1, v1, Landroid/graphics/Rect;->top:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateTapExcludeRegion_Landroid_graphics_Region__V",
         "method":      ".method updateTapExcludeRegion(Landroid/graphics/Region;)V",
+        "method_name": 'updateTapExcludeRegion',
         "type":        "method_replace",
         "search": """\
 .method updateTapExcludeRegion(Landroid/graphics/Region;)V
@@ -71084,12 +71523,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getDisplayContent()Lcom/android/server/wm/DisplayContent;', 'move-result-object v0', 'if-eqz v0, :cond_2', 'if-eqz p1, :cond_1', 'invoke-virtual {p1}, Landroid/graphics/Region;->isEmpty()Z', 'move-result v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateTrustedOverlay__V",
         "method":      ".method updateTrustedOverlay()V",
+        "method_name": 'updateTrustedOverlay',
         "type":        "method_replace",
         "search": """\
 .method updateTrustedOverlay()V
@@ -71181,12 +71622,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/wm/WindowState;->mInputWindowHandle:Lcom/android/server/wm/InputWindowHandleWrapper;', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->getPendingTransaction()Landroid/view/SurfaceControl$Transaction;', 'move-result-object v1', 'iget-object v2, p0, Lcom/android/server/wm/WindowState;->mSurfaceControl:Landroid/view/SurfaceControl;', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isWindowTrustedOverlay()Z', 'move-result v3'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_wouldBeVisibleIfPolicyIgnored__Z",
         "method":      ".method wouldBeVisibleIfPolicyIgnored()Z",
+        "method_name": 'wouldBeVisibleIfPolicyIgnored',
         "type":        "method_replace",
         "search": """\
 .method wouldBeVisibleIfPolicyIgnored()Z
@@ -71460,6 +71903,7 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mHasSurface:Z', 'if-eqz v0, :cond_4', 'invoke-virtual {p0}, Lcom/android/server/wm/WindowState;->isParentWindowHidden()Z', 'move-result v0', 'if-nez v0, :cond_4', 'iget-boolean v0, p0, Lcom/android/server/wm/WindowState;->mAnimatingExit:Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

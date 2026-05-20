@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/miui/server/greeze/PolicyManager.smali"
+CLASS_FALLBACK_NAMES = ['PolicyManager.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method__clinit___V",
         "method":      ".method static constructor <clinit>()V",
+        "method_name": '<clinit>',
         "type":        "method_replace",
         "search": """\
 .method static constructor <clinit>()V
@@ -178,6 +181,7 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['const-string v0, "persist.sys.aurogon.immobulus"', 'invoke-static {v0, v1}, Landroid/os/SystemProperties;->getBoolean(Ljava/lang/String;Z)Z', 'move-result v0', 'sput-boolean v0, Lcom/miui/server/greeze/PolicyManager;->IMMOBULUS_ENABLED:Z', 'const-string v0, "ro.miui.region"', 'const-string v1, "unknown"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

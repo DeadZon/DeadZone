@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-framework.jar"
 TARGET_CLASS = "mezo/xiaomi/util/JSONTranslator$SingletonHolder.smali"
+CLASS_FALLBACK_NAMES = ['JSONTranslator$SingletonHolder.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

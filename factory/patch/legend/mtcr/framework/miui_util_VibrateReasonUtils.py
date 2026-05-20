@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "miui/util/VibrateReasonUtils.smali"
+CLASS_FALLBACK_NAMES = ['VibrateReasonUtils.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

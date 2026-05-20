@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/devicepolicy/DevicePolicyCacheImpl.smali"
+CLASS_FALLBACK_NAMES = ['DevicePolicyCacheImpl.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_isScreenCaptureAllowed_I_Z",
         "method":      ".method public isScreenCaptureAllowed(I)Z",
+        "method_name": 'isScreenCaptureAllowed',
         "type":        "method_replace",
         "search": """\
 .method public isScreenCaptureAllowed(I)Z
@@ -147,6 +150,7 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyCacheImpl;->mLock:Ljava/lang/Object;', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyCacheImpl;->mScreenCaptureDisallowedUsers:Ljava/util/Set;', 'invoke-static {p1}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;', 'move-result-object v2', 'invoke-interface {v1, v2}, Ljava/util/Set;->contains(Ljava/lang/Object;)Z', 'move-result v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

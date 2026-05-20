@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/wm/WindowManagerServiceImpl.smali"
+CLASS_FALLBACK_NAMES = ['WindowManagerServiceImpl.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_notAllowCaptureDisplay_Lcom_android_server_wm_RootWindowCont",
         "method":      ".method public notAllowCaptureDisplay(Lcom/android/server/wm/RootWindowContainer;I)Z",
+        "method_name": 'notAllowCaptureDisplay',
         "type":        "method_replace",
         "search": """\
 .method public notAllowCaptureDisplay(Lcom/android/server/wm/RootWindowContainer;I)Z
@@ -199,6 +202,7 @@ PATCHES = [
     return v2
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/os/Binder;->getCallingUid()I', 'move-result v0', 'if-eq v0, v1, :cond_2', 'invoke-static {}, Lcom/android/server/wm/ActivityRecordStub;->isCompatibilityMode()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "android/Utils/Shell$CommandResult.smali"
+CLASS_FALLBACK_NAMES = ['Shell$CommandResult.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

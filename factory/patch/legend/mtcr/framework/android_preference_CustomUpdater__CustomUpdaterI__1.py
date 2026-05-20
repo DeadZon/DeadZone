@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "android/preference/CustomUpdater$CustomUpdaterI$1.smali"
+CLASS_FALLBACK_NAMES = ['CustomUpdater$CustomUpdaterI$1.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/biometrics/sensors/AuthenticationClient.smali"
+CLASS_FALLBACK_NAMES = ['AuthenticationClient.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_getActivityTaskManager__Landroid_app_ActivityTaskManager_",
         "method":      ".method protected getActivityTaskManager()Landroid/app/ActivityTaskManager;",
+        "method_name": 'getActivityTaskManager',
         "type":        "method_replace",
         "search": """\
 .method protected getActivityTaskManager()Landroid/app/ActivityTaskManager;
@@ -50,12 +53,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/app/ActivityTaskManager;->getInstance()Landroid/app/ActivityTaskManager;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getLockoutTracker__Lcom_android_server_biometrics_sensors_Lo",
         "method":      ".method protected getLockoutTracker()Lcom/android/server/biometrics/sensors/LockoutTracker;",
+        "method_name": 'getLockoutTracker',
         "type":        "method_replace",
         "search": """\
 .method protected getLockoutTracker()Lcom/android/server/biometrics/sensors/LockoutTracker;
@@ -85,12 +90,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/biometrics/sensors/AuthenticationClient;->mLockoutTracker:Lcom/android/server/biometrics/sensors/LockoutTracker;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getOptions__Landroid_hardware_biometrics_AuthenticateOptions",
         "method":      ".method protected getOptions()Landroid/hardware/biometrics/AuthenticateOptions;",
+        "method_name": 'getOptions',
         "type":        "method_replace",
         "search": """\
 .method protected getOptions()Landroid/hardware/biometrics/AuthenticateOptions;
@@ -130,12 +137,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/biometrics/sensors/AuthenticationClient;->mOptions:Landroid/hardware/biometrics/AuthenticateOptions;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getRequestReason__I",
         "method":      ".method protected getRequestReason()I",
+        "method_name": 'getRequestReason',
         "type":        "method_replace",
         "search": """\
 .method protected getRequestReason()I
@@ -300,12 +309,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/biometrics/sensors/AuthenticationClient;->isKeyguard()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return v0', 'invoke-virtual {p0}, Lcom/android/server/biometrics/sensors/AuthenticationClient;->isBiometricPrompt()Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getSensorStrength__I",
         "method":      ".method protected getSensorStrength()I",
+        "method_name": 'getSensorStrength',
         "type":        "method_replace",
         "search": """\
 .method protected getSensorStrength()I
@@ -335,12 +346,14 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['iget v0, p0, Lcom/android/server/biometrics/sensors/AuthenticationClient;->mSensorStrength:I', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getStartTimeMs__J",
         "method":      ".method protected getStartTimeMs()J",
+        "method_name": 'getStartTimeMs',
         "type":        "method_replace",
         "search": """\
 .method protected getStartTimeMs()J
@@ -370,12 +383,14 @@ PATCHES = [
     return-wide v0
 .end method
 """,
+        "method_anchors": ['iget-wide v0, p0, Lcom/android/server/biometrics/sensors/AuthenticationClient;->mStartTimeMs:J', 'return-wide v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isCryptoOperation__Z",
         "method":      ".method protected isCryptoOperation()Z",
+        "method_name": 'isCryptoOperation',
         "type":        "method_replace",
         "search": """\
 .method protected isCryptoOperation()Z
@@ -466,12 +481,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-wide v0, p0, Lcom/android/server/biometrics/sensors/AuthenticationClient;->mOperationId:J', 'if-eqz v0, :cond_0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onAuthenticated_Landroid_hardware_biometrics_BiometricAuthen",
         "method":      ".method public onAuthenticated(Landroid/hardware/biometrics/BiometricAuthenticator$Identifier;ZLjava/util/ArrayList;)V",
+        "method_name": 'onAuthenticated',
         "type":        "method_replace",
         "search": """\
 .method public onAuthenticated(Landroid/hardware/biometrics/BiometricAuthenticator$Identifier;ZLjava/util/ArrayList;)V
@@ -1778,6 +1795,7 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-virtual {v1}, Lcom/android/server/biometrics/sensors/AuthenticationClient;->getLogger()Lcom/android/server/biometrics/log/BiometricLogger;', 'move-result-object v2', 'invoke-virtual {v1}, Lcom/android/server/biometrics/sensors/AuthenticationClient;->getContext()Landroid/content/Context;', 'move-result-object v3', 'invoke-virtual {v1}, Lcom/android/server/biometrics/sensors/AuthenticationClient;->getOperationContext()Lcom/android/server/biometrics/log/OperationContextExt;', 'move-result-object v4'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

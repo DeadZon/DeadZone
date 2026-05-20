@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/devicepolicy/DevicePolicyManagerService.smali"
+CLASS_FALLBACK_NAMES = ['DevicePolicyManagerService.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_addCrossProfileIntentFilter_Lcom_android_server_pm_DefaultCr",
         "method":      ".method addCrossProfileIntentFilter(Lcom/android/server/pm/DefaultCrossProfileIntentFilter;II)V",
+        "method_name": 'addCrossProfileIntentFilter',
         "type":        "method_replace",
         "search": """\
 .method addCrossProfileIntentFilter(Lcom/android/server/pm/DefaultCrossProfileIntentFilter;II)V
@@ -286,12 +289,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v2, v1, Lcom/android/server/pm/DefaultCrossProfileIntentFilter;->direction:I', 'if-ne v2, v3, :cond_0', 'iget-object v4, v0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mIPackageManager:Landroid/content/pm/IPackageManager;', 'iget-object v2, v1, Lcom/android/server/pm/DefaultCrossProfileIntentFilter;->filter:Lcom/android/server/pm/WatchedIntentFilter;', 'invoke-virtual {v2}, Lcom/android/server/pm/WatchedIntentFilter;->getIntentFilter()Landroid/content/IntentFilter;', 'move-result-object v5'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_deleteTransferOwnershipBundleLocked_I_V",
         "method":      ".method deleteTransferOwnershipBundleLocked(I)V",
+        "method_name": 'deleteTransferOwnershipBundleLocked',
         "type":        "method_replace",
         "search": """\
 .method deleteTransferOwnershipBundleLocked(I)V
@@ -370,12 +375,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v0, Ljava/io/File;', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mPathProvider:Lcom/android/server/devicepolicy/PolicyPathProvider;', 'invoke-interface {v1, p1}, Lcom/android/server/devicepolicy/PolicyPathProvider;->getUserSystemDirectory(I)Ljava/io/File;', 'move-result-object v1', 'const-string v2, "transfer-ownership-parameters.xml"', 'invoke-direct {v0, v1, v2}, Ljava/io/File;-><init>(Ljava/io/File;Ljava/lang/String;)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dump_Ljava_io_FileDescriptor_Ljava_io_PrintWriter__Ljava_lan",
         "method":      ".method protected dump(Ljava/io/FileDescriptor;Ljava/io/PrintWriter;[Ljava/lang/String;)V",
+        "method_name": 'dump',
         "type":        "method_replace",
         "search": """\
 .method protected dump(Ljava/io/FileDescriptor;Ljava/io/PrintWriter;[Ljava/lang/String;)V
@@ -1083,12 +1090,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mContext:Landroid/content/Context;', 'const-string v1, "DevicePolicyManager"', 'invoke-static {v0, v1, p2}, Lcom/android/internal/util/DumpUtils;->checkDumpPermission(Landroid/content/Context;Ljava/lang/String;Ljava/io/PrintWriter;)Z', 'move-result v0', 'if-nez v0, :cond_0', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_ensureLocked__V",
         "method":      ".method final ensureLocked()V",
+        "method_name": 'ensureLocked',
         "type":        "method_replace",
         "search": """\
 .method final ensureLocked()V
@@ -1181,12 +1190,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mLockDoNoUseDirectly:Ljava/lang/Object;', 'invoke-static {v0}, Ljava/lang/Thread;->holdsLock(Ljava/lang/Object;)Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return-void', 'const-string v0, "DevicePolicyManager"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getAcceptedCaCertificates_Landroid_os_UserHandle__Ljava_util",
         "method":      ".method protected getAcceptedCaCertificates(Landroid/os/UserHandle;)Ljava/util/Set;",
+        "method_name": 'getAcceptedCaCertificates',
         "type":        "method_replace",
         "search": """\
 .method protected getAcceptedCaCertificates(Landroid/os/UserHandle;)Ljava/util/Set;
@@ -1338,12 +1349,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mHasFeature:Z', 'if-nez v0, :cond_0', 'invoke-static {}, Ljava/util/Collections;->emptySet()Ljava/util/Set;', 'move-result-object v0', 'return-object v0', 'invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminForCallerLocked_Landroid_content_ComponentName",
         "method":      ".method getActiveAdminForCallerLocked(Landroid/content/ComponentName;I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminForCallerLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminForCallerLocked(Landroid/content/ComponentName;I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -1396,12 +1409,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, p2, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getActiveAdminOrCheckPermissionForCallerLocked(Landroid/content/ComponentName;ILjava/lang/String;)Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminForCallerLocked_Landroid_content_ComponentName",
         "method":      ".method getActiveAdminForCallerLocked(Landroid/content/ComponentName;IZ)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminForCallerLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminForCallerLocked(Landroid/content/ComponentName;IZ)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -1454,12 +1469,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, p2, p3, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getActiveAdminOrCheckPermissionForCallerLocked(Landroid/content/ComponentName;IZLjava/lang/String;)Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminOrCheckPermissionForCallerLocked_Landroid_cont",
         "method":      ".method getActiveAdminOrCheckPermissionForCallerLocked(Landroid/content/ComponentName;ILjava/lang/String;)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminOrCheckPermissionForCallerLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminOrCheckPermissionForCallerLocked(Landroid/content/ComponentName;ILjava/lang/String;)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -1558,12 +1575,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p3, :cond_0', 'invoke-static {}, Ljava/util/Set;->of()Ljava/util/Set;', 'move-result-object v0', 'invoke-static {p3}, Ljava/util/Set;->of(Ljava/lang/Object;)Ljava/util/Set;', 'move-result-object v0', 'invoke-virtual {p0, p1, p2, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getActiveAdminOrCheckPermissionsForCallerLocked(Landroid/content/ComponentName;ILjava/util/Set;)Lcom/android/server/devicepolicy/ActiveAdmin;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminOrCheckPermissionForCallerLocked_Landroid_cont",
         "method":      ".method getActiveAdminOrCheckPermissionForCallerLocked(Landroid/content/ComponentName;IZLjava/lang/String;)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminOrCheckPermissionForCallerLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminOrCheckPermissionForCallerLocked(Landroid/content/ComponentName;IZLjava/lang/String;)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -1662,12 +1681,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p4, :cond_0', 'invoke-static {}, Ljava/util/Set;->of()Ljava/util/Set;', 'move-result-object v0', 'invoke-static {p4}, Ljava/util/Set;->of(Ljava/lang/Object;)Ljava/util/Set;', 'move-result-object v0', 'invoke-virtual {p0, p1, p2, p3, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getActiveAdminOrCheckPermissionsForCallerLocked(Landroid/content/ComponentName;IZLjava/util/Set;)Lcom/android/server/devicepolicy/ActiveAdmin;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminOrCheckPermissionsForCallerLocked_Landroid_con",
         "method":      ".method getActiveAdminOrCheckPermissionsForCallerLocked(Landroid/content/ComponentName;ILjava/util/Set;)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminOrCheckPermissionsForCallerLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminOrCheckPermissionsForCallerLocked(Landroid/content/ComponentName;ILjava/util/Set;)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -2744,12 +2765,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'invoke-direct {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getCallerIdentity()Lcom/android/server/devicepolicy/CallerIdentity;', 'move-result-object v0', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/CallerIdentity;->getUid()I', 'move-result v1', 'invoke-direct {p0, p1, p2, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getActiveAdminWithPolicyForUidLocked(Landroid/content/ComponentName;II)Lcom/android/server/devicepolicy/ActiveAdmin;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminOrCheckPermissionsForCallerLocked_Landroid_con",
         "method":      ".method getActiveAdminOrCheckPermissionsForCallerLocked(Landroid/content/ComponentName;IZLjava/util/Set;)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminOrCheckPermissionsForCallerLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminOrCheckPermissionsForCallerLocked(Landroid/content/ComponentName;IZLjava/util/Set;)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -2935,12 +2958,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'if-eqz p3, :cond_0', 'invoke-direct {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getCallerIdentity()Lcom/android/server/devicepolicy/CallerIdentity;', 'move-result-object v0', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/CallerIdentity;->getUserId()I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminUncheckedLocked_Landroid_content_ComponentName",
         "method":      ".method getActiveAdminUncheckedLocked(Landroid/content/ComponentName;I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminUncheckedLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminUncheckedLocked(Landroid/content/ComponentName;I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -3184,12 +3209,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'invoke-virtual {p0, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;', 'move-result-object v0', 'iget-object v0, v0, Lcom/android/server/devicepolicy/DevicePolicyData;->mAdminMap:Landroid/util/ArrayMap;', 'invoke-virtual {v0, p1}, Landroid/util/ArrayMap;->get(Ljava/lang/Object;)Ljava/lang/Object;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getActiveAdminUncheckedLocked_Landroid_content_ComponentName",
         "method":      ".method getActiveAdminUncheckedLocked(Landroid/content/ComponentName;IZ)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getActiveAdminUncheckedLocked',
         "type":        "method_replace",
         "search": """\
 .method getActiveAdminUncheckedLocked(Landroid/content/ComponentName;IZ)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -3342,12 +3369,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'if-eqz p3, :cond_0', 'invoke-direct {p0, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->isManagedProfile(I)Z', 'move-result v0', 'invoke-static {p2}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getCallerIdentity_Landroid_content_ComponentName__Lcom_andro",
         "method":      ".method getCallerIdentity(Landroid/content/ComponentName;)Lcom/android/server/devicepolicy/CallerIdentity;",
+        "method_name": 'getCallerIdentity',
         "type":        "method_replace",
         "search": """\
 .method getCallerIdentity(Landroid/content/ComponentName;)Lcom/android/server/devicepolicy/CallerIdentity;
@@ -3390,12 +3419,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getCallerIdentity(Landroid/content/ComponentName;Ljava/lang/String;)Lcom/android/server/devicepolicy/CallerIdentity;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getCallerIdentity_Landroid_content_ComponentName_Ljava_lang_",
         "method":      ".method getCallerIdentity(Landroid/content/ComponentName;Ljava/lang/String;)Lcom/android/server/devicepolicy/CallerIdentity;",
+        "method_name": 'getCallerIdentity',
         "type":        "method_replace",
         "search": """\
 .method getCallerIdentity(Landroid/content/ComponentName;Ljava/lang/String;)Lcom/android/server/devicepolicy/CallerIdentity;
@@ -3940,12 +3971,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;->binderGetCallingUid()I', 'move-result v0', 'if-eqz p2, :cond_1', 'invoke-static {}, Lmiui/enterprise/ApplicationHelperStub;->getInstance()Lmiui/enterprise/IApplicationHelper;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDefaultDeviceOwnerLocked_I_Lcom_android_server_devicepoli",
         "method":      ".method getDefaultDeviceOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getDefaultDeviceOwnerLocked',
         "type":        "method_replace",
         "search": """\
 .method getDefaultDeviceOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -4108,12 +4141,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/Owners;->getDeviceOwnerComponent()Landroid/content/ComponentName;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0}, Landroid/content/ComponentName;->getPackageName()Ljava/lang/String;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDeviceOwnerAdminLocked__Lcom_android_server_devicepolicy_",
         "method":      ".method getDeviceOwnerAdminLocked()Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getDeviceOwnerAdminLocked',
         "type":        "method_replace",
         "search": """\
 .method getDeviceOwnerAdminLocked()Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -4470,12 +4505,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/Owners;->getDeviceOwnerComponent()Landroid/content/ComponentName;', 'move-result-object v0', 'if-nez v0, :cond_0', 'return-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDeviceOwnerLocked_I_Lcom_android_server_devicepolicy_Acti",
         "method":      ".method getDeviceOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getDeviceOwnerLocked',
         "type":        "method_replace",
         "search": """\
 .method getDeviceOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -4571,12 +4608,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/Owners;->getDeviceOwnerComponent()Landroid/content/ComponentName;', 'move-result-object v0', 'invoke-virtual {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked_",
         "method":      ".method getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked()Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked',
         "type":        "method_replace",
         "search": """\
 .method getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked()Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -4646,12 +4685,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getDeviceOwnerAdminLocked()Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0', 'if-nez v0, :cond_0', 'invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getProfileOwnerOfOrganizationOwnedDeviceLocked()Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked_",
         "method":      ".method getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked',
         "type":        "method_replace",
         "search": """\
 .method getDeviceOwnerOrProfileOwnerOfOrganizationOwnedDeviceLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -4725,12 +4766,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getDeviceOwnerAdminLocked()Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0', 'if-nez v0, :cond_0', 'invoke-virtual {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getProfileOwnerOfOrganizationOwnedDeviceLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDeviceOwnerRemoteBugreportUriAndHash__Landroid_util_Pair_",
         "method":      ".method getDeviceOwnerRemoteBugreportUriAndHash()Landroid/util/Pair;",
+        "method_name": 'getDeviceOwnerRemoteBugreportUriAndHash',
         "type":        "method_replace",
         "search": """\
 .method getDeviceOwnerRemoteBugreportUriAndHash()Landroid/util/Pair;
@@ -4863,12 +4906,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v1}, Lcom/android/server/devicepolicy/Owners;->getDeviceOwnerRemoteBugreportUri()Ljava/lang/String;', 'move-result-object v1', 'if-nez v1, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getDevicePolicySafetyChecker__Landroid_app_admin_DevicePolic",
         "method":      ".method getDevicePolicySafetyChecker()Landroid/app/admin/DevicePolicySafetyChecker;",
+        "method_name": 'getDevicePolicySafetyChecker',
         "type":        "method_replace",
         "search": """\
 .method getDevicePolicySafetyChecker()Landroid/app/admin/DevicePolicySafetyChecker;
@@ -4898,12 +4943,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mSafetyChecker:Landroid/app/admin/DevicePolicySafetyChecker;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getLockObject__Ljava_lang_Object_",
         "method":      ".method final getLockObject()Ljava/lang/Object;",
+        "method_name": 'getLockObject',
         "type":        "method_replace",
         "search": """\
 .method final getLockObject()Ljava/lang/Object;
@@ -5000,12 +5047,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mStatLogger:Lcom/android/internal/util/StatLogger;', 'invoke-virtual {v0}, Lcom/android/internal/util/StatLogger;->getTime()J', 'move-result-wide v0', 'invoke-static {v2}, Lcom/android/server/LockGuard;->guard(I)V', 'iget-object v2, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mStatLogger:Lcom/android/internal/util/StatLogger;', 'invoke-virtual {v2, v3, v0, v1}, Lcom/android/internal/util/StatLogger;->logDurationStat(IJ)J'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getParentOfAdminIfRequired_Lcom_android_server_devicepolicy_",
         "method":      ".method getParentOfAdminIfRequired(Lcom/android/server/devicepolicy/ActiveAdmin;Z)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getParentOfAdminIfRequired',
         "type":        "method_replace",
         "search": """\
 .method getParentOfAdminIfRequired(Lcom/android/server/devicepolicy/ActiveAdmin;Z)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -5082,12 +5131,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['invoke-static {p1}, Ljava/util/Objects;->requireNonNull(Ljava/lang/Object;)Ljava/lang/Object;', 'if-eqz p2, :cond_0', 'invoke-virtual {p1}, Lcom/android/server/devicepolicy/ActiveAdmin;->getParentActiveAdmin()Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProfileOwnerAdminLocked_I_Lcom_android_server_devicepolic",
         "method":      ".method getProfileOwnerAdminLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getProfileOwnerAdminLocked',
         "type":        "method_replace",
         "search": """\
 .method getProfileOwnerAdminLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -5329,12 +5380,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0, p1}, Lcom/android/server/devicepolicy/Owners;->getProfileOwnerComponent(I)Landroid/content/ComponentName;', 'move-result-object v0', 'if-nez v0, :cond_0', 'return-object v1', 'invoke-virtual {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProfileOwnerLocked_I_Lcom_android_server_devicepolicy_Act",
         "method":      ".method getProfileOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getProfileOwnerLocked',
         "type":        "method_replace",
         "search": """\
 .method getProfileOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -5430,12 +5483,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0, p1}, Lcom/android/server/devicepolicy/Owners;->getProfileOwnerComponent(I)Landroid/content/ComponentName;', 'move-result-object v0', 'invoke-virtual {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProfileOwnerOfOrganizationOwnedDeviceLocked__Lcom_android",
         "method":      ".method getProfileOwnerOfOrganizationOwnedDeviceLocked()Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getProfileOwnerOfOrganizationOwnedDeviceLocked',
         "type":        "method_replace",
         "search": """\
 .method getProfileOwnerOfOrganizationOwnedDeviceLocked()Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -5505,12 +5560,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'new-instance v1, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda24;', 'invoke-direct {v1, p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda24;-><init>(Lcom/android/server/devicepolicy/DevicePolicyManagerService;)V', 'invoke-virtual {v0, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;->binderWithCleanCallingIdentity(Lcom/android/internal/util/FunctionalUtils$ThrowingSupplier;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Lcom/android/server/devicepolicy/ActiveAdmin;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProfileOwnerOfOrganizationOwnedDeviceLocked_I_Lcom_androi",
         "method":      ".method getProfileOwnerOfOrganizationOwnedDeviceLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getProfileOwnerOfOrganizationOwnedDeviceLocked',
         "type":        "method_replace",
         "search": """\
 .method getProfileOwnerOfOrganizationOwnedDeviceLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -5580,12 +5637,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'new-instance v1, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda205;', 'invoke-direct {v1, p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda205;-><init>(Lcom/android/server/devicepolicy/DevicePolicyManagerService;I)V', 'invoke-virtual {v0, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;->binderWithCleanCallingIdentity(Lcom/android/internal/util/FunctionalUtils$ThrowingSupplier;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Lcom/android/server/devicepolicy/ActiveAdmin;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProfileOwnerOrDeviceOwnerLocked_I_Lcom_android_server_dev",
         "method":      ".method getProfileOwnerOrDeviceOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;",
+        "method_name": 'getProfileOwnerOrDeviceOwnerLocked',
         "type":        "method_replace",
         "search": """\
 .method getProfileOwnerOrDeviceOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;
@@ -5686,12 +5745,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0, p1}, Lcom/android/server/devicepolicy/Owners;->getProfileOwnerComponent(I)Landroid/content/ComponentName;', 'move-result-object v0', 'if-eqz v0, :cond_0', 'invoke-virtual {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getProfileOwnerLocked(I)Lcom/android/server/devicepolicy/ActiveAdmin;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getProfileParentId_I_I",
         "method":      ".method protected getProfileParentId(I)I",
+        "method_name": 'getProfileParentId',
         "type":        "method_replace",
         "search": """\
 .method protected getProfileParentId(I)I
@@ -5774,12 +5835,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'new-instance v1, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda127;', 'invoke-direct {v1, p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda127;-><init>(Lcom/android/server/devicepolicy/DevicePolicyManagerService;I)V', 'invoke-virtual {v0, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;->binderWithCleanCallingIdentity(Lcom/android/internal/util/FunctionalUtils$ThrowingSupplier;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Ljava/lang/Integer;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getScreenCaptureDisabled_Landroid_content_ComponentName_IZ_Z",
         "method":      ".method public getScreenCaptureDisabled(Landroid/content/ComponentName;IZ)Z",
+        "method_name": 'getScreenCaptureDisabled',
         "type":        "method_replace",
         "search": """\
 .method public getScreenCaptureDisabled(Landroid/content/ComponentName;IZ)Z
@@ -5980,12 +6043,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mHasFeature:Z', 'if-nez v0, :cond_0', 'return v1', 'invoke-virtual {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getCallerIdentity(Landroid/content/ComponentName;)Lcom/android/server/devicepolicy/CallerIdentity;', 'move-result-object v0', 'invoke-direct {p0, v0, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->hasFullCrossUsersPermission(Lcom/android/server/devicepolicy/CallerIdentity;I)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getUnsafeOperationReason_I_I",
         "method":      ".method getUnsafeOperationReason(I)I",
+        "method_name": 'getUnsafeOperationReason',
         "type":        "method_replace",
         "search": """\
 .method getUnsafeOperationReason(I)I
@@ -6071,12 +6136,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mSafetyChecker:Landroid/app/admin/DevicePolicySafetyChecker;', 'if-nez v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mSafetyChecker:Landroid/app/admin/DevicePolicySafetyChecker;', 'invoke-interface {v0, p1}, Landroid/app/admin/DevicePolicySafetyChecker;->getUnsafeOperationReason(I)I', 'move-result v0', 'return v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getUserData_I_Lcom_android_server_devicepolicy_DevicePolicyD",
         "method":      ".method getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;",
+        "method_name": 'getUserData',
         "type":        "method_replace",
         "search": """\
 .method getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;
@@ -6205,12 +6272,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mUserData:Landroid/util/SparseArray;', 'invoke-virtual {v1, p1}, Landroid/util/SparseArray;->get(I)Ljava/lang/Object;', 'move-result-object v1', 'check-cast v1, Lcom/android/server/devicepolicy/DevicePolicyData;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getUserDataUnchecked_I_Lcom_android_server_devicepolicy_Devi",
         "method":      ".method getUserDataUnchecked(I)Lcom/android/server/devicepolicy/DevicePolicyData;",
+        "method_name": 'getUserDataUnchecked',
         "type":        "method_replace",
         "search": """\
 .method getUserDataUnchecked(I)Lcom/android/server/devicepolicy/DevicePolicyData;
@@ -6280,12 +6349,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'new-instance v1, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda86;', 'invoke-direct {v1, p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda86;-><init>(Lcom/android/server/devicepolicy/DevicePolicyManagerService;I)V', 'invoke-virtual {v0, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;->binderWithCleanCallingIdentity(Lcom/android/internal/util/FunctionalUtils$ThrowingSupplier;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Lcom/android/server/devicepolicy/DevicePolicyData;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleOnUserSwitching_II_V",
         "method":      ".method handleOnUserSwitching(II)V",
+        "method_name": 'handleOnUserSwitching',
         "type":        "method_replace",
         "search": """\
 .method handleOnUserSwitching(II)V
@@ -6315,12 +6386,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->showNewUserDisclaimerIfNecessary(I)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleStartUser_I_V",
         "method":      ".method handleStartUser(I)V",
+        "method_name": 'handleStartUser',
         "type":        "method_replace",
         "search": """\
 .method handleStartUser(I)V
@@ -6649,12 +6722,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-nez p1, :cond_0', 'invoke-direct {p0, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->updatePasswordQualityCacheForUserGroup(I)V', 'invoke-direct {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->updatePermissionPolicyCache(I)V', 'invoke-direct {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->updateAdminCanGrantSensorsPermissionCache(I)V', 'invoke-direct {p0, p1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->updateContentProtectionPolicyCache(I)V', 'invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleStopUser_I_V",
         "method":      ".method handleStopUser(I)V",
+        "method_name": 'handleStopUser',
         "type":        "method_replace",
         "search": """\
 .method handleStopUser(I)V
@@ -6751,12 +6826,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-object v0, Landroid/app/admin/PreferentialNetworkServiceConfig;->DEFAULT:Landroid/app/admin/PreferentialNetworkServiceConfig;', 'invoke-static {v0}, Ljava/util/List;->of(Ljava/lang/Object;)Ljava/util/List;', 'move-result-object v0', 'invoke-direct {p0, p1, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->updateNetworkPreferenceForUser(ILjava/util/List;)V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mDeviceAdminServiceController:Lcom/android/server/devicepolicy/DeviceAdminServiceController;', 'const-string v1, "stop-user"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleUnlockUser_I_V",
         "method":      ".method handleUnlockUser(I)V",
+        "method_name": 'handleUnlockUser',
         "type":        "method_replace",
         "search": """\
 .method handleUnlockUser(I)V
@@ -6813,12 +6890,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "unlock-user"', 'invoke-direct {p0, p1, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->startOwnerService(ILjava/lang/String;)V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mDevicePolicyEngine:Lcom/android/server/devicepolicy/DevicePolicyEngine;', 'invoke-virtual {v0, p1}, Lcom/android/server/devicepolicy/DevicePolicyEngine;->handleUnlockUser(I)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_hasDeviceIdAccessUnchecked_Ljava_lang_String_I_Z",
         "method":      ".method hasDeviceIdAccessUnchecked(Ljava/lang/String;I)Z",
+        "method_name": 'hasDeviceIdAccessUnchecked',
         "type":        "method_replace",
         "search": """\
 .method hasDeviceIdAccessUnchecked(Ljava/lang/String;I)Z
@@ -7176,12 +7255,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {p2}, Landroid/os/UserHandle;->getUserId(I)I', 'move-result v0', 'invoke-virtual {p0, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getDeviceOwnerComponent(Z)Landroid/content/ComponentName;', 'move-result-object v2', 'const-string v3, "delegation-cert-install"', 'if-eqz v2, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isActiveAdminWithPolicyForUserLocked_Lcom_android_server_dev",
         "method":      ".method isActiveAdminWithPolicyForUserLocked(Lcom/android/server/devicepolicy/ActiveAdmin;II)Z",
+        "method_name": 'isActiveAdminWithPolicyForUserLocked',
         "type":        "method_replace",
         "search": """\
 .method isActiveAdminWithPolicyForUserLocked(Lcom/android/server/devicepolicy/ActiveAdmin;II)Z
@@ -7526,12 +7607,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureLocked()V', 'iget-object v0, p1, Lcom/android/server/devicepolicy/ActiveAdmin;->info:Landroid/app/admin/DeviceAdminInfo;', 'invoke-virtual {v0}, Landroid/app/admin/DeviceAdminInfo;->getComponent()Landroid/content/ComponentName;', 'move-result-object v0', 'invoke-virtual {p0, v0, p3}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->isDeviceOwner(Landroid/content/ComponentName;I)Z', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDeviceOwner_Lcom_android_server_devicepolicy_ActiveAdmin__",
         "method":      ".method isDeviceOwner(Lcom/android/server/devicepolicy/ActiveAdmin;)Z",
+        "method_name": 'isDeviceOwner',
         "type":        "method_replace",
         "search": """\
 .method isDeviceOwner(Lcom/android/server/devicepolicy/ActiveAdmin;)Z
@@ -7613,12 +7696,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p1, Lcom/android/server/devicepolicy/ActiveAdmin;->info:Landroid/app/admin/DeviceAdminInfo;', 'invoke-virtual {v0}, Landroid/app/admin/DeviceAdminInfo;->getComponent()Landroid/content/ComponentName;', 'move-result-object v0', 'invoke-virtual {p1}, Lcom/android/server/devicepolicy/ActiveAdmin;->getUserHandle()Landroid/os/UserHandle;', 'move-result-object v1', 'invoke-virtual {v1}, Landroid/os/UserHandle;->getIdentifier()I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isPackageInstalledForUser_Ljava_lang_String_I_Z",
         "method":      ".method isPackageInstalledForUser(Ljava/lang/String;I)Z",
+        "method_name": 'isPackageInstalledForUser',
         "type":        "method_replace",
         "search": """\
 .method isPackageInstalledForUser(Ljava/lang/String;I)Z
@@ -7701,12 +7786,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'new-instance v1, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda195;', 'invoke-direct {v1, p0, p1, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda195;-><init>(Lcom/android/server/devicepolicy/DevicePolicyManagerService;Ljava/lang/String;I)V', 'invoke-virtual {v0, v1}, Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;->binderWithCleanCallingIdentity(Lcom/android/internal/util/FunctionalUtils$ThrowingSupplier;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Ljava/lang/Boolean;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_listAllOwners__Ljava_util_List_",
         "method":      ".method listAllOwners()Ljava/util/List;",
+        "method_name": 'listAllOwners',
         "type":        "method_replace",
         "search": """\
 .method listAllOwners()Ljava/util/List;
@@ -7827,12 +7914,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "android.permission.MANAGE_DEVICE_ADMINS"', 'invoke-direct {p0, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->hasCallingOrSelfPermission(Ljava/lang/String;)Z', 'move-result v0', 'invoke-static {v0}, Lcom/android/internal/util/Preconditions;->checkCallAuthorization(Z)V', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mInjector:Lcom/android/server/devicepolicy/DevicePolicyManagerService$Injector;', 'new-instance v1, Lcom/android/server/devicepolicy/DevicePolicyManagerService$$ExternalSyntheticLambda46;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_loadOwners__V",
         "method":      ".method loadOwners()V",
+        "method_name": 'loadOwners',
         "type":        "method_replace",
         "search": """\
 .method loadOwners()V
@@ -7953,12 +8042,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v1}, Lcom/android/server/devicepolicy/Owners;->load()V', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v1}, Lcom/android/server/devicepolicy/Owners;->hasDeviceOwner()Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onInstalledCertificatesChanged_Landroid_os_UserHandle_Ljava_",
         "method":      ".method protected onInstalledCertificatesChanged(Landroid/os/UserHandle;Ljava/util/Collection;)V",
+        "method_name": 'onInstalledCertificatesChanged',
         "type":        "method_replace",
         "search": """\
 .method protected onInstalledCertificatesChanged(Landroid/os/UserHandle;Ljava/util/Collection;)V
@@ -8180,12 +8271,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mHasFeature:Z', 'if-nez v0, :cond_0', 'return-void', 'invoke-direct {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getCallerIdentity()Lcom/android/server/devicepolicy/CallerIdentity;', 'move-result-object v0', 'invoke-direct {p0, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->canManageUsers(Lcom/android/server/devicepolicy/CallerIdentity;)Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeActiveAdminLocked_Landroid_content_ComponentName_I_V",
         "method":      ".method removeActiveAdminLocked(Landroid/content/ComponentName;I)V",
+        "method_name": 'removeActiveAdminLocked',
         "type":        "method_replace",
         "search": """\
 .method removeActiveAdminLocked(Landroid/content/ComponentName;I)V
@@ -8493,12 +8586,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getActiveAdminUncheckedLocked(Landroid/content/ComponentName;I)Lcom/android/server/devicepolicy/ActiveAdmin;', 'move-result-object v0', 'invoke-virtual {p0, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;', 'move-result-object v1', 'if-eqz v0, :cond_0', 'iget-object v2, v1, Lcom/android/server/devicepolicy/DevicePolicyData;->mRemovingAdmins:Ljava/util/ArrayList;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeCrossProfileIntentFilter_Lcom_android_server_pm_Defaul",
         "method":      ".method removeCrossProfileIntentFilter(Lcom/android/server/pm/DefaultCrossProfileIntentFilter;II)Z",
+        "method_name": 'removeCrossProfileIntentFilter',
         "type":        "method_replace",
         "search": """\
 .method removeCrossProfileIntentFilter(Lcom/android/server/pm/DefaultCrossProfileIntentFilter;II)Z
@@ -8774,12 +8869,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v0, p1, Lcom/android/server/pm/DefaultCrossProfileIntentFilter;->direction:I', 'if-ne v0, v1, :cond_0', 'iget-object v2, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mIPackageManager:Landroid/content/pm/IPackageManager;', 'iget-object v0, p1, Lcom/android/server/pm/DefaultCrossProfileIntentFilter;->filter:Lcom/android/server/pm/WatchedIntentFilter;', 'invoke-virtual {v0}, Lcom/android/server/pm/WatchedIntentFilter;->getIntentFilter()Landroid/content/IntentFilter;', 'move-result-object v3'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_removeUserData_I_V",
         "method":      ".method removeUserData(I)V",
+        "method_name": 'removeUserData',
         "type":        "method_replace",
         "search": """\
 .method removeUserData(I)V
@@ -9206,12 +9303,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v0', 'if-nez p1, :cond_0', 'const-string v1, "DevicePolicyManager"', 'const-string v2, "Tried to remove device policy file for user 0! Ignoring."', 'invoke-static {v1, v2}, Lcom/android/server/utils/Slogf;->w(Ljava/lang/String;Ljava/lang/String;)I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_saveTransferOwnershipBundleLocked_Landroid_os_PersistableBun",
         "method":      ".method saveTransferOwnershipBundleLocked(Landroid/os/PersistableBundle;I)V",
+        "method_name": 'saveTransferOwnershipBundleLocked',
         "type":        "method_replace",
         "search": """\
 .method saveTransferOwnershipBundleLocked(Landroid/os/PersistableBundle;I)V
@@ -9504,12 +9603,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "transfer-ownership-bundle"', 'new-instance v1, Ljava/io/File;', 'iget-object v2, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mPathProvider:Lcom/android/server/devicepolicy/PolicyPathProvider;', 'invoke-interface {v2, p2}, Lcom/android/server/devicepolicy/PolicyPathProvider;->getUserSystemDirectory(I)Ljava/io/File;', 'move-result-object v2', 'const-string v3, "transfer-ownership-parameters.xml"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendAdminCommandLocked_Lcom_android_server_devicepolicy_Acti",
         "method":      ".method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;)V",
+        "method_name": 'sendAdminCommandLocked',
         "type":        "method_replace",
         "search": """\
 .method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;)V
@@ -9548,12 +9649,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, p2, v0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/content/BroadcastReceiver;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendAdminCommandLocked_Lcom_android_server_devicepolicy_Acti",
         "method":      ".method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/content/BroadcastReceiver;)V",
+        "method_name": 'sendAdminCommandLocked',
         "type":        "method_replace",
         "search": """\
 .method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/content/BroadcastReceiver;)V
@@ -9592,12 +9695,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, p2, v0, p3}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/os/Bundle;Landroid/content/BroadcastReceiver;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendAdminCommandLocked_Lcom_android_server_devicepolicy_Acti",
         "method":      ".method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/os/Bundle;Landroid/content/BroadcastReceiver;)V",
+        "method_name": 'sendAdminCommandLocked',
         "type":        "method_replace",
         "search": """\
 .method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/os/Bundle;Landroid/content/BroadcastReceiver;)V
@@ -9681,12 +9786,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual/range {v0 .. v5}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/os/Bundle;Landroid/content/BroadcastReceiver;Z)Z', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendAdminCommandLocked_Ljava_lang_String_IILandroid_os_Bundl",
         "method":      ".method sendAdminCommandLocked(Ljava/lang/String;IILandroid/os/Bundle;)V",
+        "method_name": 'sendAdminCommandLocked',
         "type":        "method_replace",
         "search": """\
 .method sendAdminCommandLocked(Ljava/lang/String;IILandroid/os/Bundle;)V
@@ -9870,12 +9977,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p3}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getUserData(I)Lcom/android/server/devicepolicy/DevicePolicyData;', 'move-result-object v0', 'iget-object v1, v0, Lcom/android/server/devicepolicy/DevicePolicyData;->mAdminList:Ljava/util/ArrayList;', 'invoke-virtual {v1}, Ljava/util/ArrayList;->size()I', 'move-result v1', 'if-ge v2, v1, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendAdminCommandLocked_Lcom_android_server_devicepolicy_Acti",
         "method":      ".method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/os/Bundle;Landroid/content/BroadcastReceiver;Z)Z",
+        "method_name": 'sendAdminCommandLocked',
         "type":        "method_replace",
         "search": """\
 .method sendAdminCommandLocked(Lcom/android/server/devicepolicy/ActiveAdmin;Ljava/lang/String;Landroid/os/Bundle;Landroid/content/BroadcastReceiver;Z)Z
@@ -10516,12 +10625,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['new-instance v4, Landroid/content/Intent;', 'invoke-direct {v4, v2}, Landroid/content/Intent;-><init>(Ljava/lang/String;)V', 'iget-object v4, v1, Lcom/android/server/devicepolicy/ActiveAdmin;->info:Landroid/app/admin/DeviceAdminInfo;', 'invoke-virtual {v4}, Landroid/app/admin/DeviceAdminInfo;->getComponent()Landroid/content/ComponentName;', 'move-result-object v4', 'invoke-virtual {v6, v4}, Landroid/content/Intent;->setComponent(Landroid/content/ComponentName;)Landroid/content/Intent;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendBugreportToDeviceOwner_Landroid_net_Uri_Ljava_lang_Strin",
         "method":      ".method sendBugreportToDeviceOwner(Landroid/net/Uri;Ljava/lang/String;)V",
+        "method_name": 'sendBugreportToDeviceOwner',
         "type":        "method_replace",
         "search": """\
 .method sendBugreportToDeviceOwner(Landroid/net/Uri;Ljava/lang/String;)V
@@ -10736,12 +10847,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v0', 'new-instance v1, Landroid/content/Intent;', 'const-string v2, "android.app.action.BUGREPORT_SHARE"', 'invoke-direct {v1, v2}, Landroid/content/Intent;-><init>(Ljava/lang/String;)V', 'iget-object v2, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendDeviceOwnerCommand_Ljava_lang_String_Landroid_os_Bundle_",
         "method":      ".method sendDeviceOwnerCommand(Ljava/lang/String;Landroid/os/Bundle;)V",
+        "method_name": 'sendDeviceOwnerCommand',
         "type":        "method_replace",
         "search": """\
 .method sendDeviceOwnerCommand(Ljava/lang/String;Landroid/os/Bundle;)V
@@ -10945,12 +11058,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v1', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/Owners;->getDeviceOwnerUserId()I', 'move-result v0', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendDeviceOwnerOrProfileOwnerCommand_Ljava_lang_String_Landr",
         "method":      ".method sendDeviceOwnerOrProfileOwnerCommand(Ljava/lang/String;Landroid/os/Bundle;I)V",
+        "method_name": 'sendDeviceOwnerOrProfileOwnerCommand',
         "type":        "method_replace",
         "search": """\
 .method sendDeviceOwnerOrProfileOwnerCommand(Ljava/lang/String;Landroid/os/Bundle;I)V
@@ -11381,12 +11496,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-ne p3, v0, :cond_1', 'invoke-direct {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getHeadlessDeviceOwnerModeForDeviceOwner()I', 'move-result v0', 'if-ne v0, v1, :cond_0', 'iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v0}, Lcom/android/server/devicepolicy/Owners;->getDeviceOwnerUserId()I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setDeviceOwnerRemoteBugreportUriAndHash_Ljava_lang_String_Lj",
         "method":      ".method setDeviceOwnerRemoteBugreportUriAndHash(Ljava/lang/String;Ljava/lang/String;)V",
+        "method_name": 'setDeviceOwnerRemoteBugreportUriAndHash',
         "type":        "method_replace",
         "search": """\
 .method setDeviceOwnerRemoteBugreportUriAndHash(Ljava/lang/String;Ljava/lang/String;)V
@@ -11461,12 +11578,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;', 'move-result-object v0', 'iget-object v1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mOwners:Lcom/android/server/devicepolicy/Owners;', 'invoke-virtual {v1, p1, p2}, Lcom/android/server/devicepolicy/Owners;->setDeviceOwnerRemoteBugreportUriAndHash(Ljava/lang/String;Ljava/lang/String;)V', 'return-void', 'throw v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setDevicePolicySafetyCheckerUnchecked_Landroid_app_admin_Dev",
         "method":      ".method setDevicePolicySafetyCheckerUnchecked(Landroid/app/admin/DevicePolicySafetyChecker;)V",
+        "method_name": 'setDevicePolicySafetyCheckerUnchecked',
         "type":        "method_replace",
         "search": """\
 .method setDevicePolicySafetyCheckerUnchecked(Landroid/app/admin/DevicePolicySafetyChecker;)V
@@ -11554,12 +11673,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "Setting DevicePolicySafetyChecker as %s"', 'filled-new-array {p1}, [Ljava/lang/Object;', 'move-result-object v1', 'const-string v2, "DevicePolicyManager"', 'invoke-static {v2, v0, v1}, Lcom/android/server/utils/Slogf;->i(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/Object;)V', 'iput-object p1, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mSafetyChecker:Landroid/app/admin/DevicePolicySafetyChecker;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setScreenCaptureDisabled_Landroid_content_ComponentName_Ljav",
         "method":      ".method public setScreenCaptureDisabled(Landroid/content/ComponentName;Ljava/lang/String;ZZ)V",
+        "method_name": 'setScreenCaptureDisabled',
         "type":        "method_replace",
         "search": """\
 .method public setScreenCaptureDisabled(Landroid/content/ComponentName;Ljava/lang/String;ZZ)V
@@ -11842,12 +11963,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mHasFeature:Z', 'if-nez v0, :cond_0', 'return-void', 'invoke-virtual {p0, p1, p2}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getCallerIdentity(Landroid/content/ComponentName;Ljava/lang/String;)Lcom/android/server/devicepolicy/CallerIdentity;', 'move-result-object v0', 'invoke-static {}, Landroid/os/Binder;->getCallingUserHandle()Landroid/os/UserHandle;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_systemReady_I_V",
         "method":      ".method systemReady(I)V",
+        "method_name": 'systemReady',
         "type":        "method_replace",
         "search": """\
 .method systemReady(I)V
@@ -12233,12 +12356,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-boolean v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mHasFeature:Z', 'if-nez v0, :cond_0', 'return-void', 'invoke-direct {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->factoryResetIfDelayedEarlier()V', 'invoke-direct {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->ensureDeviceOwnerUserStarted()V', 'invoke-virtual {p0}, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->getLockObject()Ljava/lang/Object;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateUserSetupCompleteAndPaired__V",
         "method":      ".method updateUserSetupCompleteAndPaired()V",
+        "method_name": 'updateUserSetupCompleteAndPaired',
         "type":        "method_replace",
         "search": """\
 .method updateUserSetupCompleteAndPaired()V
@@ -12735,6 +12860,7 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/devicepolicy/DevicePolicyManagerService;->mUserManager:Landroid/os/UserManager;', 'invoke-virtual {v0}, Landroid/os/UserManager;->getAliveUsers()Ljava/util/List;', 'move-result-object v0', 'invoke-interface {v0}, Ljava/util/List;->size()I', 'move-result v1', 'if-ge v2, v1, :cond_3'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

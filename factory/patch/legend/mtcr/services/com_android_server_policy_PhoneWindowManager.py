@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/policy/PhoneWindowManager.smali"
+CLASS_FALLBACK_NAMES = ['PhoneWindowManager.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method__init___V",
         "method":      ".method public constructor <init>()V",
+        "method_name": '<init>',
         "type":        "method_replace",
         "search": """\
 .method public constructor <init>()V
@@ -356,12 +359,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-direct {p0}, Ljava/lang/Object;-><init>()V', 'new-instance v0, Ljava/lang/Object;', 'invoke-direct {v0}, Ljava/lang/Object;-><init>()V', 'iput-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mLock:Ljava/lang/Object;', 'new-instance v0, Landroid/util/SparseArray;', 'invoke-direct {v0}, Landroid/util/SparseArray;-><init>()V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "add_method_CheckDisplayState__Z",
         "method":      ".method private CheckDisplayState()Z",
+        "method_name": 'CheckDisplayState',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -423,6 +428,7 @@ PATCHES = [
     {
         "id":          "add_method_checkVolBtn_Landroid_view_KeyEvent__I",
         "method":      ".method private checkVolBtn(Landroid/view/KeyEvent;)I",
+        "method_name": 'checkVolBtn',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -492,6 +498,7 @@ PATCHES = [
     {
         "id":          "add_method_handleVolumeLongPress_I_V",
         "method":      ".method private handleVolumeLongPress(I)V",
+        "method_name": 'handleVolumeLongPress',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -527,6 +534,7 @@ PATCHES = [
     {
         "id":          "add_method_responseToTheCall_Landroid_view_KeyEvent__V",
         "method":      ".method private responseToTheCall(Landroid/view/KeyEvent;)V",
+        "method_name": 'responseToTheCall',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -655,6 +663,7 @@ PATCHES = [
     {
         "id":          "replace_method_createHomeDockIntent__Landroid_content_Intent_",
         "method":      ".method createHomeDockIntent()Landroid/content/Intent;",
+        "method_name": 'createHomeDockIntent',
         "type":        "method_replace",
         "search": """\
 .method createHomeDockIntent()Landroid/content/Intent;
@@ -1204,12 +1213,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mUiMode:I', 'if-ne v1, v2, :cond_0', 'iget-boolean v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mEnableCarDockHomeCapture:Z', 'if-eqz v1, :cond_5', 'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mCarDockIntent:Landroid/content/Intent;', 'iget v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mUiMode:I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchMediaKeyRepeatWithWakeLock_Landroid_view_KeyEvent__V",
         "method":      ".method dispatchMediaKeyRepeatWithWakeLock(Landroid/view/KeyEvent;)V",
+        "method_name": 'dispatchMediaKeyRepeatWithWakeLock',
         "type":        "method_replace",
         "search": """\
 .method dispatchMediaKeyRepeatWithWakeLock(Landroid/view/KeyEvent;)V
@@ -1443,12 +1454,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iput-boolean v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mHavePendingMediaKeyRepeatWithWakeLock:Z', 'invoke-static {}, Landroid/os/SystemClock;->uptimeMillis()J', 'move-result-wide v0', 'invoke-virtual {p1}, Landroid/view/KeyEvent;->getFlags()I', 'move-result v2', 'invoke-static {p1, v0, v1, v3, v2}, Landroid/view/KeyEvent;->changeTimeRepeat(Landroid/view/KeyEvent;JII)Landroid/view/KeyEvent;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchMediaKeyWithWakeLock_Landroid_view_KeyEvent__V",
         "method":      ".method dispatchMediaKeyWithWakeLock(Landroid/view/KeyEvent;)V",
+        "method_name": 'dispatchMediaKeyWithWakeLock',
         "type":        "method_replace",
         "search": """\
 .method dispatchMediaKeyWithWakeLock(Landroid/view/KeyEvent;)V
@@ -1882,12 +1895,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lcom/android/server/policy/PhoneWindowManager;->DEBUG_INPUT:Z', 'const-string v1, "WindowManager"', 'if-eqz v0, :cond_0', 'new-instance v0, Ljava/lang/StringBuilder;', 'invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V', 'const-string v2, "dispatchMediaKeyWithWakeLock: "'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_dispatchMediaKeyWithWakeLockToAudioService_Landroid_view_Key",
         "method":      ".method dispatchMediaKeyWithWakeLockToAudioService(Landroid/view/KeyEvent;)V",
+        "method_name": 'dispatchMediaKeyWithWakeLockToAudioService',
         "type":        "method_replace",
         "search": """\
 .method dispatchMediaKeyWithWakeLockToAudioService(Landroid/view/KeyEvent;)V
@@ -1984,12 +1999,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mActivityManagerInternal:Landroid/app/ActivityManagerInternal;', 'invoke-virtual {v0}, Landroid/app/ActivityManagerInternal;->isSystemReady()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'invoke-static {v0}, Landroid/media/session/MediaSessionLegacyHelper;->getHelper(Landroid/content/Context;)Landroid/media/session/MediaSessionLegacyHelper;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getAccessibilityManagerInternal__Lcom_android_server_Accessi",
         "method":      ".method getAccessibilityManagerInternal()Lcom/android/server/AccessibilityManagerInternal;",
+        "method_name": 'getAccessibilityManagerInternal',
         "type":        "method_replace",
         "search": """\
 .method getAccessibilityManagerInternal()Lcom/android/server/AccessibilityManagerInternal;
@@ -2086,12 +2103,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mServiceAcquireLock:Ljava/lang/Object;', 'iget-object v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mAccessibilityManagerInternal:Lcom/android/server/AccessibilityManagerInternal;', 'if-nez v1, :cond_0', 'const-class v1, Lcom/android/server/AccessibilityManagerInternal;', 'invoke-static {v1}, Lcom/android/server/LocalServices;->getService(Ljava/lang/Class;)Ljava/lang/Object;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getAudioManagerInternal__Landroid_media_AudioManagerInternal",
         "method":      ".method getAudioManagerInternal()Landroid/media/AudioManagerInternal;",
+        "method_name": 'getAudioManagerInternal',
         "type":        "method_replace",
         "search": """\
 .method getAudioManagerInternal()Landroid/media/AudioManagerInternal;
@@ -2188,12 +2207,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mServiceAcquireLock:Ljava/lang/Object;', 'iget-object v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mAudioManagerInternal:Landroid/media/AudioManagerInternal;', 'if-nez v1, :cond_0', 'const-class v1, Landroid/media/AudioManagerInternal;', 'invoke-static {v1}, Lcom/android/server/LocalServices;->getService(Ljava/lang/Class;)Ljava/lang/Object;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getNotificationService__Landroid_app_NotificationManager_",
         "method":      ".method getNotificationService()Landroid/app/NotificationManager;",
+        "method_name": 'getNotificationService',
         "type":        "method_replace",
         "search": """\
 .method getNotificationService()Landroid/app/NotificationManager;
@@ -2254,12 +2275,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'const-class v1, Landroid/app/NotificationManager;', 'invoke-virtual {v0, v1}, Landroid/content/Context;->getSystemService(Ljava/lang/Class;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Landroid/app/NotificationManager;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getStatusBarManagerInternal__Lcom_android_server_statusbar_S",
         "method":      ".method getStatusBarManagerInternal()Lcom/android/server/statusbar/StatusBarManagerInternal;",
+        "method_name": 'getStatusBarManagerInternal',
         "type":        "method_replace",
         "search": """\
 .method getStatusBarManagerInternal()Lcom/android/server/statusbar/StatusBarManagerInternal;
@@ -2356,12 +2379,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mServiceAcquireLock:Ljava/lang/Object;', 'iget-object v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mStatusBarManagerInternal:Lcom/android/server/statusbar/StatusBarManagerInternal;', 'if-nez v1, :cond_0', 'const-class v1, Lcom/android/server/statusbar/StatusBarManagerInternal;', 'invoke-static {v1}, Lcom/android/server/LocalServices;->getService(Ljava/lang/Class;)Ljava/lang/Object;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getStatusBarService__Lcom_android_internal_statusbar_IStatus",
         "method":      ".method getStatusBarService()Lcom/android/internal/statusbar/IStatusBarService;",
+        "method_name": 'getStatusBarService',
         "type":        "method_replace",
         "search": """\
 .method getStatusBarService()Lcom/android/internal/statusbar/IStatusBarService;
@@ -2462,12 +2487,14 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mServiceAcquireLock:Ljava/lang/Object;', 'iget-object v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mStatusBarService:Lcom/android/internal/statusbar/IStatusBarService;', 'if-nez v1, :cond_0', 'const-string v1, "statusbar"', 'invoke-static {v1}, Landroid/os/ServiceManager;->getService(Ljava/lang/String;)Landroid/os/IBinder;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_getTelecommService__Landroid_telecom_TelecomManager_",
         "method":      ".method getTelecommService()Landroid/telecom/TelecomManager;",
+        "method_name": 'getTelecommService',
         "type":        "method_replace",
         "search": """\
 .method getTelecommService()Landroid/telecom/TelecomManager;
@@ -2528,12 +2555,14 @@ PATCHES = [
     return-object v0
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'const-string v1, "telecom"', 'invoke-virtual {v0, v1}, Landroid/content/Context;->getSystemService(Ljava/lang/String;)Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Landroid/telecom/TelecomManager;', 'return-object v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_goHome__Z",
         "method":      ".method goHome()Z",
+        "method_name": 'goHome',
         "type":        "method_replace",
         "search": """\
 .method goHome()Z
@@ -2956,12 +2985,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {v1}, Lcom/android/server/policy/PhoneWindowManager;->isUserSetupComplete()Z', 'move-result v0', 'const-string v2, "WindowManager"', 'if-nez v0, :cond_0', 'const-string v0, "Not going home because user setup is in progress."', 'invoke-static {v2, v0}, Landroid/util/Slog;->i(Ljava/lang/String;Ljava/lang/String;)I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_handleKeyGestureEvent_Landroid_hardware_input_KeyGestureEven",
         "method":      ".method handleKeyGestureEvent(Landroid/hardware/input/KeyGestureEvent;Landroid/os/IBinder;)V",
+        "method_name": 'handleKeyGestureEvent',
         "type":        "method_replace",
         "search": """\
 .method handleKeyGestureEvent(Landroid/hardware/input/KeyGestureEvent;Landroid/os/IBinder;)V
@@ -7447,12 +7478,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual/range {p1 .. p1}, Landroid/hardware/input/KeyGestureEvent;->getAction()I', 'move-result v0', 'if-ne v0, v3, :cond_0', 'invoke-virtual/range {p1 .. p1}, Landroid/hardware/input/KeyGestureEvent;->getAction()I', 'move-result v0', 'if-ne v0, v4, :cond_1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "add_method_handleVolumeLongPressAbort__V",
         "method":      ".method handleVolumeLongPressAbort()V",
+        "method_name": 'handleVolumeLongPressAbort',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -7515,6 +7548,7 @@ PATCHES = [
     {
         "id":          "replace_method_init_Lcom_android_server_policy_PhoneWindowManager_Injector_",
         "method":      ".method init(Lcom/android/server/policy/PhoneWindowManager$Injector;)V",
+        "method_name": 'init',
         "type":        "method_replace",
         "search": """\
 .method init(Lcom/android/server/policy/PhoneWindowManager$Injector;)V
@@ -11805,12 +11839,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual/range {p1 .. p1}, Lcom/android/server/policy/PhoneWindowManager$Injector;->getContext()Landroid/content/Context;', 'move-result-object v1', 'iput-object v1, v0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'invoke-virtual/range {p1 .. p1}, Lcom/android/server/policy/PhoneWindowManager$Injector;->getWindowManager()Landroid/view/IWindowManager;', 'move-result-object v1', 'iput-object v1, v0, Lcom/android/server/policy/PhoneWindowManager;->mWindowManager:Landroid/view/IWindowManager;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_initializeHdmiState__V",
         "method":      ".method initializeHdmiState()V",
+        "method_name": 'initializeHdmiState',
         "type":        "method_replace",
         "search": """\
 .method initializeHdmiState()V
@@ -11891,12 +11927,14 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/os/StrictMode;->allowThreadDiskReadsMask()I', 'move-result v0', 'invoke-virtual {p0}, Lcom/android/server/policy/PhoneWindowManager;->initializeHdmiStateInternal()V', 'invoke-static {v0}, Landroid/os/StrictMode;->setThreadPolicyMask(I)V', 'return-void', 'invoke-static {v0}, Landroid/os/StrictMode;->setThreadPolicyMask(I)V'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_initializeHdmiStateInternal__V",
         "method":      ".method initializeHdmiStateInternal()V",
+        "method_name": 'initializeHdmiStateInternal',
         "type":        "method_replace",
         "search": """\
 .method initializeHdmiStateInternal()V
@@ -12705,12 +12743,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "Couldn\\\'t read hdmi state from /sys/class/switch/hdmi/state: "', 'const-string v1, "WindowManager"', 'invoke-static {}, Lxiaomi/platform/flags/Flags;->qcomEnabled()Z', 'move-result v3', 'if-eqz v3, :cond_0', 'iget-object v3, p0, Lcom/android/server/policy/PhoneWindowManager;->mExtEventObserver:Landroid/os/UEventObserver;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_interceptKeyBeforeQueueing_Landroid_view_KeyEvent_I_I",
         "method":      ".method public interceptKeyBeforeQueueing(Landroid/view/KeyEvent;I)I",
+        "method_name": 'interceptKeyBeforeQueueing',
         "type":        "method_replace",
         "search": """\
 .method public interceptKeyBeforeQueueing(Landroid/view/KeyEvent;I)I
@@ -16881,12 +16921,14 @@ PATCHES = [
     .end sparse-switch
 .end method
 """,
+        "method_anchors": ['invoke-virtual {v2}, Landroid/view/KeyEvent;->getKeyCode()I', 'move-result v4', 'invoke-virtual {v2}, Landroid/view/KeyEvent;->getAction()I', 'move-result v0', 'if-nez v0, :cond_0', 'if-nez v0, :cond_2'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_isDeviceProvisioned__Z",
         "method":      ".method isDeviceProvisioned()Z",
+        "method_name": 'isDeviceProvisioned',
         "type":        "method_replace",
         "search": """\
 .method isDeviceProvisioned()Z
@@ -16983,12 +17025,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'invoke-virtual {v0}, Landroid/content/Context;->getContentResolver()Landroid/content/ContentResolver;', 'move-result-object v0', 'const-string v1, "device_provisioned"', 'invoke-static {v0, v1, v2}, Landroid/provider/Settings$Global;->getInt(Landroid/content/ContentResolver;Ljava/lang/String;I)I', 'move-result v0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_keyguardOn__Z",
         "method":      ".method keyguardOn()Z",
+        "method_name": 'keyguardOn',
         "type":        "method_replace",
         "search": """\
 .method keyguardOn()Z
@@ -17102,12 +17146,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0}, Lcom/android/server/policy/PhoneWindowManager;->isKeyguardShowingAndNotOccluded()Z', 'move-result v0', 'if-nez v0, :cond_1', 'invoke-virtual {p0}, Lcom/android/server/policy/PhoneWindowManager;->inKeyguardRestrictedKeyInputMode()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_launchHomeFromHotKey_I_V",
         "method":      ".method launchHomeFromHotKey(I)V",
+        "method_name": 'launchHomeFromHotKey',
         "type":        "method_replace",
         "search": """\
 .method launchHomeFromHotKey(I)V
@@ -17146,12 +17192,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p0, p1, v0, v0}, Lcom/android/server/policy/PhoneWindowManager;->launchHomeFromHotKey(IZZ)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_launchHomeFromHotKey_IZZ_V",
         "method":      ".method launchHomeFromHotKey(IZZ)V",
+        "method_name": 'launchHomeFromHotKey',
         "type":        "method_replace",
         "search": """\
 .method launchHomeFromHotKey(IZZ)V
@@ -17493,12 +17541,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz p3, :cond_1', 'invoke-virtual {p0}, Lcom/android/server/policy/PhoneWindowManager;->isKeyguardShowingAndNotOccluded()Z', 'move-result v0', 'if-eqz v0, :cond_0', 'return-void', 'invoke-virtual {p0}, Lcom/android/server/policy/PhoneWindowManager;->isKeyguardOccluded()Z'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_launchVoiceAssistWithWakeLock__V",
         "method":      ".method launchVoiceAssistWithWakeLock()V",
+        "method_name": 'launchVoiceAssistWithWakeLock',
         "type":        "method_replace",
         "search": """\
 .method launchVoiceAssistWithWakeLock()V
@@ -17773,12 +17823,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "assist"', 'invoke-virtual {p0, v0}, Lcom/android/server/policy/PhoneWindowManager;->sendCloseSystemWindows(Ljava/lang/String;)V', 'invoke-virtual {p0}, Lcom/android/server/policy/PhoneWindowManager;->keyguardOn()Z', 'move-result v0', 'if-nez v0, :cond_0', 'new-instance v0, Landroid/content/Intent;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_performStemPrimaryDoublePressSwitchToRecentTask__V",
         "method":      ".method performStemPrimaryDoublePressSwitchToRecentTask()V",
+        "method_name": 'performStemPrimaryDoublePressSwitchToRecentTask',
         "type":        "method_replace",
         "search": """\
 .method performStemPrimaryDoublePressSwitchToRecentTask()V
@@ -18276,12 +18328,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mBackgroundRecentTaskInfoOnStemPrimarySingleKeyUp:Landroid/app/ActivityManager$RecentTaskInfo;', 'const-string v1, "WindowManager"', 'if-nez v0, :cond_1', 'sget-boolean v2, Lcom/android/server/policy/PhoneWindowManager;->DEBUG_INPUT:Z', 'if-eqz v2, :cond_0', 'const-string v2, "No recent task available! Show wallpaper."'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_powerPress_JII_V",
         "method":      ".method powerPress(JII)V",
+        "method_name": 'powerPress',
         "type":        "method_replace",
         "search": """\
 .method powerPress(JII)V
@@ -20017,12 +20071,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mDefaultDisplayPolicy:Lcom/android/server/wm/DisplayPolicy;', 'invoke-virtual {v0}, Lcom/android/server/wm/DisplayPolicy;->isScreenOnEarly()Z', 'move-result v0', 'const-string v1, "WindowManager"', 'if-eqz v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mDefaultDisplayPolicy:Lcom/android/server/wm/DisplayPolicy;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_readLidState__V",
         "method":      ".method readLidState()V",
+        "method_name": 'readLidState',
         "type":        "method_replace",
         "search": """\
 .method readLidState()V
@@ -20083,12 +20139,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mDefaultDisplayPolicy:Lcom/android/server/wm/DisplayPolicy;', 'iget-object v1, p0, Lcom/android/server/policy/PhoneWindowManager;->mWindowManagerFuncs:Lcom/android/server/policy/WindowManagerPolicy$WindowManagerFuncs;', 'invoke-interface {v1}, Lcom/android/server/policy/WindowManagerPolicy$WindowManagerFuncs;->getLidState()I', 'move-result v1', 'invoke-virtual {v0, v1}, Lcom/android/server/wm/DisplayPolicy;->setLidState(I)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_requestBugreportForTv__V",
         "method":      ".method requestBugreportForTv()V",
+        "method_name": 'requestBugreportForTv',
         "type":        "method_replace",
         "search": """\
 .method requestBugreportForTv()V
@@ -20193,12 +20251,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/app/ActivityManager;->getService()Landroid/app/IActivityManager;', 'move-result-object v0', 'invoke-interface {v0}, Landroid/app/IActivityManager;->launchBugReportHandlerApp()Z', 'move-result v0', 'if-nez v0, :cond_0', 'invoke-static {}, Landroid/app/ActivityManager;->getService()Landroid/app/IActivityManager;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendCloseSystemWindows__V",
         "method":      ".method sendCloseSystemWindows()V",
+        "method_name": 'sendCloseSystemWindows',
         "type":        "method_replace",
         "search": """\
 .method sendCloseSystemWindows()V
@@ -20246,12 +20306,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'invoke-static {v0, v1}, Lcom/android/internal/policy/PhoneWindow;->sendCloseSystemWindows(Landroid/content/Context;Ljava/lang/String;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_sendCloseSystemWindows_Ljava_lang_String__V",
         "method":      ".method sendCloseSystemWindows(Ljava/lang/String;)V",
+        "method_name": 'sendCloseSystemWindows',
         "type":        "method_replace",
         "search": """\
 .method sendCloseSystemWindows(Ljava/lang/String;)V
@@ -20290,12 +20352,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;', 'invoke-static {v0, p1}, Lcom/android/internal/policy/PhoneWindow;->sendCloseSystemWindows(Landroid/content/Context;Ljava/lang/String;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "add_method_sendMediaButtonEvent_I_V",
         "method":      ".method public sendMediaButtonEvent(I)V",
+        "method_name": 'sendMediaButtonEvent',
         "type":        "method_add",
         "search":      None,
         "replacement": """\
@@ -20346,6 +20410,7 @@ PATCHES = [
     {
         "id":          "replace_method_setDebugSwitch_Z_V",
         "method":      ".method protected setDebugSwitch(Z)V",
+        "method_name": 'setDebugSwitch',
         "type":        "method_replace",
         "search": """\
 .method protected setDebugSwitch(Z)V
@@ -20393,12 +20458,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['sput-boolean p1, Lcom/android/server/policy/PhoneWindowManager;->DEBUG_INPUT:Z', 'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mSingleKeyGestureDetector:Lcom/android/server/policy/SingleKeyGestureDetector;', 'invoke-virtual {v0, p1}, Lcom/android/server/policy/SingleKeyGestureDetector;->setDebugSwitch(Z)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_showGlobalActionsInternal__V",
         "method":      ".method showGlobalActionsInternal()V",
+        "method_name": 'showGlobalActionsInternal',
         "type":        "method_replace",
         "search": """\
 .method showGlobalActionsInternal()V
@@ -20717,12 +20784,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mGlobalActions:Lcom/android/server/policy/GlobalActions;', 'if-nez v0, :cond_0', 'iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mGlobalActionsFactory:Ljava/util/function/Supplier;', 'invoke-interface {v0}, Ljava/util/function/Supplier;->get()Ljava/lang/Object;', 'move-result-object v0', 'check-cast v0, Lcom/android/server/policy/GlobalActions;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_startDockOrHome_IZZ_V",
         "method":      ".method startDockOrHome(IZZ)V",
+        "method_name": 'startDockOrHome',
         "type":        "method_replace",
         "search": """\
 .method startDockOrHome(IZZ)V
@@ -20761,12 +20830,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['const-string v0, "startDockOrHome"', 'invoke-virtual {p0, p1, p2, p3, v0}, Lcom/android/server/policy/PhoneWindowManager;->startDockOrHome(IZZLjava/lang/String;)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_startDockOrHome_IZZLjava_lang_String__V",
         "method":      ".method startDockOrHome(IZZLjava/lang/String;)V",
+        "method_name": 'startDockOrHome',
         "type":        "method_replace",
         "search": """\
 .method startDockOrHome(IZZLjava/lang/String;)V
@@ -21180,12 +21251,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-static {}, Landroid/app/ActivityManager;->getService()Landroid/app/IActivityManager;', 'move-result-object v0', 'invoke-interface {v0}, Landroid/app/IActivityManager;->stopAppSwitches()V', 'const-string v0, "homekey"', 'invoke-virtual {p0, v0}, Lcom/android/server/policy/PhoneWindowManager;->sendCloseSystemWindows(Ljava/lang/String;)V', 'if-eqz p3, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateRotation_Z_V",
         "method":      ".method updateRotation(Z)V",
+        "method_name": 'updateRotation',
         "type":        "method_replace",
         "search": """\
 .method updateRotation(Z)V
@@ -21233,12 +21306,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mWindowManagerFuncs:Lcom/android/server/policy/WindowManagerPolicy$WindowManagerFuncs;', 'invoke-interface {v0, p1, v1}, Lcom/android/server/policy/WindowManagerPolicy$WindowManagerFuncs;->updateRotation(ZZ)V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateSettings_Landroid_os_Handler__V",
         "method":      ".method updateSettings(Landroid/os/Handler;)V",
+        "method_name": 'updateSettings',
         "type":        "method_replace",
         "search": """\
 .method updateSettings(Landroid/os/Handler;)V
@@ -22403,12 +22478,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['if-eqz v2, :cond_0', 'new-instance v0, Lcom/android/server/policy/PhoneWindowManager$$ExternalSyntheticLambda6;', 'invoke-direct {v0, v1}, Lcom/android/server/policy/PhoneWindowManager$$ExternalSyntheticLambda6;-><init>(Lcom/android/server/policy/PhoneWindowManager;)V', 'invoke-virtual {v2, v0}, Landroid/os/Handler;->post(Ljava/lang/Runnable;)Z', 'return-void', 'iget-object v0, v1, Lcom/android/server/policy/PhoneWindowManager;->mContext:Landroid/content/Context;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateUiMode__V",
         "method":      ".method updateUiMode()V",
+        "method_name": 'updateUiMode',
         "type":        "method_replace",
         "search": """\
 .method updateUiMode()V
@@ -22539,6 +22616,7 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/PhoneWindowManager;->mUiModeManager:Landroid/app/IUiModeManager;', 'if-nez v0, :cond_0', 'const-string v0, "uimode"', 'invoke-static {v0}, Landroid/os/ServiceManager;->getService(Ljava/lang/String;)Landroid/os/IBinder;', 'move-result-object v0', 'invoke-static {v0}, Landroid/app/IUiModeManager$Stub;->asInterface(Landroid/os/IBinder;)Landroid/app/IUiModeManager;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

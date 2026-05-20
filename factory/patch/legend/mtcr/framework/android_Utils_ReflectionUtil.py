@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "framework.jar"
 TARGET_CLASS = "android/Utils/ReflectionUtil.smali"
+CLASS_FALLBACK_NAMES = ['ReflectionUtil.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-framework.jar"
 TARGET_CLASS = "com/android/internal/util/mezo/OOO0OO.smali"
+CLASS_FALLBACK_NAMES = ['OOO0OO.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

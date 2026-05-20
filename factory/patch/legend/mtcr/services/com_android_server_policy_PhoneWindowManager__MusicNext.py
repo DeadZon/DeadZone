@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/policy/PhoneWindowManager$MusicNext.smali"
+CLASS_FALLBACK_NAMES = ['PhoneWindowManager$MusicNext.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {

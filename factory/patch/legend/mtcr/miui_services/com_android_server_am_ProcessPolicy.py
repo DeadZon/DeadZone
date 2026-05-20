@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ProcessPolicy.smali"
+CLASS_FALLBACK_NAMES = ['ProcessPolicy.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_updateContentCatcherWhitelist__V",
         "method":      ".method private updateContentCatcherWhitelist()V",
+        "method_name": 'updateContentCatcherWhitelist',
         "type":        "method_replace",
         "search": """\
 .method private updateContentCatcherWhitelist()V
@@ -126,12 +129,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z', 'if-eqz v0, :cond_0', 'const-string v0, "ProcessManager"', 'const-string v1, "update taplus clipboard whitelist error, build international"', 'invoke-static {v0, v1}, Landroid/util/Slog;->i(Ljava/lang/String;Ljava/lang/String;)I', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_updateVoiceTriggerWhitelist__V",
         "method":      ".method private updateVoiceTriggerWhitelist()V",
+        "method_name": 'updateVoiceTriggerWhitelist',
         "type":        "method_replace",
         "search": """\
 .method private updateVoiceTriggerWhitelist()V
@@ -375,12 +380,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['sget-boolean v0, Lmiui/os/Build;->IS_INTERNATIONAL_BUILD:Z', 'const-string v1, "ProcessManager"', 'if-nez v0, :cond_3', 'invoke-static {}, Lcom/android/server/am/ProcessPolicy;->isLiteOrMiddle()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_systemReady_Landroid_content_Context__V",
         "method":      ".method public systemReady(Landroid/content/Context;)V",
+        "method_name": 'systemReady',
         "type":        "method_replace",
         "search": """\
 .method public systemReady(Landroid/content/Context;)V
@@ -1370,6 +1377,7 @@ PATCHES = [
     throw v1
 .end method
 """,
+        "method_anchors": ['iput-object p1, p0, Lcom/android/server/am/ProcessPolicy;->mContext:Landroid/content/Context;', 'sget-object v0, Lcom/android/server/am/ProcessPolicy;->sLock:Ljava/lang/Object;', 'new-instance v1, Ljava/util/ArrayList;', 'invoke-virtual {p1}, Landroid/content/Context;->getResources()Landroid/content/res/Resources;', 'move-result-object v2', 'invoke-virtual {v2, v3}, Landroid/content/res/Resources;->getStringArray(I)[Ljava/lang/String;'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

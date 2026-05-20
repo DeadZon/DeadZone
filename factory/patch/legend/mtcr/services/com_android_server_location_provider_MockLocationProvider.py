@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "services.jar"
 TARGET_CLASS = "com/android/server/location/provider/MockLocationProvider.smali"
+CLASS_FALLBACK_NAMES = ['MockLocationProvider.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_onExtraCommand_IILjava_lang_String_Landroid_os_Bundle__V",
         "method":      ".method protected onExtraCommand(IILjava/lang/String;Landroid/os/Bundle;)V",
+        "method_name": 'onExtraCommand',
         "type":        "method_replace",
         "search": """\
 .method protected onExtraCommand(IILjava/lang/String;Landroid/os/Bundle;)V
@@ -37,12 +40,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_onFlush_Ljava_lang_Runnable__V",
         "method":      ".method protected onFlush(Ljava/lang/Runnable;)V",
+        "method_name": 'onFlush',
         "type":        "method_replace",
         "search": """\
 .method protected onFlush(Ljava/lang/Runnable;)V
@@ -72,12 +77,14 @@ PATCHES = [
     nop
 .end method
 """,
+        "method_anchors": ['invoke-interface {p1}, Ljava/lang/Runnable;->run()V', 'return-void'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },
     {
         "id":          "replace_method_setProviderLocation_Landroid_location_Location__V",
         "method":      ".method public setProviderLocation(Landroid/location/Location;)V",
+        "method_name": 'setProviderLocation',
         "type":        "method_replace",
         "search": """\
 .method public setProviderLocation(Landroid/location/Location;)V
@@ -184,6 +191,7 @@ PATCHES = [
     throw v2
 .end method
 """,
+        "method_anchors": ['new-instance v0, Landroid/location/Location;', 'invoke-direct {v0, p1}, Landroid/location/Location;-><init>(Landroid/location/Location;)V', 'invoke-virtual {v0, v1}, Landroid/location/Location;->setIsFromMockProvider(Z)V', 'iput-object v0, p0, Lcom/android/server/location/provider/MockLocationProvider;->mLocation:Landroid/location/Location;', 'invoke-static {v1}, Landroid/location/LocationResult;->wrap([Landroid/location/Location;)Landroid/location/LocationResult;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from Service_Legend.mtcr",
     },

@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver.smali"
+CLASS_FALLBACK_NAMES = ['MiuiShortcutTriggerHelper$ShortcutSettingsObserver.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_initShortcutSettingsObserver__V",
         "method":      ".method public initShortcutSettingsObserver()V",
+        "method_name": 'initShortcutSettingsObserver',
         "type":        "method_replace",
         "search": """\
 .method public initShortcutSettingsObserver()V
@@ -912,12 +915,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver;->this$0:Lcom/android/server/policy/MiuiShortcutTriggerHelper;', 'invoke-static {v0}, Lcom/android/server/policy/MiuiShortcutTriggerHelper;->-$$Nest$fgetmContentResolver(Lcom/android/server/policy/MiuiShortcutTriggerHelper;)Landroid/content/ContentResolver;', 'move-result-object v0', 'const-string v1, "long_press_power_launch_xiaoai"', 'invoke-static {v1}, Landroid/provider/Settings$System;->getUriFor(Ljava/lang/String;)Landroid/net/Uri;', 'move-result-object v1'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_onChange_Z_V",
         "method":      ".method public onChange(Z)V",
+        "method_name": 'onChange',
         "type":        "method_replace",
         "search": """\
 .method public onChange(Z)V
@@ -1741,12 +1746,14 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['iget-object v0, p0, Lcom/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver;->this$0:Lcom/android/server/policy/MiuiShortcutTriggerHelper;', 'iget-object v1, p0, Lcom/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver;->this$0:Lcom/android/server/policy/MiuiShortcutTriggerHelper;', 'invoke-static {v1}, Lcom/android/server/policy/MiuiShortcutTriggerHelper;->-$$Nest$fgetmContentResolver(Lcom/android/server/policy/MiuiShortcutTriggerHelper;)Landroid/content/ContentResolver;', 'move-result-object v1', 'iget-object v2, p0, Lcom/android/server/policy/MiuiShortcutTriggerHelper$ShortcutSettingsObserver;->this$0:Lcom/android/server/policy/MiuiShortcutTriggerHelper;', 'invoke-static {v2}, Lcom/android/server/policy/MiuiShortcutTriggerHelper;->-$$Nest$fgetmCurrentUserId(Lcom/android/server/policy/MiuiShortcutTriggerHelper;)I'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_onChange_ZLandroid_net_Uri__V",
         "method":      ".method public onChange(ZLandroid/net/Uri;)V",
+        "method_name": 'onChange',
         "type":        "method_replace",
         "search": """\
 .method public onChange(ZLandroid/net/Uri;)V
@@ -3274,6 +3281,7 @@ PATCHES = [
     return-void
 .end method
 """,
+        "method_anchors": ['const-string v0, "long_press_power_launch_xiaoai"', 'invoke-static {v0}, Landroid/provider/Settings$System;->getUriFor(Ljava/lang/String;)Landroid/net/Uri;', 'move-result-object v1', 'invoke-virtual {v1, p2}, Landroid/net/Uri;->equals(Ljava/lang/Object;)Z', 'move-result v1', 'const-string v2, "long_press_power_key"'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

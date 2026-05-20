@@ -12,11 +12,14 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-services.jar"
 TARGET_CLASS = "com/android/server/am/ProcessSceneCleaner.smali"
+CLASS_FALLBACK_NAMES = ['ProcessSceneCleaner.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
         "id":          "replace_method_handleSwipeKill_Lmiui_process_ProcessConfig__Z",
         "method":      ".method private handleSwipeKill(Lmiui/process/ProcessConfig;)Z",
+        "method_name": 'handleSwipeKill',
         "type":        "method_replace",
         "search": """\
 .method private handleSwipeKill(Lmiui/process/ProcessConfig;)Z
@@ -438,12 +441,14 @@ PATCHES = [
     return v1
 .end method
 """,
+        "method_anchors": ['invoke-virtual {p1}, Lmiui/process/ProcessConfig;->isUserIdInvalid()Z', 'move-result v0', 'if-nez v0, :cond_8', 'invoke-virtual {p1}, Lmiui/process/ProcessConfig;->isTaskIdInvalid()Z', 'move-result v0', 'if-eqz v0, :cond_0'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },
     {
         "id":          "replace_method_killAppForHasOtherTask_ILmiui_process_ProcessConfig__Z",
         "method":      ".method private killAppForHasOtherTask(ILmiui/process/ProcessConfig;)Z",
+        "method_name": 'killAppForHasOtherTask',
         "type":        "method_replace",
         "search": """\
 .method private killAppForHasOtherTask(ILmiui/process/ProcessConfig;)Z
@@ -641,6 +646,7 @@ PATCHES = [
     return v0
 .end method
 """,
+        "method_anchors": ['invoke-static {p1}, Lcom/android/server/wm/WindowProcessUtils;->getTaskTopApp(I)Lcom/android/server/wm/WindowProcessController;', 'move-result-object v1', 'if-eqz v1, :cond_0', 'iget-object v2, v1, Lcom/android/server/wm/WindowProcessController;->mOwner:Ljava/lang/Object;', 'check-cast v0, Lcom/android/server/am/ProcessRecord;', 'if-eqz v3, :cond_2'],
         "required":    True,
         "reason":      "Legend MTCR modified method from miui-services_Legend.mtcr",
     },

@@ -12,6 +12,8 @@ from __future__ import annotations
 
 TARGET_JAR   = "miui-framework.jar"
 TARGET_CLASS = "mezo/xiaomi/util/Translator$State.smali"
+CLASS_FALLBACK_NAMES = ['Translator$State.smali']
+CLASS_ANCHORS        = []
 
 PATCHES = [
     {
