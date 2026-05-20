@@ -3,7 +3,7 @@ set -e
 
 # ===================================================================
 # DeadZone Snapdragon Cloud Builder - Multi Live Stream (Owners & Group)
-# Strictly Pure English - Zero Arabic Characters
+# Neom
 # ===================================================================
 
 export SOC="snapdragon"
@@ -13,7 +13,7 @@ export DZ_NOTIFY="${IN_NOTIFY}"
 export DZ_BUILD="${IN_FINAL_NAME}"
 export DZ_DEVICE="${IN_CUSTOM_DEVICE:-$IN_DEVICE}"
 
-# Exact binding to match your GitHub Repository Secrets repository parameters
+# [FIXED] Exact binding to match your GitHub Repository Secrets parameters
 export TELEGRAM_BOT_TOKEN="${TELEGRAM_SNAPDRAGON_BOT_TOKEN}"
 export TELEGRAM_GROUP_CHAT_ID="${TELEGRAM_SNAPDRAGON_CHAT_ID}"
 export TELEGRAM_THREAD_ID="${TELEGRAM_THREAD_ID}"
@@ -31,6 +31,7 @@ rm -rf DeadZone
 git clone https://oauth2:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git
 cd DeadZone
 
+# [FIXED] Safe Python Requirements installation without wheel upgrade crash
 python -m pip install -r requirements.txt --break-system-packages
 
 # ===========================================================================
@@ -57,6 +58,7 @@ def _run_url():
     return f"{server}/{repo}/actions/runs/{run_id}" if repo and run_id else ""
 
 def _credentials():
+    # [FIXED] Reading correct group chat variable mapped from bash environment
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     group_chat = os.environ.get("TELEGRAM_GROUP_CHAT_ID", "").strip()
     thread_id = os.environ.get("TELEGRAM_THREAD_ID", "").strip()
