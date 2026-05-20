@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 APP_DIR="/app"
 WORK_DIR="/work"
-INPUT_DIR="${WORK_DIR}/_input_roms"
-OUTPUT_DIR="${WORK_DIR}/output"
+INPUT_DIR=""
+OUTPUT_DIR=""
 TEMPLATE_ZIP="${TEMPLATE_ZIP:-${APP_DIR}/third_party/mezo_core/templates/deadzone_fastboot}"
 
 log() {
@@ -18,6 +18,7 @@ stage() {
 fail() {
   stage "FAILED"
   printf '[fly-entrypoint] ERROR: %s\n' "$*" >&2
+  maybe_keep_alive_on_failure
   exit 1
 }
 
@@ -25,6 +26,7 @@ on_error() {
   local exit_code=$?
   stage "FAILED"
   log "Worker failed with exit code ${exit_code}"
+  maybe_keep_alive_on_failure
   exit "$exit_code"
 }
 trap on_error ERR
@@ -93,6 +95,31 @@ download_rom() {
   printf '%s' "$output_path"
 }
 
+prepare_workdir() {
+  stage "PREPARING_WORKDIR"
+
+  if [ ! -e "$WORK_DIR" ] && [ -d /mnt/dz_data ]; then
+    if ln -s /mnt/dz_data "$WORK_DIR" 2>/dev/null; then
+      log "Created ${WORK_DIR} symlink to /mnt/dz_data"
+    else
+      WORK_DIR="/mnt/dz_data"
+      log "Could not create /work symlink; using ${WORK_DIR} as fallback"
+    fi
+  fi
+
+  if [ -e "$WORK_DIR" ] && [ ! -d "$WORK_DIR" ]; then
+    fail "${WORK_DIR} exists but is not a directory"
+  fi
+
+  INPUT_DIR="${WORK_DIR}/_input_roms"
+  OUTPUT_DIR="${WORK_DIR}/output"
+  mkdir -p "$INPUT_DIR" "$OUTPUT_DIR"
+
+  log "Work directory: ${WORK_DIR}"
+  log "Input ROM directory: ${INPUT_DIR}"
+  log "Output directory: ${OUTPUT_DIR}"
+}
+
 cleanup_output() {
   stage "CLEANING_OUTPUT"
   log "Removing transient ROM input and staging directories"
@@ -103,7 +130,16 @@ cleanup_output() {
 
 maybe_keep_alive() {
   if truthy "${KEEP_ALIVE_AFTER_RUN:-false}"; then
+    stage "KEEP_ALIVE"
     log "KEEP_ALIVE_AFTER_RUN=true; keeping Fly machine alive"
+    tail -f /dev/null
+  fi
+}
+
+maybe_keep_alive_on_failure() {
+  if truthy "${KEEP_ALIVE_ON_FAILURE:-false}"; then
+    stage "KEEP_ALIVE"
+    log "KEEP_ALIVE_ON_FAILURE=true; keeping Fly machine alive after failure"
     tail -f /dev/null
   fi
 }
@@ -156,16 +192,16 @@ ANDROID_VERSION="${ANDROID_VERSION:-}"
 MI_VERSION="${MI_VERSION:-}"
 VBMETA_MODE="${VBMETA_MODE:-}"
 NOTIFY_TELEGRAM="${NOTIFY_TELEGRAM:-false}"
-KEEP_ALIVE_AFTER_RUN="${KEEP_ALIVE_AFTER_RUN:-false}"
+KEEP_ALIVE_AFTER_RUN="${KEEP_ALIVE_AFTER_RUN:-true}"
+KEEP_ALIVE_ON_FAILURE="${KEEP_ALIVE_ON_FAILURE:-false}"
 
 stage "STARTING"
 log "DeadZone Fly builder starting"
 log "Source directory: ${APP_DIR}"
-log "Work directory: ${WORK_DIR}"
+log "Requested work directory: ${WORK_DIR}"
 
 export PYTHONPATH="${APP_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
 cd "$APP_DIR"
-mkdir -p "$INPUT_DIR" "$OUTPUT_DIR"
 
 stage "VALIDATING_INPUTS"
 case "$SOC" in
@@ -207,8 +243,12 @@ log "ANDROID_VERSION=${ANDROID_VERSION}"
 log "MI_VERSION=${MI_VERSION}"
 log "VBMETA_MODE=${VBMETA_MODE}"
 log "NOTIFY_TELEGRAM=${NOTIFY_TELEGRAM}"
+log "KEEP_ALIVE_AFTER_RUN=${KEEP_ALIVE_AFTER_RUN}"
+log "KEEP_ALIVE_ON_FAILURE=${KEEP_ALIVE_ON_FAILURE}"
 
 python3 -m factory.cli validate-registry
+
+prepare_workdir
 
 ROM_FILE=""
 if [ -n "$ROM_PATH" ]; then
