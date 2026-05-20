@@ -478,6 +478,7 @@ def apply_legacy_build_pipeline(
                 build_name=build_name,
                 device=device or "unknown",
                 flavor=flavor,
+                soc=soc,
                 template_zip=template_zip,
                 execute=execute,
             )

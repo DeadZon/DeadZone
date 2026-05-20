@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from .fastboot_template import REQUIRED_BIN_FILES, prepare_fastboot_template
-from .flash_scripts import FLASH_ORDER, SCRIPT_NAMES, generate_windows_flash_scripts
+from .flash_scripts import (
+    FLASH_ORDER,
+    MTK_VAB_REQUIRED_IMAGES,
+    SCRIPT_NAMES,
+    generate_windows_flash_scripts,
+    validate_mtk_required_images,
+)
 from .report import write_final_fastboot_zip_report
 
 
@@ -120,6 +127,10 @@ def _iter_staging_files(staging_dir: Path) -> list[Path]:
     return sorted(path for path in staging_dir.rglob("*") if path.is_file())
 
 
+def _is_dynamic_partition(name: str) -> bool:
+    return name in DYNAMIC_PARTITION_IMAGES or name.endswith("_dlkm.img")
+
+
 def _collect_image_files(
     images_dir: Path,
     exclude: frozenset[str] | None = None,
@@ -128,7 +139,7 @@ def _collect_image_files(
     excluded_names: list[str] = []
     if exclude:
         for name in list(images.keys()):
-            if name in exclude:
+            if _is_dynamic_partition(name):
                 excluded_names.append(name)
                 del images[name]
     ordered = [images.pop(name) for name in KNOWN_IMAGE_ORDER if name in images]
@@ -142,6 +153,7 @@ def _report_base(
     build_name: str,
     device: str,
     flavor: str,
+    soc: str | None,
     staging_dir: Path,
     final_zip: Path,
     execute: bool,
@@ -152,6 +164,7 @@ def _report_base(
         "build_name": build_name,
         "device": device,
         "flavor": flavor,
+        "soc": soc,
         "images_dir": str(images_dir),
         "output_dir": str(output_dir),
         "staging_dir": str(staging_dir),
@@ -160,6 +173,7 @@ def _report_base(
         "files_copied": [],
         "images_included": [],
         "images_missing": [],
+        "images_missing_required": [],
         "scripts_generated": [],
         "zip_entries": [],
         "forbidden_entries": [],
@@ -180,12 +194,33 @@ def _report_base(
     }
 
 
+def _write_github_summary_missing(missing: list[str], device: str) -> None:
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+    lines = [
+        "## MTK Fastboot Image Validation — FAILED",
+        f"Device: `{device}`",
+        "",
+        f"**{len(missing)} required firmware image(s) missing from images directory:**",
+        "",
+    ]
+    lines.extend(f"- `{name}`" for name in missing)
+    lines += [
+        "",
+        "Build aborted. Fix the ROM extraction or SoC firmware pack before re-running.",
+    ]
+    with open(summary_path, "a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+
+
 def build_final_fastboot_zip(
     images_dir: Path,
     output_dir: Path,
     build_name: str,
     device: str,
     flavor: str = "legend",
+    soc: str | None = None,
     template_zip: Path | None = None,
     execute: bool = False,
 ) -> dict:
@@ -194,7 +229,7 @@ def build_final_fastboot_zip(
     template_zip = Path(template_zip) if template_zip else None
     staging_dir = output_dir / f"{build_name}_{device}_fastboot"
     final_zip = output_dir / f"{build_name}_{device}_fastboot.zip"
-    report = _report_base(images_dir, output_dir, build_name, device, flavor, staging_dir, final_zip, execute)
+    report = _report_base(images_dir, output_dir, build_name, device, flavor, soc, staging_dir, final_zip, execute)
     reports_dir = output_dir.parent / "reports"
 
     if not images_dir.is_dir():
@@ -203,6 +238,21 @@ def build_final_fastboot_zip(
         report["final_status"] = "FAILED"
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
+
+    # Strict MTK firmware completeness check — must pass before any ZIP is built.
+    if soc == "mtk":
+        missing_required = validate_mtk_required_images(images_dir)
+        report["images_missing_required"] = missing_required
+        if missing_required:
+            report["errors"].append(
+                f"MTK fastboot validation failed: {len(missing_required)} required firmware "
+                f"image(s) missing: {', '.join(missing_required)}"
+            )
+            report["validation_status"] = "FAILED"
+            report["final_status"] = "FAILED"
+            _write_github_summary_missing(missing_required, device)
+            report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
+            return report
 
     # Hard-fail guard: dynamic partition images must never reach output/images.
     # They belong in partition_staging_dir and are packed into super.img by lpmake.
@@ -371,6 +421,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--build-name", required=True)
     parser.add_argument("--device", required=True)
     parser.add_argument("--flavor", default="legend")
+    parser.add_argument("--soc", default=None)
     parser.add_argument("--template-zip", type=Path)
     parser.add_argument("--execute", action="store_true")
     return parser
@@ -384,6 +435,7 @@ def main(argv: list[str] | None = None) -> int:
         build_name=args.build_name,
         device=args.device,
         flavor=args.flavor,
+        soc=args.soc,
         template_zip=args.template_zip,
         execute=args.execute,
     )

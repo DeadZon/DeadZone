@@ -9,6 +9,38 @@ SCRIPT_NAMES = [
     "windows_format_data_only.bat",
 ]
 
+MTK_VAB_REQUIRED_IMAGES: list[str] = [
+    "apusys.img",
+    "audio_dsp.img",
+    "ccu.img",
+    "connsys_bt.img",
+    "connsys_gnss.img",
+    "connsys_wifi.img",
+    "dpm.img",
+    "gpueb.img",
+    "gz.img",
+    "mcf_ota.img",
+    "mcupm.img",
+    "md1img.img",
+    "mvpu_algo.img",
+    "pi_img.img",
+    "scp.img",
+    "spmfw.img",
+    "sspm.img",
+    "tee.img",
+    "vcp.img",
+    "boot.img",
+    "dtbo.img",
+    "init_boot.img",
+    "lk.img",
+    "logo.img",
+    "vendor_boot.img",
+    "vbmeta.img",
+    "vbmeta_system.img",
+    "vbmeta_vendor.img",
+    "super.img",
+]
+
 FLASH_ORDER: list[tuple[str, str]] = [
     ("apusys_ab", "apusys.img"),
     ("audio_dsp_ab", "audio_dsp.img"),
@@ -41,6 +73,12 @@ FLASH_ORDER: list[tuple[str, str]] = [
     ("vendor_boot_ab", "vendor_boot.img"),
     ("super", "super.img"),
 ]
+
+
+def validate_mtk_required_images(images_dir: Path) -> list[str]:
+    """Return names of MTK VAB required images absent from images_dir."""
+    images_dir = Path(images_dir)
+    return [name for name in MTK_VAB_REQUIRED_IMAGES if not (images_dir / name).is_file()]
 
 
 def _present_flash_commands(images_dir: Path) -> list[tuple[str, str]]:

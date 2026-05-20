@@ -50,7 +50,14 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
     else:
         lines.append("  (none — super.img not detected or no dynamic images present)")
     lines.append("")
-    lines.append("Images missing:")
+    missing_required = report.get("images_missing_required", [])
+    if missing_required:
+        lines.append("MISSING REQUIRED IMAGES (build aborted):")
+        lines.extend(f"- MISSING: {name}" for name in missing_required)
+    else:
+        lines.append("Missing required images: none")
+    lines.append("")
+    lines.append("Images missing from flash order (optional):")
     lines.extend(f"- {name}" for name in report.get("images_missing", []))
     lines.append("")
     lines.append("Scripts generated:")
@@ -68,4 +75,3 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
 
     txt_path.write_text("\n".join(lines), encoding="utf-8")
     return {"json": str(json_path), "txt": str(txt_path)}
-

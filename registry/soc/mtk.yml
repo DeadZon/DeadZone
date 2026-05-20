@@ -15,17 +15,38 @@ engine:
     - "third_party/mezo_core/flash/windows_format_data_only.bat"
 
 required_images:
+  - apusys.img
+  - audio_dsp.img
   - boot.img
+  - ccu.img
+  - connsys_bt.img
+  - connsys_gnss.img
+  - connsys_wifi.img
+  - dpm.img
+  - dtbo.img
+  - gpueb.img
+  - gz.img
   - init_boot.img
-  - vendor_boot.img
+  - lk.img
+  - logo.img
+  - mcf_ota.img
+  - mcupm.img
+  - md1img.img
+  - mvpu_algo.img
+  - pi_img.img
+  - scp.img
+  - spmfw.img
+  - sspm.img
+  - tee.img
   - vbmeta.img
+  - vbmeta_system.img
+  - vbmeta_vendor.img
+  - vcp.img
+  - vendor_boot.img
   - super.img
 
 optional_images:
-  - dtbo.img
-  - logo.img
-  - vbmeta_system.img
-  - vbmeta_vendor.img
+  - preloader_raw.img
 
 forbidden_flash_commands:
   - "fastboot -w"
