@@ -248,6 +248,10 @@ def build_final_fastboot_zip(
                 f"MTK fastboot validation failed: {len(missing_required)} required firmware "
                 f"image(s) missing: {', '.join(missing_required)}"
             )
+            report["errors"].append(
+                "MTK firmware images not present in source ROM. "
+                "Provide matching fastboot TGZ or firmware pack."
+            )
             report["validation_status"] = "FAILED"
             report["final_status"] = "FAILED"
             _write_github_summary_missing(missing_required, device)

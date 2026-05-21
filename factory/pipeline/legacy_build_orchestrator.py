@@ -66,6 +66,7 @@ def _known_report_path(stage_id: str, output_dir: Path) -> str | None:
         "images_vbmeta": output_dir / "reports" / "12_images_vbmeta_legacy_report.json",
         "erofs_repack": _REPO_ROOT / "output" / "reports" / "13_erofs_repack_legacy_report.json",
         "super_build": _REPO_ROOT / "output" / "reports" / "14_super_build_legacy_report.json",
+        "mtk_firmware": output_dir / "reports" / "mtk_firmware_image_collection_report.json",
         "final_zip": output_dir / "reports" / "15_final_fastboot_zip_report.json",
     }
     path = candidates.get(stage_id)
@@ -198,6 +199,7 @@ def apply_legacy_build_pipeline(
         _stage_record("images_vbmeta", "Images + vbmeta", critical=True),
         _stage_record("erofs_repack", "EROFS repack", critical=True),
         _stage_record("super_build", "Super build", critical=True),
+        _stage_record("mtk_firmware", "MTK firmware images", critical=True),
         _stage_record("final_zip", "Final ZIP", critical=True),
     ]
 
@@ -482,7 +484,37 @@ def apply_legacy_build_pipeline(
         print(f"[legacy_pipeline] partition_staging_dir={partition_staging_dir}")
 
     if not stopped:
-        final_stage = stages[9]
+        mtk_stage = stages[9]
+        if str(soc or "").lower() != "mtk":
+            stage_reports[mtk_stage["id"]] = _skip_stage(mtk_stage, "non-MTK SoC")
+            live.update(stages, current=mtk_stage["name"])
+        else:
+            def mtk_firmware_call() -> dict:
+                from factory.images.mtk_firmware_collector_legacy import collect_mtk_firmware_images_legacy
+                return collect_mtk_firmware_images_legacy(
+                    project_dir=project_dir,
+                    output_dir=output_dir,
+                    images_dir=images_dir,
+                    device=device,
+                    soc=soc,
+                    execute=execute,
+                )
+
+            report, failed = _run_stage(mtk_stage, stages, live, mtk_firmware_call, execute=execute)
+            stage_reports[mtk_stage["id"]] = report
+            if failed:
+                missing = report.get("missing_images") or []
+                message = (
+                    "MTK firmware images not present in source ROM. "
+                    "Provide matching fastboot TGZ or firmware pack."
+                )
+                if missing:
+                    mtk_stage["errors"].append(f"missing MTK firmware images: {', '.join(missing)}")
+                mtk_stage["errors"].append(message)
+            stopped = stop_if_needed(mtk_stage, failed)
+
+    if not stopped:
+        final_stage = stages[10]
 
         def final_call() -> dict:
             from factory.output.final_zip_legacy import build_final_fastboot_zip

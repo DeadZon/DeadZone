@@ -38,6 +38,27 @@ STANDALONE_IMAGES: frozenset[str] = frozenset({
     "tee.img",
 })
 
+MTK_FIRMWARE_IMAGES: frozenset[str] = frozenset({
+    "apusys.img",
+    "audio_dsp.img",
+    "ccu.img",
+    "connsys_bt.img",
+    "connsys_gnss.img",
+    "connsys_wifi.img",
+    "dpm.img",
+    "gpueb.img",
+    "gz.img",
+    "mcf_ota.img",
+    "mcupm.img",
+    "md1img.img",
+    "mvpu_algo.img",
+    "pi_img.img",
+    "scp.img",
+    "spmfw.img",
+    "sspm.img",
+    "vcp.img",
+})
+
 LEGACY_IMAGE_NAMES: tuple[str, ...] = (
     "boot.img",
     "init_boot.img",
@@ -137,12 +158,15 @@ def collect_required_images_legacy(
     project_dir: Path,
     images_dir: Path,
     partition_staging_dir: Path | None = None,
+    soc: str | None = None,
     execute: bool = False,
 ) -> dict:
     """Move payload-extracted files to staging (dynamic) or images (standalone)."""
     project_dir = Path(project_dir)
     images_dir = Path(images_dir)
     partition_staging_dir = Path(partition_staging_dir) if partition_staging_dir is not None else None
+    is_mtk = str(soc or "").lower() == "mtk"
+    standalone_images = STANDALONE_IMAGES | (MTK_FIRMWARE_IMAGES if is_mtk else frozenset())
     payload_extracted_dirs = [
         project_dir / "rom" / "payload_extracted",
         project_dir.parent / "rom" / "payload_extracted",
@@ -185,8 +209,10 @@ def collect_required_images_legacy(
             "project_dir": str(project_dir),
             "images_dir": str(images_dir),
             "partition_staging_dir": str(partition_staging_dir) if partition_staging_dir else None,
+            "soc": soc,
             "required_images": list(REQUIRED_IMAGES),
             "optional_images": list(OPTIONAL_IMAGES),
+            "mtk_firmware_images": sorted(MTK_FIRMWARE_IMAGES) if is_mtk else [],
             "found_images": found_images,
             "missing_required_images": missing_required,
             "payload_entries": [str(entry) for entry in payload_entries],
@@ -234,7 +260,7 @@ def collect_required_images_legacy(
                 print(f"[images] Moved {entry.name} -> staging {partition_staging_dir}")
             except Exception as exc:
                 errors.append(f"move {entry}: {exc}")
-        elif entry.name in STANDALONE_IMAGES:
+        elif entry.name in standalone_images:
             target = images_dir / entry.name
             try:
                 if target.exists() and not remove_path_force(target):
@@ -292,4 +318,3 @@ def collect_required_images_legacy(
 
     status = "FAILED" if errors else "APPLIED"
     return {"status": status, **_base_report()}
-

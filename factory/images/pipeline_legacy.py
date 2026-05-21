@@ -115,6 +115,7 @@ def apply_images_vbmeta_legacy_stage(
         project_dir=project_dir,
         images_dir=images_dir,
         partition_staging_dir=partition_staging_dir,
+        soc=soc,
         execute=execute,
     )
     vbmeta = apply_vbmeta_legacy_patch(
