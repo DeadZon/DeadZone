@@ -1,0 +1,1 @@
+BRANDING_STRING_RULES = [{'id': 'com_android_provision_string_string_branding_0', 'target': 'res/values/strings.xml', 'new': 'DeadZone', 'required': False, 'reason': 'Visible Provision branding replacement planned.'}]

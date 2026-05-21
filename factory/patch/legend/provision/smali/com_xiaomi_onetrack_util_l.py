@@ -1,0 +1,70 @@
+TARGET_APK = 'Provision.apk'
+TARGET_CLASS = 'com/xiaomi/onetrack/util/l.smali'
+CLASS_FALLBACK_NAMES = ['l.smali']
+CLASS_ANCHORS = ['.super Landroid/util/LruCache;']
+
+PATCHES = [
+    {
+        'id': 'com_xiaomi_onetrack_util_l__class_delete',
+        'type': 'class_delete',
+        'search': """.class Lcom/xiaomi/onetrack/util/l;
+.super Landroid/util/LruCache;
+
+
+# direct methods
+.method constructor <init>(I)V
+    .registers 2
+
+    invoke-direct {p0, p1}, Landroid/util/LruCache;-><init>(I)V
+
+    return-void
+.end method
+
+
+# virtual methods
+.method protected a(Ljava/lang/String;Lcom/xiaomi/onetrack/util/k$a;)I
+    .registers 3
+
+    if-eqz p2, :cond_0
+
+    iget-object p0, p2, Lcom/xiaomi/onetrack/util/k$a;->a:Ljava/lang/String;
+
+    invoke-static {p0}, Landroid/text/TextUtils;->isEmpty(Ljava/lang/CharSequence;)Z
+
+    move-result p0
+
+    if-nez p0, :cond_0
+
+    iget-object p0, p2, Lcom/xiaomi/onetrack/util/k$a;->a:Ljava/lang/String;
+
+    invoke-virtual {p0}, Ljava/lang/String;->length()I
+
+    move-result p0
+
+    return p0
+
+    :cond_0
+    const/4 p0, 0x0
+
+    return p0
+.end method
+
+.method protected synthetic sizeOf(Ljava/lang/Object;Ljava/lang/Object;)I
+    .registers 3
+
+    check-cast p1, Ljava/lang/String;
+
+    check-cast p2, Lcom/xiaomi/onetrack/util/k$a;
+
+    invoke-virtual {p0, p1, p2}, Lcom/xiaomi/onetrack/util/l;->a(Ljava/lang/String;Lcom/xiaomi/onetrack/util/k$a;)I
+
+    move-result p0
+
+    return p0
+.end method
+""",
+        'replacement': """""",
+        'required': False,
+        'reason': 'Class removed by Provision comparison output.',
+    },
+]
