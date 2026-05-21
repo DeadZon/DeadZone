@@ -51,7 +51,7 @@ def _stage_status(report: dict, execute: bool) -> str:
     )
     if status.startswith("SKIPPED"):
         return "SKIP"
-    if status in {"APPLIED", "DRY_RUN", "PASSED", "OK", "SUCCESS"}:
+    if status in {"APPLIED", "DRY_RUN", "PASSED", "OK", "SUCCESS", "PATCHED", "WOULD_PATCH"}:
         return "OK"
     if status == "FAILED" or _errors(report):
         return "FAIL"
@@ -63,6 +63,7 @@ def _known_report_path(stage_id: str, output_dir: Path) -> str | None:
         "common_rom_patches": _REPO_ROOT / "output" / "reports" / "03_common_rom_legacy_report.json",
         "legend_jar": _REPO_ROOT / "output" / "reports" / "03_legend_jar_patch_report.json",
         "provision_apk": _REPO_ROOT / "output" / "reports" / "09_provision_apk_legacy_report.json",
+        "powerkeeper_legend": _REPO_ROOT / "output" / "reports" / "legend_powerkeeper_report.json",
         "images_vbmeta": output_dir / "reports" / "12_images_vbmeta_legacy_report.json",
         "erofs_repack": _REPO_ROOT / "output" / "reports" / "13_erofs_repack_legacy_report.json",
         "super_build": _REPO_ROOT / "output" / "reports" / "14_super_build_legacy_report.json",
@@ -196,6 +197,7 @@ def apply_legacy_build_pipeline(
         _stage_record("legend_jar", "Legend JAR"),
         _stage_record("provision_apk", "Provision APK"),
         _stage_record("systemui_legend", "MiuiSystemUI APK"),
+        _stage_record("powerkeeper_legend", "PowerKeeper APK"),
         _stage_record("images_vbmeta", "Images + vbmeta", critical=True),
         _stage_record("erofs_repack", "EROFS repack", critical=True),
         _stage_record("super_build", "Super build", critical=True),
@@ -402,7 +404,29 @@ def apply_legacy_build_pipeline(
                 stopped = stop_if_needed(systemui_stage, failed)
 
     if not stopped:
-        images_stage = stages[6]
+        powerkeeper_stage = stages[6]
+        if not _is_legend(flavor):
+            stage_reports[powerkeeper_stage["id"]] = _skip_stage(powerkeeper_stage, "non-Legend flavor")
+            live.update(stages, current=powerkeeper_stage["name"])
+        else:
+            powerkeeper_mod = _import_optional("factory.patch.apk.powerkeeper_legend")
+            if powerkeeper_mod is None or not hasattr(powerkeeper_mod, "apply_legend_powerkeeper_patch"):
+                stage_reports[powerkeeper_stage["id"]] = _skip_stage(powerkeeper_stage, "missing module")
+                live.update(stages, current=powerkeeper_stage["name"])
+            else:
+                def powerkeeper_call() -> dict:
+                    return powerkeeper_mod.apply_legend_powerkeeper_patch(
+                        project_dir=project_dir,
+                        flavor=flavor,
+                        execute=execute,
+                    )
+
+                report, failed = _run_stage(powerkeeper_stage, stages, live, powerkeeper_call, execute=execute)
+                stage_reports[powerkeeper_stage["id"]] = report
+                stopped = stop_if_needed(powerkeeper_stage, failed)
+
+    if not stopped:
+        images_stage = stages[7]
 
         def images_call() -> dict:
             from factory.images.pipeline_legacy import apply_images_vbmeta_legacy_stage
@@ -426,7 +450,7 @@ def apply_legacy_build_pipeline(
         stopped = stop_if_needed(images_stage, failed)
 
     if not stopped:
-        erofs_stage = stages[7]
+        erofs_stage = stages[8]
 
         def erofs_call() -> dict:
             from factory.repack.pipeline_erofs_legacy import apply_erofs_repack_legacy_stage
@@ -443,7 +467,7 @@ def apply_legacy_build_pipeline(
         stopped = stop_if_needed(erofs_stage, failed)
 
     if not stopped:
-        super_stage = stages[8]
+        super_stage = stages[9]
 
         def super_call() -> dict:
             from factory.repack.pipeline_super_legacy import apply_super_build_legacy_stage
@@ -484,7 +508,7 @@ def apply_legacy_build_pipeline(
         print(f"[legacy_pipeline] partition_staging_dir={partition_staging_dir}")
 
     if not stopped:
-        mtk_stage = stages[9]
+        mtk_stage = stages[10]
         if str(soc or "").lower() != "mtk":
             stage_reports[mtk_stage["id"]] = _skip_stage(mtk_stage, "non-MTK SoC")
             live.update(stages, current=mtk_stage["name"])
@@ -514,7 +538,7 @@ def apply_legacy_build_pipeline(
             stopped = stop_if_needed(mtk_stage, failed)
 
     if not stopped:
-        final_stage = stages[10]
+        final_stage = stages[11]
 
         def final_call() -> dict:
             from factory.output.final_zip_legacy import build_final_fastboot_zip
