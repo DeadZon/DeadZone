@@ -23,6 +23,7 @@ from factory.patch.apk.apk_workspace import (
 from factory.patch.legend.provision.branding import apply_visible_branding
 from factory.patch.legend.provision.model import load_class_patch
 from factory.patch.legend.smart_smali_patcher import (
+    ClassMatchResult,
     ClassMatchStatus,
     MethodMatchStatus,
     PatchApplyStatus,
@@ -97,12 +98,54 @@ def _apply_delete_rule(smali_roots: list[Path], rule: dict, dry_run: bool) -> di
     )
     if found.status == ClassMatchStatus.AMBIGUOUS:
         return {"id": rule["id"], "status": "FAILED_AMBIGUOUS", "message": found.strategy}
+
+    # RELATIVE_PATH_MULTI: same relative path in multiple copies (e.g. across smali_classes* dirs).
+    # For class_delete → delete ALL copies; never fail just because the basename is common.
+    # For method_delete → fall through using the first copy (unusual case).
+    if found.status == ClassMatchStatus.RELATIVE_PATH_MULTI:
+        if rule["type"] == "class_delete":
+            deleted = 0
+            errors: list[str] = []
+            if not dry_run:
+                for cand in found.candidates:
+                    try:
+                        cand.unlink()
+                        deleted += 1
+                    except OSError as exc:
+                        errors.append(str(exc))
+            n = len(found.candidates)
+            if errors:
+                return {
+                    "id": rule["id"],
+                    "status": "FAILED_AMBIGUOUS",
+                    "message": f"class_delete partial: {deleted}/{n} removed; errors: {errors}",
+                }
+            return {
+                "id": rule["id"],
+                "status": "WOULD_PATCH" if dry_run else "PATCHED",
+                "message": f"class delete: {'would remove' if dry_run else 'removed'} {n} copies",
+                "exact_path_match_count": n,
+                "selected_class_path": str(found.candidates[0]),
+            }
+        # method_delete with multiple copies: use the first one
+        found = ClassMatchResult(
+            status=ClassMatchStatus.RELATIVE_PATH,
+            path=found.candidates[0],
+            strategy=found.strategy + " → first copy used for method_delete",
+        )
+
     if found.status == ClassMatchStatus.NOT_FOUND or not found.path:
         return {"id": rule["id"], "status": "SKIPPED_OPTIONAL", "message": found.strategy}
     if rule["type"] == "class_delete":
         if not dry_run:
             found.path.unlink()
-        return {"id": rule["id"], "status": "WOULD_PATCH" if dry_run else "PATCHED", "message": "class delete"}
+        return {
+            "id": rule["id"],
+            "status": "WOULD_PATCH" if dry_run else "PATCHED",
+            "message": "class delete",
+            "exact_path_match_count": 1,
+            "selected_class_path": str(found.path),
+        }
     text = found.path.read_text(encoding="utf-8", errors="replace")
     method = find_method(text, rule.get("method", ""), rule.get("method_name", ""), rule.get("method_anchors", []))
     if method.status == MethodMatchStatus.AMBIGUOUS:
@@ -112,7 +155,14 @@ def _apply_delete_rule(smali_roots: list[Path], rule: dict, dry_run: bool) -> di
     if not dry_run:
         new_text = text.replace(method.block, "", 1)
         found.path.write_text(new_text, encoding="utf-8")
-    return {"id": rule["id"], "status": "WOULD_PATCH" if dry_run else "PATCHED", "message": "method delete"}
+    return {
+        "id": rule["id"],
+        "status": "WOULD_PATCH" if dry_run else "PATCHED",
+        "message": "method delete",
+        "exact_path_match_count": 1,
+        "selected_class_path": str(found.path),
+        "method_match": method.status.value,
+    }
 
 
 def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:

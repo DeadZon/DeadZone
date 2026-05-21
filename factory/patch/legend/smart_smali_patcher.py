@@ -4,11 +4,19 @@ Smart smali patcher — multi-tier class/method matching with register/label tol
 Architecture
 ============
 Class matching tiers:
-  Tier 1 — Exact path         : TARGET_CLASS resolved directly under each smali_root.
-  Tier 2 — Basename           : any *.smali whose filename matches CLASS_FALLBACK_NAMES.
-  Tier 3 — Class anchors      : any *.smali containing ALL class_anchors (stable verbatim refs).
-  Tier 4 — Method-anchor refs : stable class/member refs extracted from method_anchors; any
-                                 *.smali containing ALL of them.  Requires exactly 1 hit.
+  Tier 1   — Exact path         : TARGET_CLASS resolved directly under each smali_root.
+  Tier 1.5 — Relative path      : any *.smali whose path ends with /<TARGET_CLASS>.
+                                   Single hit → RELATIVE_PATH (use it).
+                                   Multiple hits (same relative path across smali_classes*
+                                   or nested dex dirs) → RELATIVE_PATH_MULTI.
+                                   RELATIVE_PATH_MULTI for method_replace → pick the copy
+                                   that contains the target method.
+                                   RELATIVE_PATH_MULTI for class_delete → delete all copies.
+  Tier 2   — Basename           : any *.smali whose filename matches CLASS_FALLBACK_NAMES.
+                                   Only reached when Tiers 1 and 1.5 both find nothing.
+  Tier 3   — Class anchors      : any *.smali containing ALL class_anchors (stable verbatim refs).
+  Tier 4   — Method-anchor refs : stable class/member refs extracted from method_anchors; any
+                                   *.smali containing ALL of them.  Requires exactly 1 hit.
 
   AMBIGUOUS = FAIL at every tier: > 1 candidate → ClassMatchStatus.AMBIGUOUS, abort.
   If all four tiers fail     → ClassMatchStatus.NOT_FOUND.
@@ -56,12 +64,14 @@ from typing import Optional
 # ── Status enums ───────────────────────────────────────────────────────────────
 
 class ClassMatchStatus(Enum):
-    EXACT          = "EXACT"          # Tier 1: exact path under smali_root
-    BASENAME       = "BASENAME"       # Tier 2: filename match (or fallback name)
-    ANCHOR         = "ANCHOR"         # Tier 3: class_anchors all present
-    METHOD_ANCHOR  = "METHOD_ANCHOR"  # Tier 4: stable refs from method_anchors all present
-    NOT_FOUND      = "NOT_FOUND"
-    AMBIGUOUS      = "AMBIGUOUS"      # > 1 candidate — refused to guess
+    EXACT               = "EXACT"               # Tier 1: exact path under smali_root
+    RELATIVE_PATH       = "RELATIVE_PATH"       # Tier 1.5: relative path suffix, single match
+    RELATIVE_PATH_MULTI = "RELATIVE_PATH_MULTI" # Tier 1.5: same relative path in multiple copies
+    BASENAME            = "BASENAME"            # Tier 2: filename match (or fallback name)
+    ANCHOR              = "ANCHOR"              # Tier 3: class_anchors all present
+    METHOD_ANCHOR       = "METHOD_ANCHOR"       # Tier 4: stable refs from method_anchors all present
+    NOT_FOUND           = "NOT_FOUND"
+    AMBIGUOUS           = "AMBIGUOUS"           # > 1 candidate — refused to guess
 
 
 class MethodMatchStatus(Enum):
@@ -347,10 +357,34 @@ def find_class(
                 strategy=f"exact path in {root.name}",
             )
 
-    # Collect all smali files for tiers 2-4
+    # Collect all smali files for tiers 1.5–4
     all_smali: list[Path] = []
     for root in smali_roots:
         all_smali.extend(root.rglob("*.smali"))
+
+    # Tier 1.5 — relative path suffix
+    # Matches any file whose path ends with /<exact_class>, regardless of which
+    # smali_classes* dir or nested dex sub-directory it lives in.
+    # This resolves ambiguity caused by APKEditor nesting dex dirs inside smali/
+    # (e.g. smali/classes.dex/com/android/provision/Utils.smali) where the exact
+    # Tier-1 root/exact_class join produces a path that doesn't exist.
+    rel_suffix = "/" + exact_class.replace("\\", "/")
+    tier_rel: list[Path] = [
+        p for p in all_smali
+        if str(p).replace("\\", "/").endswith(rel_suffix)
+    ]
+    if len(tier_rel) == 1:
+        return ClassMatchResult(
+            status=ClassMatchStatus.RELATIVE_PATH,
+            path=tier_rel[0],
+            strategy=f"relative path suffix: .../{exact_class}",
+        )
+    if len(tier_rel) > 1:
+        return ClassMatchResult(
+            status=ClassMatchStatus.RELATIVE_PATH_MULTI,
+            candidates=tier_rel,
+            strategy=f"relative path suffix: {len(tier_rel)} copies of /{exact_class}",
+        )
 
     # Tier 2 — basename (TARGET_CLASS filename + fallback names)
     search_basenames: set[str] = {Path(exact_class).name}
@@ -431,7 +465,7 @@ def find_class(
 
     return ClassMatchResult(
         status=ClassMatchStatus.NOT_FOUND,
-        strategy="all four tiers exhausted (path, basename, class-anchors, method-anchor-refs)",
+        strategy="all tiers exhausted (exact-path, relative-path, basename, class-anchors, method-anchor-refs)",
     )
 
 
@@ -621,6 +655,65 @@ def apply_smart_patch(
     class_result = find_class(
         smali_roots, target_class, fallback_names, class_anchors, method_anchors
     )
+
+    # ── RELATIVE_PATH_MULTI: same relative path in multiple copies ───────────────
+    # For method_replace: pick the copy that contains the target method.
+    # For method_add and other types: use the first copy.
+    # class_delete is handled in the runner's _apply_delete_rule, not here.
+    if class_result.status == ClassMatchStatus.RELATIVE_PATH_MULTI:
+        n_copies = len(class_result.candidates)
+        if patch_type == "method_replace":
+            matched_pairs: list[tuple[Path, MethodMatchResult]] = []
+            for cand in class_result.candidates:
+                try:
+                    cand_text = cand.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                mr = find_method(cand_text, method_sig, method_name, method_anchors)
+                if mr.status not in (MethodMatchStatus.NOT_FOUND, MethodMatchStatus.AMBIGUOUS):
+                    matched_pairs.append((cand, mr))
+            if not matched_pairs:
+                return PatchResult(
+                    patch_id=pid, method=method_sig, type=patch_type, required=required,
+                    status=PatchApplyStatus.FAILED if required else PatchApplyStatus.SKIPPED,
+                    class_match=ClassMatchStatus.RELATIVE_PATH_MULTI,
+                    class_strategy=class_result.strategy,
+                    method_match=MethodMatchStatus.NOT_FOUND,
+                    method_strategy=f"method not found in any of {n_copies} relative-path copies",
+                    message=f"METHOD_NOT_FOUND across {n_copies} copies of /{target_class}",
+                )
+            if len(matched_pairs) > 1:
+                return PatchResult(
+                    patch_id=pid, method=method_sig, type=patch_type, required=required,
+                    status=PatchApplyStatus.FAILED if required else PatchApplyStatus.SKIPPED,
+                    class_match=ClassMatchStatus.AMBIGUOUS,
+                    class_strategy=class_result.strategy,
+                    method_match=MethodMatchStatus.AMBIGUOUS,
+                    method_strategy=f"method found in {len(matched_pairs)} of {n_copies} copies",
+                    message=f"AMBIGUOUS: method present in multiple copies of /{target_class}",
+                )
+            chosen_path, chosen_mr = matched_pairs[0]
+            class_result = ClassMatchResult(
+                status=ClassMatchStatus.RELATIVE_PATH,
+                path=chosen_path,
+                strategy=(
+                    f"relative-path-multi → {chosen_path.parent.name} "
+                    f"(method-selected from {n_copies} copies)"
+                ),
+                candidates=class_result.candidates,
+            )
+        else:
+            # method_add and any other patch type: use the first candidate
+            chosen = class_result.candidates[0]
+            class_result = ClassMatchResult(
+                status=ClassMatchStatus.RELATIVE_PATH,
+                path=chosen,
+                strategy=(
+                    f"relative-path-multi → {chosen.parent.name} "
+                    f"(first of {n_copies} copies)"
+                ),
+                candidates=class_result.candidates,
+            )
 
     if class_result.status in (ClassMatchStatus.NOT_FOUND, ClassMatchStatus.AMBIGUOUS):
         return PatchResult(
