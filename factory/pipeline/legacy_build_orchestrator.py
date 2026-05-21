@@ -329,6 +329,7 @@ def apply_legacy_build_pipeline(
                         project_dir=project_dir,
                         flavor=flavor,
                         execute=execute,
+                        android_major=_android_major(android_version),
                     )
 
                 report, failed = _run_stage(jar_stage, stages, live, jar_call, execute=execute)

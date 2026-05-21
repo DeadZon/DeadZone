@@ -457,23 +457,23 @@ def _patch_one_jar(
 
 # ── Cross-JAR stages ──────────────────────────────────────────────────────────
 
-def _run_cross_jar_stages(work_dir: Path, flavor: str, execute: bool) -> dict:
+def _run_cross_jar_stages(work_dir: Path, flavor: str, execute: bool, android_major: int | None = None) -> dict:
     stages: dict = {}
     for mod_name, attr_name, call_kwargs in [
         (
             "factory.patch.legend.signature_bypass_legacy",
             "apply_legacy_signature_bypass",
-            {"work_dir": work_dir, "android_major": None, "flavor": flavor, "execute": execute},
+            {"work_dir": work_dir, "android_major": android_major, "flavor": flavor, "execute": execute},
         ),
         (
             "factory.patch.legend.jar_misc_legacy",
             "apply_legend_jar_misc_legacy_patches",
-            {"work_dir": work_dir, "android_major": None, "flavor": flavor, "execute": execute},
+            {"work_dir": work_dir, "android_major": android_major, "flavor": flavor, "execute": execute},
         ),
         (
             "factory.patch.legend.kaori_legacy",
             "apply_kaori_legacy_patch",
-            {"work_dir": work_dir, "flavor": flavor, "android_major": None, "execute": execute},
+            {"work_dir": work_dir, "flavor": flavor, "android_major": android_major, "execute": execute},
         ),
     ]:
         stage_key = mod_name.rsplit(".", 1)[-1]
@@ -609,6 +609,7 @@ def apply_legend_mtcr_patches(
     project_dir: Path,
     flavor: str,
     execute: bool = False,
+    android_major: int | None = None,
 ) -> dict:
     """
     Apply (or dry-run) all Legend MTCR JAR patches at class/method level.
@@ -686,7 +687,7 @@ def apply_legend_mtcr_patches(
 
     # Cross-JAR stages
     print("[legend_mtcr] --- Cross-JAR stages ---")
-    report["cross_jar_stages"] = _run_cross_jar_stages(work_dir, flavor, execute=execute)
+    report["cross_jar_stages"] = _run_cross_jar_stages(work_dir, flavor, execute=execute, android_major=android_major)
     for stage_key, sr in report["cross_jar_stages"].items():
         if sr.get("errors"):
             report["warnings"].extend(f"{stage_key}: {e}" for e in sr["errors"])
