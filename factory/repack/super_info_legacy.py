@@ -22,6 +22,22 @@ except Exception:  # pragma: no cover - reported at runtime
     lpunpack_get_info = None  # type: ignore
 
 
+_ZIRCON_SUPER_SIZE: int = 9126805504
+_ZIRCON_SUPER_GROUP_BASENAME: str = "qti_dynamic_partitions"
+_LP_METADATA_OVERHEAD: int = 4 * 1024 * 1024
+
+# Devices with a hardcoded super profile (no SuperConfig / registry entry required).
+_DEVICE_SUPER_PROFILES: dict[str, dict[str, object]] = {
+    "zircon": {
+        "super_size": _ZIRCON_SUPER_SIZE,
+        "group_basename": _ZIRCON_SUPER_GROUP_BASENAME,
+        "metadata_slots": 3,
+        "slot_mode": "vab",
+        "output_format": "sparse",
+    },
+}
+
+
 def _read_json(path: Path) -> dict[str, Any] | None:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -69,7 +85,19 @@ def _save_super_config_files(project_dir: Path, super_info: dict[str, Any]) -> N
         _write_json(parts_info_path, parts_info)
 
 
-def _load_super_info_from_payload_manifest(project_dir: Path) -> tuple[dict[str, Any] | None, list[str]]:
+def _load_super_info_from_payload_manifest(
+    project_dir: Path,
+    super_size_override: int | None = None,
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Extract dynamic partition metadata from payload.bin manifest.
+
+    ``super_size_override`` — when provided, this value is used as the block
+    device size instead of the manifest's group size.  Pass the device-specific
+    verified super partition size (e.g., 9126805504 for zircon) so that lpmake
+    receives the correct block-device capacity.  Without this the group size
+    (logical group capacity) would be used as the block-device size, which is
+    typically a few MiB short of the actual partition.
+    """
     warnings: list[str] = []
     try:
         from core.payload_extract import init_payload_info  # type: ignore
@@ -119,22 +147,73 @@ def _load_super_info_from_payload_manifest(project_dir: Path) -> tuple[dict[str,
                 continue
 
             group_name = str(main_group.name)
-            group_size = int(main_group.size)
+            # Strip _a/_b suffix from group name if present
+            if group_name.endswith("_a") or group_name.endswith("_b"):
+                group_name = group_name[:-2]
+
+            manifest_group_size = int(main_group.size)
             part_names = list(main_group.partition_names) if main_group.partition_names else []
             if not part_names:
                 warnings.append(f"Payload manifest group has no partition names: {payload_path}")
                 continue
 
+            # Use the caller-supplied device size when available; otherwise fall back
+            # to the manifest group size (legacy behaviour, may be slightly too small).
+            block_device_size = super_size_override if super_size_override and super_size_override > 0 else manifest_group_size
+            if super_size_override and super_size_override != manifest_group_size:
+                warnings.append(
+                    f"Using super_size_override={super_size_override} "
+                    f"(manifest group size was {manifest_group_size})"
+                )
+
+            # Normalise partition names: strip slot suffix, deduplicate.
+            normalised: list[str] = []
+            seen_parts: set[str] = set()
+            for p in part_names:
+                base = p[:-2] if (p.endswith("_a") or p.endswith("_b")) else p
+                if base not in seen_parts:
+                    seen_parts.add(base)
+                    normalised.append(base)
+
             return {
                 "metadata_slot_count": 3,
-                "block_devices": [{"name": "super", "size": group_size}],
+                "block_devices": [{"name": "super", "size": block_device_size}],
                 "group_table": [{"name": f"{group_name}_a"}, {"name": f"{group_name}_b"}],
-                "partition_table": [{"name": f"{part}_a"} for part in part_names],
+                "partition_table": [{"name": f"{part}_a"} for part in normalised],
+                "_manifest_group_size": manifest_group_size,
             }, warnings
         except Exception as exc:
             warnings.append(f"Could not parse payload manifest {payload_path.name}: {exc}")
 
     return None, warnings
+
+
+def _load_device_hardcoded_fallback(device: str | None) -> tuple[dict[str, Any] | None, list[str]]:
+    """Return a hardcoded super profile for devices not in SuperConfig / registry.
+
+    Covers zircon and any other device added to _DEVICE_SUPER_PROFILES.
+    """
+    warnings: list[str] = []
+    key = (device or "").strip().lower()
+    if not key or key not in _DEVICE_SUPER_PROFILES:
+        return None, warnings
+    prof = _DEVICE_SUPER_PROFILES[key]
+    super_size = int(prof["super_size"])  # type: ignore[arg-type]
+    group_basename = str(prof["group_basename"])
+    metadata_slots = int(prof.get("metadata_slots", 3))  # type: ignore[arg-type]
+    warnings.append(
+        f"Using hardcoded super profile for device '{key}': "
+        f"super_size={super_size}, group={group_basename}"
+    )
+    return {
+        "metadata_slot_count": metadata_slots,
+        "block_devices": [{"name": "super", "size": super_size}],
+        "group_table": [{"name": f"{group_basename}_a"}, {"name": f"{group_basename}_b"}],
+        "partition_table": [],
+        "slot_mode": str(prof.get("slot_mode", "vab")),
+        "virtual_ab": str(prof.get("slot_mode", "vab")).lower() == "vab",
+        "output_format": str(prof.get("output_format", "sparse")),
+    }, warnings
 
 
 def _load_registry_super(device: str | None, soc: str | None) -> tuple[dict[str, Any] | None, list[str]]:
@@ -247,7 +326,18 @@ def load_super_info_legacy(
                 _save_super_config_files(project_dir, info)
             return _annotate_super_info(info, "manual")
 
-    payload_info, payload_warnings = _load_super_info_from_payload_manifest(project_dir)
+    # When the device has a known hardcoded profile (e.g., zircon), use that
+    # super_size to override the block device size reported by the payload manifest.
+    device_profile, _ = _load_device_hardcoded_fallback(device)
+    super_size_override: int | None = None
+    if device_profile:
+        bd = device_profile.get("block_devices") or []
+        if bd and isinstance(bd[0], dict):
+            super_size_override = int(bd[0].get("size", 0) or 0) or None
+
+    payload_info, payload_warnings = _load_super_info_from_payload_manifest(
+        project_dir, super_size_override=super_size_override
+    )
     warnings.extend(payload_warnings)
     if payload_info is not None:
         if execute:
@@ -267,6 +357,13 @@ def load_super_info_legacy(
         if execute:
             _save_super_config_files(project_dir, registry_info)
         return _annotate_super_info(registry_info, "registry")
+
+    # Last resort: use the hardcoded device profile (covers zircon and other
+    # devices not yet in SuperConfig or the registry).
+    if device_profile is not None:
+        if execute:
+            _save_super_config_files(project_dir, device_profile)
+        return _annotate_super_info(device_profile, "device_hardcoded_fallback")
 
     return {
         "_super_info_source": "missing",

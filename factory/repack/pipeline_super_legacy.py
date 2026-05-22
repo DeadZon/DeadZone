@@ -12,9 +12,18 @@ from factory.repack.super_builder_legacy import (
     derive_super_layout_legacy,
     resolve_lpmake_binary_legacy,
 )
+from factory.repack.super_collector import (
+    DYNAMIC_SUPER_PARTITIONS,
+    validate_super_with_lpunpack,
+    write_super_build_reports as _write_collector_reports,
+)
 from factory.repack.super_config_legacy import sync_super_config_for_device_legacy
 from factory.repack.super_info_legacy import load_super_info_legacy
 from factory.repack.super_report import write_super_build_legacy_reports
+
+_FORBIDDEN_DYNAMIC_IN_FINAL: frozenset[str] = frozenset(
+    f"{p}.img" for p in DYNAMIC_SUPER_PARTITIONS
+)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _OUTPUT_ROOT = _REPO_ROOT / "output"
@@ -198,13 +207,45 @@ def apply_super_build_legacy_stage(
 
     # ── Validate super.img after successful build ────────────────────────────
     validation_errors: list[str] = []
+    lpunpack_validation: dict = {}
     staging_deleted = False
     if execute and build_report.get("super_img_created"):
         validation_status, validation_errors = _validate_super_img(output_super)
-        print(f"[super_build] super_img_validated={validation_status}")
+        print(f"[super_build] super_img_magic_validated={validation_status}")
         if validation_status == "FAILED":
             print(f"[super_build] validation errors: {validation_errors}")
-        elif validation_status == "PASSED" and partition_staging_dir is not None:
+
+        if validation_status == "PASSED":
+            # Deep LP metadata validation via lpunpack.
+            selected = list(layout.get("selected_parts") or part_names)
+            expected_super_size = int(layout.get("super_size") or 0) or None
+            lpunpack_validation = validate_super_with_lpunpack(
+                super_path=output_super,
+                expected_partitions=selected,
+                expected_super_size=expected_super_size,
+            )
+            print(f"[super_build] lpunpack_validation={lpunpack_validation.get('status')}")
+            if lpunpack_validation.get("errors"):
+                validation_errors.extend(lpunpack_validation["errors"])
+                validation_status = "FAILED"
+
+            # Check that final images_dir does NOT contain standalone dynamic
+            # partition images — they belong in partition_staging_dir / super.img.
+            forbidden_found = sorted(
+                name for name in _FORBIDDEN_DYNAMIC_IN_FINAL
+                if (images_dir / name).is_file()
+            )
+            if forbidden_found:
+                msg = (
+                    f"Dynamic partition images found as standalone files in "
+                    f"images_dir (must be inside super.img): "
+                    f"{', '.join(forbidden_found)}"
+                )
+                validation_errors.append(msg)
+                validation_status = "FAILED"
+                print(f"[super_build] ERROR: {msg}")
+
+        if validation_status == "PASSED" and partition_staging_dir is not None:
             # Mirroring MEZOBuildRom cleanup_after_repack(): once super.img is
             # validated, the temporary partition images are no longer needed.
             # Deleting them ensures output/images/ holds only super.img and
@@ -239,6 +280,11 @@ def apply_super_build_legacy_stage(
     else:
         final_status = "APPLIED"
 
+    # Build final images manifest for the report
+    final_images_manifest = sorted(
+        p.name for p in images_dir.glob("*.img") if p.is_file()
+    ) if images_dir.is_dir() else []
+
     report = {
         "stage": "super_build_legacy",
         "dry_run": not execute,
@@ -270,6 +316,15 @@ def apply_super_build_legacy_stage(
         "super_img_created": build_report.get("super_img_created", False),
         "super_img_size": build_report.get("super_img_size"),
         "validation_status": validation_status,
+        "lpdump_summary": lpunpack_validation.get("lpdump_summary"),
+        "lpunpack_device_size": lpunpack_validation.get("device_size_in_super"),
+        "lpunpack_partitions_in_super": lpunpack_validation.get("partitions_in_super", []),
+        "missing_dynamic_partitions": lpunpack_validation.get("missing_partitions", missing),
+        "forbidden_standalone_dynamic_images": sorted(
+            name for name in _FORBIDDEN_DYNAMIC_IN_FINAL
+            if (images_dir / name).is_file()
+        ) if execute and images_dir.is_dir() else [],
+        "final_images_manifest": final_images_manifest,
         "skipped_items": skipped,
         "warnings": warnings,
         "errors": errors,
@@ -281,6 +336,35 @@ def apply_super_build_legacy_stage(
     }
 
     write_super_build_legacy_reports(report, reports_dir)
+
+    # Also write the canonical super_build_report.{json,txt} consumed by CI / other tools.
+    _collector_report = {
+        "status": final_status,
+        "payload_images_dir": str(partition_staging_dir) if partition_staging_dir else str(images_dir),
+        "output_super": str(output_super),
+        "final_images_dir": str(images_dir),
+        "dynamic_super_partitions": {p: "" for p in found},
+        "standalone_fastboot_images": {},
+        "super_size": layout.get("super_size"),
+        "group_name": layout.get("group_name"),
+        "slot_mode": layout.get("slot_mode"),
+        "output_format": layout.get("output_format"),
+        "lpmake_command": build_report.get("lpmake_command", []),
+        "lpmake_executed": build_report.get("lpmake_executed", False),
+        "lpmake_return_code": build_report.get("return_code"),
+        "lpmake_output": build_report.get("command_output"),
+        "super_img_created": build_report.get("super_img_created", False),
+        "super_img_size": build_report.get("super_img_size"),
+        "lpdump_summary": lpunpack_validation.get("lpdump_summary"),
+        "validation_status": validation_status,
+        "missing_dynamic_partitions": lpunpack_validation.get("missing_partitions", missing),
+        "forbidden_standalone_dynamic_images": report["forbidden_standalone_dynamic_images"],
+        "final_images_manifest": final_images_manifest,
+        "warnings": warnings,
+        "errors": errors,
+    }
+    _write_collector_reports(_collector_report, reports_dir)
+
     print(f"[super_build] status={final_status}")
     return report
 

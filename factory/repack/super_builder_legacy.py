@@ -34,6 +34,10 @@ KNOWN_PARTITIONS = [
     "mi_ext",
 ]
 
+# LP metadata reserved space: geometry blocks ×2 + metadata slots ×3 ×2 + alignment.
+# 4 MiB is a conservative safe margin so group_size never exceeds device capacity.
+_LP_METADATA_OVERHEAD: int = 4 * 1024 * 1024
+
 
 def _default_root_dir(root_dir: Path | None = None) -> Path:
     return Path(root_dir).resolve() if root_dir is not None else _LEGACY_ROOT.resolve()
@@ -181,6 +185,11 @@ def derive_super_layout_legacy(
         if _image_for_partition(images_dir, part, "a").is_file()
     }
 
+    # group_size must be < super_size to leave room for LP metadata headers.
+    # Using super_size directly causes lpmake to reject the image because the
+    # group capacity would exceed the available data space on the block device.
+    group_size = max(0, super_size - _LP_METADATA_OVERHEAD) if super_size > 0 else 0
+
     return {
         "block_device_name": block_device_name,
         "super_size": super_size,
@@ -189,7 +198,7 @@ def derive_super_layout_legacy(
         "group_name": group_name,
         "group_a_name": group_a_name,
         "group_b_name": group_b_name,
-        "group_size": super_size,
+        "group_size": group_size,
         "slot_mode": "vab" if super_type == 2 else "single",
         "virtual_ab": super_type == 2,
         "output_format": super_info.get("output_format") or "sparse",
@@ -248,11 +257,15 @@ def _build_lpmake_command(
     if lpmake_sparse_enabled:
         command.append("--sparse")
 
+    group_size = int(layout.get("group_size") or 0)
+    if group_size <= 0 and super_size > 0:
+        group_size = max(0, super_size - _LP_METADATA_OVERHEAD)
+
     selected_parts = list(layout["selected_parts"])
     if layout["super_type"] == 1:
         command += [
             "-device", f"{layout['block_device_name']}:{super_size}",
-            "--group", f"{layout['group_a_name']}:{super_size}",
+            "--group", f"{layout['group_a_name']}:{group_size}",
         ]
         for part_name in selected_parts:
             img_path = _image_for_partition(partition_images_dir, part_name, "a")
@@ -266,7 +279,7 @@ def _build_lpmake_command(
     else:
         command += [
             "-device", f"{layout['block_device_name']}:{super_size}",
-            "--group", f"{layout['group_a_name']}:{super_size}",
+            "--group", f"{layout['group_a_name']}:{group_size}",
         ]
         for part_name in selected_parts:
             img_path = _image_for_partition(partition_images_dir, part_name, "a")
@@ -277,7 +290,7 @@ def _build_lpmake_command(
                 "--partition", f"{part_name}_a:readonly:{img_path.stat().st_size}:{layout['group_a_name']}",
                 "--image", f"{part_name}_a={img_path}",
             ]
-        command += ["--group", f"{layout['group_b_name']}:{super_size}"]
+        command += ["--group", f"{layout['group_b_name']}:{group_size}"]
         for part_name in selected_parts:
             img_path = partition_images_dir / f"{part_name}_b.img"
             if can_use_slot_image_legacy(part_name, img_path, layout["slot_mode"]):
