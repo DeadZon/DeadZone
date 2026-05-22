@@ -6,13 +6,13 @@ Architecture
 Real patch logic lives in two layers:
 
   1. Per-class rule modules (auto-discovered):
-       factory/patch/legend/mtcr/framework/       → framework.jar
-       factory/patch/legend/mtcr/services/        → services.jar
-       factory/patch/legend/mtcr/miui_framework/  → miui-framework.jar
-       factory/patch/legend/mtcr/miui_services/   → miui-services.jar
+       factory/patch/legend/mods/jars/framework/      → framework.jar
+       factory/patch/legend/mods/jars/services/       → services.jar
+       factory/patch/legend/mods/jars/miui_framework/ → miui-framework.jar
+       factory/patch/legend/mods/jars/miui_services/  → miui-services.jar
 
   2. Config-gated mod modules (registry-driven):
-       factory/patch/legend/mods/<group>/<mod_id>/mod.py
+       factory/patch/legend/mods/jars/<group>/<mod_id>/mod.py
        Registered in factory/patch/legend/mods/registry.py
 
 Each class-rule module exposes TARGET_JAR, TARGET_CLASS, and PATCHES.
@@ -82,10 +82,10 @@ from factory.patch.legend.mods.registry import (
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
-_REPO_ROOT   = Path(__file__).resolve().parents[4]
-_MTCR_PKG    = Path(__file__).resolve().parent
-_OUTPUT_ROOT = _REPO_ROOT / "output"
-_REPORTS_DIR = _OUTPUT_ROOT / "reports"
+_REPO_ROOT      = Path(__file__).resolve().parents[4]
+_MODS_JARS_PKG  = Path(__file__).resolve().parents[1] / "mods" / "jars"
+_OUTPUT_ROOT    = _REPO_ROOT / "output"
+_REPORTS_DIR    = _OUTPUT_ROOT / "reports"
 
 _ADD_DEX_CANONICAL = _REPO_ROOT / "third_party" / "mezo_core" / "MEZO_LEGEND" / "jar"
 _ADD_DEX_FALLBACK  = _REPO_ROOT / "Legend" / "jar"
@@ -130,10 +130,10 @@ _JARS: list[dict] = [
 def _discover_class_modules(pkg_subdir: str) -> list[Any]:
     """
     Import all non-__init__ modules under
-    factory.patch.legend.mtcr.<pkg_subdir> and return them.
+    factory.patch.legend.mods.jars.<pkg_subdir> and return them.
     """
-    base_pkg = f"factory.patch.legend.mtcr.{pkg_subdir}"
-    sub_path = _MTCR_PKG / pkg_subdir
+    base_pkg = f"factory.patch.legend.mods.jars.{pkg_subdir}"
+    sub_path = _MODS_JARS_PKG / pkg_subdir
     if not sub_path.is_dir():
         return []
 
@@ -310,7 +310,7 @@ def _run_jar_mods(
     Returns {mod_id: result_dict}.
     """
     mod_ids  = LEGEND_JAR_MODS.get(jar_group, [])
-    base_pkg = f"factory.patch.legend.mods.{jar_group}"
+    base_pkg = f"factory.patch.legend.mods.jars.{jar_group}"
     results: dict[str, dict] = {}
 
     for mod_id in mod_ids:

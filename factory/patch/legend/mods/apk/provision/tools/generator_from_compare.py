@@ -12,7 +12,7 @@ import re
 import zipfile
 from pathlib import Path
 
-from factory.patch.legend.provision.policy import (
+from factory.patch.legend.mods.apk.provision.policy import (
     contains_protected_or_disallowed_build_flag,
     normalize_build_flags_to_stock,
     strip_build_flag_refs,

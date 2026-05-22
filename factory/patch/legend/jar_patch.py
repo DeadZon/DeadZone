@@ -109,29 +109,31 @@ def _work_dir(project_dir: Path) -> Path:
 # Each module is optional: if missing, the stage is reported as
 # SKIPPED_MISSING_MODULE and the pipeline continues.
 
+# Legacy modules are archived — they must never be executed by this runner.
+# Imports are intentionally left failing so _HAS_* stays False.
 try:
-    from factory.patch.legend.signature_bypass_legacy import (
+    from factory.patch.legend.archived_legacy.signature_bypass_legacy import (
         apply_legacy_signature_bypass as _apply_sig_bypass,
     )
-    _HAS_SIG_BYPASS = True
+    _HAS_SIG_BYPASS = False  # archived: do not execute
 except ImportError:
     _HAS_SIG_BYPASS = False
     _apply_sig_bypass = None  # type: ignore[assignment]
 
 try:
-    from factory.patch.legend.jar_misc_legacy import (
+    from factory.patch.legend.archived_legacy.jar_misc_legacy import (
         apply_legend_jar_misc_legacy_patches as _apply_misc_legacy,
     )
-    _HAS_MISC_LEGACY = True
+    _HAS_MISC_LEGACY = False  # archived: do not execute
 except ImportError:
     _HAS_MISC_LEGACY = False
     _apply_misc_legacy = None  # type: ignore[assignment]
 
 try:
-    from factory.patch.legend.kaori_legacy import (
+    from factory.patch.legend.archived_legacy.kaori_legacy import (
         apply_kaori_legacy_patch as _apply_kaori,
     )
-    _HAS_KAORI = True
+    _HAS_KAORI = False  # archived: do not execute
 except ImportError:
     _HAS_KAORI = False
     _apply_kaori = None  # type: ignore[assignment]

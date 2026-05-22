@@ -68,7 +68,7 @@ from factory.patch.legend.smart_smali_patcher import (
     insert_method_if_missing,
     add_class_if_missing,
 )
-from factory.patch.legend.systemui.model import (
+from factory.patch.legend.mods.apk.systemui.model import (
     ClassPatch,
     ClassResult,
     PatchResult,
@@ -129,7 +129,7 @@ def _next_smali_root(decompiled_dir: Path) -> Path:
 def _load_modified_class_patches() -> list[ClassPatch]:
     """Import every module in smali/ (modified classes)."""
     result: list[ClassPatch] = []
-    smali_pkg = "factory.patch.legend.systemui.smali"
+    smali_pkg = "factory.patch.legend.mods.apk.systemui.smali"
     smali_path = _PKG_ROOT / "smali"
     if not smali_path.is_dir():
         return result
@@ -149,7 +149,7 @@ def _load_modified_class_patches() -> list[ClassPatch]:
 def _load_added_class_patches() -> list[ClassPatch]:
     """Import every module in smali_added/classes_auto/ (added classes)."""
     result: list[ClassPatch] = []
-    pkg = "factory.patch.legend.systemui.smali_added.classes_auto"
+    pkg = "factory.patch.legend.mods.apk.systemui.smali_added.classes_auto"
     added_path = _PKG_ROOT / "smali_added"
     if not added_path.is_dir():
         return result
@@ -179,7 +179,7 @@ def _apply_add_resources(decompiled_dir: Path, dry_run: bool) -> dict:
         apply_add_resources as _orig_apply,
     )
     # Point to managed factory assets.
-    from factory.patch.legend.systemui.resources.values_rules import ADD_RESOURCES_SRC
+    from factory.patch.legend.mods.apk.systemui.resources.values_rules import ADD_RESOURCES_SRC
 
     result: dict = {
         "assets_root": str(ADD_RESOURCES_SRC),
@@ -235,7 +235,7 @@ def _apply_add_resources(decompiled_dir: Path, dry_run: bool) -> dict:
 
 def _apply_resource_copy_rules(decompiled_dir: Path, dry_run: bool) -> dict:
     """Copy managed drawable/layout assets into decompiled APK res/ folders."""
-    from factory.patch.legend.systemui.resources.add_resource_rules import (
+    from factory.patch.legend.mods.apk.systemui.resources.add_resource_rules import (
         ADDED_LAYOUTS,
         ASSETS_ROOT,
         RESOURCE_RULES,
@@ -376,7 +376,7 @@ def _find_layout_file(decompiled_dir: Path, layout_name: str) -> Optional[Path]:
 
 def _apply_layout_patches(decompiled_dir: Path, dry_run: bool) -> dict:
     """Apply layout XML changes from layout_rules.py."""
-    from factory.patch.legend.systemui.resources.layout_rules import (
+    from factory.patch.legend.mods.apk.systemui.resources.layout_rules import (
         MODIFIED_LAYOUTS, ADDED_LAYOUTS,
     )
     result: dict = {
@@ -505,7 +505,7 @@ def _xml_safe_write(tree_root: ET.Element, dest: Path) -> None:
 
 def _apply_arsc_patches(decompiled_dir: Path, dry_run: bool) -> dict:
     """Apply arsc resource changes from arsc_rules.py."""
-    from factory.patch.legend.systemui.resources.arsc_rules import (
+    from factory.patch.legend.mods.apk.systemui.resources.arsc_rules import (
         MODIFIED_GROUPS, ADDED_GROUPS,
     )
     result: dict = {
@@ -988,26 +988,26 @@ def apply_systemui_patch(
         added_by_group[g] = added_by_group.get(g, 0) + 1
 
     try:
-        from factory.patch.legend.systemui.resources.layout_rules import MODIFIED_LAYOUTS, ADDED_LAYOUTS
+        from factory.patch.legend.mods.apk.systemui.resources.layout_rules import MODIFIED_LAYOUTS, ADDED_LAYOUTS
         layout_count = len(MODIFIED_LAYOUTS) + len(ADDED_LAYOUTS)
     except Exception:
         layout_count = 0
 
     try:
-        from factory.patch.legend.systemui.resources.arsc_rules import MODIFIED_GROUPS, ADDED_GROUPS
+        from factory.patch.legend.mods.apk.systemui.resources.arsc_rules import MODIFIED_GROUPS, ADDED_GROUPS
         arsc_mod = len(MODIFIED_GROUPS)
         arsc_add = len(ADDED_GROUPS)
     except Exception:
         arsc_mod = arsc_add = 0
 
     try:
-        from factory.patch.legend.systemui.resources.values_rules import RESOURCE_FILE_COUNTS
+        from factory.patch.legend.mods.apk.systemui.resources.values_rules import RESOURCE_FILE_COUNTS
         add_xml_count = sum(RESOURCE_FILE_COUNTS.values())
     except Exception:
         add_xml_count = 0
 
     try:
-        from factory.patch.legend.systemui.resources.add_resource_rules import (
+        from factory.patch.legend.mods.apk.systemui.resources.add_resource_rules import (
             ADDED_LAYOUTS as RESOURCE_ADDED_LAYOUTS,
             RESOURCE_COUNTS_BY_FOLDER,
             RESOURCE_RULES,

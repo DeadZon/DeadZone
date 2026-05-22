@@ -1,17 +1,16 @@
 """
-Legend JAR mod registry.
+Legend mod registry — single source of truth for all Legend mods.
 
-Single source of truth for which mods exist, which JAR group they belong to,
-and what the default profiles are.
-
-Mod groups:
-  framework    → framework.jar
-  services     → services.jar
+JAR mod groups (factory/patch/legend/mods/jars/<group>/<mod_name>/mod.py):
+  framework      → framework.jar
+  services       → services.jar
   miui_framework → miui-framework.jar
   miui_services  → miui-services.jar
 
-Each string in LEGEND_JAR_MODS maps to:
-  factory/patch/legend/mods/<group>/<mod_name>/mod.py
+APK mod groups (factory/patch/legend/mods/apk/<group>/runner.py):
+  provision  → Provision.apk
+  systemui   → MiuiSystemUI.apk
+  powerkeeper → PowerKeeper.apk
 
 Profiles:
   LEGEND_MINIMAL_REAL_PROFILE — sensible defaults, no opt-in-only mods
@@ -46,6 +45,25 @@ LEGEND_JAR_MODS: dict[str, list[str]] = {
         "greeze_policy",
         "shortcut_settings_observer",
         "invoke_custom_handling",
+    ],
+}
+
+# ── APK mod registry ─────────────────────────────────────────────────────────
+
+LEGEND_APK_MODS: dict[str, list[str]] = {
+    "provision": [
+        "minimal_real",
+        "gms_cn_fix",
+        "branding",
+    ],
+    "systemui": [
+        "miui_systemui_legend",
+        "branding",
+    ],
+    "powerkeeper": [
+        "exact_method_patches",
+        "fps_lock",
+        "gms_control",
     ],
 }
 

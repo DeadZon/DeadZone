@@ -20,8 +20,8 @@ from factory.patch.apk.apk_workspace import (
     rebuild_apk_with_diagnostics,
     restore_rebuilt_apk_no_backup,
 )
-from factory.patch.legend.powerkeeper.policy import POWERKEEPER_ALLOWED_FLAG_REWRITES
-from factory.patch.legend.powerkeeper.model import load_class_patch
+from factory.patch.legend.mods.apk.powerkeeper.policy import POWERKEEPER_ALLOWED_FLAG_REWRITES
+from factory.patch.legend.mods.apk.powerkeeper.model import load_class_patch
 
 # Exact allowlist of 23 method patches from dex(1).mtcr.
 # Any patch whose id is not in this dict will be skipped and counted as unexpected.
@@ -223,7 +223,7 @@ def _find_smali_roots(decompiled_dir: Path) -> list[Path]:
 
 def _load_smali_rules() -> list:
     result = []
-    package = "factory.patch.legend.powerkeeper.smali"
+    package = "factory.patch.legend.mods.apk.powerkeeper.smali"
     path = _PKG_ROOT / "smali"
     if not path.is_dir():
         return result

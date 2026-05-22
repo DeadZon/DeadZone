@@ -20,9 +20,9 @@ from factory.patch.apk.apk_workspace import (
     rebuild_apk,
     restore_rebuilt_apk_no_backup,
 )
-from factory.patch.legend.provision.branding import apply_visible_branding
-from factory.patch.legend.provision.model import load_class_patch
-from factory.patch.legend.provision.policy import (
+from factory.patch.legend.mods.apk.provision.branding import apply_visible_branding
+from factory.patch.legend.mods.apk.provision.model import load_class_patch
+from factory.patch.legend.mods.apk.provision.policy import (
     MINIMAL_REAL_MODE,
     PROVISION_MINIMAL_REAL_ALLOWLIST,
     classify_provision_patch_skip,
@@ -58,7 +58,7 @@ def _find_smali_roots(decompiled_dir: Path) -> list[Path]:
 
 def _load_smali_rules() -> list:
     result = []
-    pkg = "factory.patch.legend.provision.smali"
+    pkg = "factory.patch.legend.mods.apk.provision.smali"
     path = _PKG_ROOT / "smali"
     for _, name, ispkg in pkgutil.iter_modules([str(path)]):
         if ispkg or name == "__init__":
@@ -329,8 +329,8 @@ def _safe_write_xml(path: Path, replacement: str, dry_run: bool) -> dict:
 
 def _apply_xml_rules(decompiled_dir: Path, dry_run: bool) -> dict:
     rules = []
-    rules.extend(_load_list("factory.patch.legend.provision.manifest.manifest_rules", "MANIFEST_RULES"))
-    rules.extend(_load_list("factory.patch.legend.provision.manifest.xml_rules", "XML_RULES"))
+    rules.extend(_load_list("factory.patch.legend.mods.apk.provision.manifest.manifest_rules", "MANIFEST_RULES"))
+    rules.extend(_load_list("factory.patch.legend.mods.apk.provision.manifest.xml_rules", "XML_RULES"))
     results = []
     for rule in rules:
         path = decompiled_dir / rule["target"]
@@ -342,8 +342,8 @@ def _apply_xml_rules(decompiled_dir: Path, dry_run: bool) -> dict:
 
 def _apply_resource_rules(decompiled_dir: Path, dry_run: bool) -> dict:
     rules = []
-    rules.extend(_load_list("factory.patch.legend.provision.resources.arsc_rules", "ARSC_RULES"))
-    rules.extend(_load_list("factory.patch.legend.provision.resources.values_rules", "VALUES_RULES"))
+    rules.extend(_load_list("factory.patch.legend.mods.apk.provision.resources.arsc_rules", "ARSC_RULES"))
+    rules.extend(_load_list("factory.patch.legend.mods.apk.provision.resources.values_rules", "VALUES_RULES"))
     results = []
     for rule in rules:
         replacement = rule.get("replacement", "")
@@ -363,7 +363,7 @@ def _apply_resource_rules(decompiled_dir: Path, dry_run: bool) -> dict:
 
 
 def _apply_branding_rules(decompiled_dir: Path, dry_run: bool) -> dict:
-    explicit = _load_list("factory.patch.legend.provision.resources.branding_string_rules", "BRANDING_STRING_RULES")
+    explicit = _load_list("factory.patch.legend.mods.apk.provision.resources.branding_string_rules", "BRANDING_STRING_RULES")
     changes = []
     review = []
     unsafe = []
@@ -460,8 +460,8 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
         "final_status": "WOULD_PATCH" if not execute else "PATCHED",
     }
     static_smali = _summarize_smali_rules()
-    static_xml_count = len(_load_list("factory.patch.legend.provision.manifest.manifest_rules", "MANIFEST_RULES")) + len(_load_list("factory.patch.legend.provision.manifest.xml_rules", "XML_RULES"))
-    static_res_count = len(_load_list("factory.patch.legend.provision.resources.arsc_rules", "ARSC_RULES")) + len(_load_list("factory.patch.legend.provision.resources.values_rules", "VALUES_RULES"))
+    static_xml_count = len(_load_list("factory.patch.legend.mods.apk.provision.manifest.manifest_rules", "MANIFEST_RULES")) + len(_load_list("factory.patch.legend.mods.apk.provision.manifest.xml_rules", "XML_RULES"))
+    static_res_count = len(_load_list("factory.patch.legend.mods.apk.provision.resources.arsc_rules", "ARSC_RULES")) + len(_load_list("factory.patch.legend.mods.apk.provision.resources.values_rules", "VALUES_RULES"))
     report.update({
         "smali_class_count": static_smali["class_count"],
         "smali_method_patch_count": static_smali["method_patch_count"],
@@ -499,8 +499,8 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
     if not execute:
         decompiled_dir = effective_work_dir / PROVISION_APK_SRC_DIR_NAME
         smali = _apply_smali_rules(decompiled_dir, dry_run=True) if decompiled_dir.is_dir() else static_smali
-        xml = {"count": len(_load_list("factory.patch.legend.provision.manifest.manifest_rules", "MANIFEST_RULES")) + len(_load_list("factory.patch.legend.provision.manifest.xml_rules", "XML_RULES"))}
-        res = {"count": len(_load_list("factory.patch.legend.provision.resources.arsc_rules", "ARSC_RULES")) + len(_load_list("factory.patch.legend.provision.resources.values_rules", "VALUES_RULES"))}
+        xml = {"count": len(_load_list("factory.patch.legend.mods.apk.provision.manifest.manifest_rules", "MANIFEST_RULES")) + len(_load_list("factory.patch.legend.mods.apk.provision.manifest.xml_rules", "XML_RULES"))}
+        res = {"count": len(_load_list("factory.patch.legend.mods.apk.provision.resources.arsc_rules", "ARSC_RULES")) + len(_load_list("factory.patch.legend.mods.apk.provision.resources.values_rules", "VALUES_RULES"))}
         report.update({
             "smali_class_count": smali["class_count"],
             "smali_method_patch_count": smali.get("method_patch_count", 0),
