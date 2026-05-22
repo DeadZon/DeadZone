@@ -9,19 +9,9 @@ PATCHES = [
         'method': '.method private setScreenEffect(Ljava/lang/String;II)V',
         'method_name': 'setScreenEffect',
         'method_anchors': ['iget v4, v0, Lcom/miui/powerkeeper/statemachine/DisplayFrameSetting;->mIsUltimate:I', 'const-string v5, "miui_refresh_rate"', 'if-ne v4, v8, :cond_1', 'if-eq v3, v6, :cond_1', 'if-eq v3, v7, :cond_1', 'const-string v4, "com.android.camera"', 'invoke-virtual {v1, v4}, Ljava/lang/Object;->equals(Ljava/lang/Object;)Z', 'if-nez v4, :cond_1'],
-        'type': 'method_replace',
-        'search': """.method private setScreenEffect(Ljava/lang/String;II)V
-    .registers 20
-
-    move-object/from16 v0, p0
-
-    move-object/from16 v1, p1
-
-    move/from16 v2, p2
-    move/from16 v3, p3""",
-        'replacement': """.method private setScreenEffect(Ljava/lang/String;II)V
-    .registers 20
-
+        'type': 'insert_after_registers',
+        'search': None,
+        'replacement': """
     const-string v0, "lock_max_fps_mezo"
 
     const/4 v1, 0x1
@@ -30,20 +20,14 @@ PATCHES = [
 
     move-result v0
 
-    if-eqz v0, :cond_fps_guard
+    if-eqz v0, :cond_mezo_fps_guard
 
     return-void
 
-    :cond_fps_guard
-    move-object/from16 v0, p0
-
-    move-object/from16 v1, p1
-
-    move/from16 v2, p2
-    move/from16 v3, p3""",
+    :cond_mezo_fps_guard""",
         'required': True,
         'flag_rewrite_count': 0,
-        'reason': 'PowerKeeper smali rule generated from comparison output.',
+        'reason': 'FPS guard inserted after .registers — does not replace the method, avoids missing .end method.',
     },
     {
         'id': 'com_miui_powerkeeper_statemachine_DisplayFrameSetting__isSupportDevice',

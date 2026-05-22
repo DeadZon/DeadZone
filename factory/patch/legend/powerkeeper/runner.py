@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib
 import json
 import pkgutil
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -459,6 +460,92 @@ def _write_rebuild_logs(rebuild_result: dict, prefix: str = "powerkeeper") -> di
     }
 
 
+# ── Pre-rebuild smali validation ─────────────────────────────────────────────
+
+def _has_invalid_smali_escape(line: str) -> bool:
+    """Return True if a const-string smali line has an invalid escape sequence."""
+    m = re.search(r'const-string[^"]*"(.*)"', line)
+    if not m:
+        return False
+    s = m.group(1)
+    i = 0
+    valid_escapes = set('\\nrt"\' 0abfvuNxX')
+    while i < len(s):
+        if s[i] == '\\':
+            if i + 1 >= len(s) or s[i + 1] not in valid_escapes:
+                return True
+            i += 2
+        else:
+            i += 1
+    return False
+
+
+def _validate_patched_smali(decompiled_dir: Path, patch_results: list[dict]) -> dict:
+    """
+    Validate patched smali files before rebuild.
+
+    Checks:
+      1. Each patched class file has balanced .method / .end method directives.
+      2. No invalid smali escape sequences (e.g. \\. inside const-string values).
+
+    Returns a dict with 'errors' (list[str]) and 'checked_count' (int).
+    """
+    errors: list[str] = []
+    checked: set[str] = set()
+    smali_roots = _find_smali_roots(decompiled_dir)
+
+    for item in patch_results:
+        if item.get("status") not in ("PATCHED",):
+            continue
+        class_path = item.get("class_path", "")
+        if not class_path or class_path in checked:
+            continue
+        checked.add(class_path)
+
+        # Locate the smali file
+        smali_file: Path | None = None
+        for root in smali_roots:
+            candidate = root / class_path
+            if candidate.is_file():
+                smali_file = candidate
+                break
+        if smali_file is None:
+            rel_suffix = "/" + class_path.replace("\\", "/")
+            for root in smali_roots:
+                for p in root.rglob("*.smali"):
+                    if str(p).replace("\\", "/").endswith(rel_suffix):
+                        smali_file = p
+                        break
+                if smali_file:
+                    break
+
+        if smali_file is None:
+            continue
+
+        try:
+            text = smali_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        # Check .method / .end method balance
+        method_count = len(re.findall(r"(?m)^\s*\.method\b", text))
+        end_method_count = len(re.findall(r"(?m)^\s*\.end method\b", text))
+        if method_count != end_method_count:
+            errors.append(
+                f"{class_path}: unbalanced .method ({method_count}) / "
+                f".end method ({end_method_count}) — likely a partial replacement"
+            )
+
+        # Check for invalid smali escape sequences in string literals
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if "const-string" in line and '"' in line and _has_invalid_smali_escape(line):
+                errors.append(
+                    f"{class_path}:{lineno}: invalid smali escape in string: {line.strip()!r}"
+                )
+
+    return {"errors": errors, "checked_count": len(checked)}
+
+
 # ── Stock rebuild test ────────────────────────────────────────────────────────
 
 def _run_stock_rebuild_test(
@@ -790,6 +877,20 @@ def apply_legend_powerkeeper_patch(
             report["errors"].append(f"{len(smali['failures'])} required PowerKeeper smali patches failed")
         _write_reports(report)
         return report
+
+    # 3.5. Pre-rebuild smali validation
+    print("[legend_powerkeeper] Validating patched smali files ...")
+    validation = _validate_patched_smali(decompiled_dir, smali["results"])
+    report["smali_validation"] = validation
+    if validation["errors"]:
+        report["final_status"] = "FAILED_SMALI_VALIDATION"
+        for err in validation["errors"]:
+            report["failures"].append(err)
+            report["errors"].append(err)
+            print(f"[legend_powerkeeper] SMALI VALIDATION ERROR: {err}")
+        _write_reports(report)
+        return report
+    print(f"[legend_powerkeeper] Smali validation OK ({validation['checked_count']} files checked)")
 
     # 4. Rebuild with full diagnostics
     print("[legend_powerkeeper] Rebuilding patched APK ...")

@@ -796,6 +796,178 @@ def apply_smart_patch(
             message=f"replaced via {class_result.strategy} / {method_result.strategy}",
         )
 
+    # ── insert_after_registers ────────────────────────────────────────────────
+    # Inserts `replacement` code immediately after the first .registers line
+    # inside the found method.  Does NOT touch .method / .end method.
+    if patch_type == "insert_after_registers":
+        method_result = find_method(class_text, method_sig, method_name, method_anchors)
+
+        if method_result.status in (MethodMatchStatus.NOT_FOUND, MethodMatchStatus.AMBIGUOUS):
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED if required else PatchApplyStatus.SKIPPED,
+                class_match=class_result.status,
+                class_strategy=class_result.strategy,
+                method_match=method_result.status,
+                method_strategy=method_result.strategy,
+                message=f"method {method_result.status.value}: {method_result.strategy}",
+            )
+
+        block = method_result.block
+        lines = block.split("\n")
+        reg_idx = next(
+            (i for i, l in enumerate(lines) if l.strip().startswith(".registers")),
+            None,
+        )
+        if reg_idx is None:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message=".registers directive not found in method block",
+            )
+
+        # Idempotency guard: if the replacement label already appears in the block,
+        # the guard was already inserted — treat as already patched.
+        guard_labels = [
+            tok.strip()
+            for tok in replacement.strip().split("\n")
+            if tok.strip().startswith(":")
+        ]
+        if guard_labels and guard_labels[0] in block:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.EXISTS,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message="guard label already present — skipping duplicate insertion",
+            )
+
+        if dry_run:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.WOULD_PATCH,
+                class_match=class_result.status,
+                class_strategy=class_result.strategy,
+                method_match=method_result.status,
+                method_strategy=method_result.strategy,
+                message=f"would insert after .registers via {class_result.strategy} / {method_result.strategy}",
+            )
+
+        guard_text = "\n" + replacement.rstrip("\n") + "\n"
+        new_block = (
+            "\n".join(lines[: reg_idx + 1])
+            + guard_text
+            + "\n".join(lines[reg_idx + 1 :])
+        )
+
+        if block not in class_text:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message="method block disappeared from class text (internal error)",
+            )
+
+        try:
+            class_result.path.write_text(
+                class_text.replace(block, new_block, 1), encoding="utf-8"
+            )
+        except OSError as exc:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message=f"write error: {exc}",
+            )
+
+        return PatchResult(
+            patch_id=pid, method=method_sig, type=patch_type, required=required,
+            status=PatchApplyStatus.PATCHED,
+            class_match=class_result.status,
+            class_strategy=class_result.strategy,
+            method_match=method_result.status,
+            method_strategy=method_result.strategy,
+            message=f"inserted guard after .registers via {class_result.strategy} / {method_result.strategy}",
+        )
+
+    # ── method_token_replace ──────────────────────────────────────────────────
+    # Performs a scoped string replacement of `search` → `replacement` *inside*
+    # the found method block only.  The rest of the method body is left intact.
+    if patch_type == "method_token_replace":
+        method_result = find_method(class_text, method_sig, method_name, method_anchors)
+
+        if method_result.status in (MethodMatchStatus.NOT_FOUND, MethodMatchStatus.AMBIGUOUS):
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED if required else PatchApplyStatus.SKIPPED,
+                class_match=class_result.status,
+                class_strategy=class_result.strategy,
+                method_match=method_result.status,
+                method_strategy=method_result.strategy,
+                message=f"method {method_result.status.value}: {method_result.strategy}",
+            )
+
+        block = method_result.block
+        search_token = search  # `search` field = token to find
+        replace_token = replacement  # `replacement` field = token to substitute
+
+        if not search_token or search_token not in block:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED if required else PatchApplyStatus.SKIPPED,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message=f"search token not found in method block: {search_token!r}",
+            )
+
+        if dry_run:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.WOULD_PATCH,
+                class_match=class_result.status,
+                class_strategy=class_result.strategy,
+                method_match=method_result.status,
+                method_strategy=method_result.strategy,
+                message=f"would token-replace in method via {class_result.strategy} / {method_result.strategy}",
+            )
+
+        new_block = block.replace(search_token, replace_token)
+        new_text, changed = replace_method_body(class_text, block, new_block)
+        if not changed:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message="block replacement failed (internal error)",
+            )
+
+        try:
+            class_result.path.write_text(new_text, encoding="utf-8")
+        except OSError as exc:
+            return PatchResult(
+                patch_id=pid, method=method_sig, type=patch_type, required=required,
+                status=PatchApplyStatus.FAILED,
+                class_match=class_result.status,
+                method_match=method_result.status,
+                message=f"write error: {exc}",
+            )
+
+        count = block.count(search_token)
+        return PatchResult(
+            patch_id=pid, method=method_sig, type=patch_type, required=required,
+            status=PatchApplyStatus.PATCHED,
+            class_match=class_result.status,
+            class_strategy=class_result.strategy,
+            method_match=method_result.status,
+            method_strategy=method_result.strategy,
+            message=f"token-replaced {count}x in method via {class_result.strategy} / {method_result.strategy}",
+        )
+
     # ── method_add ────────────────────────────────────────────────────────────
     if patch_type == "method_add":
         existing_names = {extract_method_name(s) for s in parse_smali_methods(class_text)}
