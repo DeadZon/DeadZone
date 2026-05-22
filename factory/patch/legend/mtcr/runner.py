@@ -3,16 +3,22 @@ Legend MTCR JAR patch runner — class/method-level edition.
 
 Architecture
 ============
-Real patch logic lives in per-class rule modules:
+Real patch logic lives in two layers:
 
-  factory/patch/legend/mtcr/framework/       → framework.jar
-  factory/patch/legend/mtcr/services/        → services.jar
-  factory/patch/legend/mtcr/miui_framework/  → miui-framework.jar
-  factory/patch/legend/mtcr/miui_services/   → miui-services.jar
+  1. Per-class rule modules (auto-discovered):
+       factory/patch/legend/mtcr/framework/       → framework.jar
+       factory/patch/legend/mtcr/services/        → services.jar
+       factory/patch/legend/mtcr/miui_framework/  → miui-framework.jar
+       factory/patch/legend/mtcr/miui_services/   → miui-services.jar
 
-Each module exposes TARGET_JAR, TARGET_CLASS, and PATCHES (list of dicts).
+  2. Config-gated mod modules (registry-driven):
+       factory/patch/legend/mods/<group>/<mod_id>/mod.py
+       Registered in factory/patch/legend/mods/registry.py
+
+Each class-rule module exposes TARGET_JAR, TARGET_CLASS, and PATCHES.
+Each mod module exposes apply(unpack_dir, config, dry_run) -> dict.
+
 This runner imports all of them, groups by JAR, and applies them.
-No MTCR files are read at runtime. No Legend/ directory is required.
 
 Pipeline per JAR (execute mode):
   1. Locate JAR in project dir.
@@ -20,11 +26,10 @@ Pipeline per JAR (execute mode):
   3. Unpack JAR + baksmali all DEX files into smali_classes* dirs.
   4. Apply add_dex_payload rules (optional, non-blocking).
   5. Apply every per-class PATCHES list — class by class, method by method.
-  6. smali → DEX (compile each smali_classes* dir).
-  7. DEX → JAR (repack dir back to JAR).
-  8. Restore rebuilt JAR to exact original filename at exact original ROM path.
-
-Cross-JAR stages run AFTER all JARs are rebuilt and restored.
+  6. Apply config-gated mods for this JAR group.
+  7. smali → DEX (compile each smali_classes* dir).
+  8. DEX → JAR (repack dir back to JAR).
+  9. Restore rebuilt JAR to exact original filename at exact original ROM path.
 
 Reports (class/method-level):
   output/reports/legend_mtcr_report.json
@@ -70,6 +75,10 @@ from factory.patch.legend.mtcr.smart_smali_patcher import (
     normalize_smali_for_match,
 )
 from factory.patch.common.add_dex_merger import merge_add_dex
+from factory.patch.legend.mods.registry import (
+    LEGEND_JAR_MODS,
+    merge_profile,
+)
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
@@ -157,15 +166,15 @@ def _smali_dirs_in(unpack_dir: Path) -> list[Path]:
 def _patch_result_to_dict(pr) -> dict:
     """Convert a smart_smali_patcher.PatchResult to the runner's report dict format."""
     return {
-        "patch_id":       pr.patch_id,
-        "method":         pr.method,
-        "type":           pr.type,
-        "status":         pr.status.value,
-        "class_match":    pr.class_match.value,
-        "method_match":   pr.method_match.value,
-        "class_strategy": pr.class_strategy,
+        "patch_id":        pr.patch_id,
+        "method":          pr.method,
+        "type":            pr.type,
+        "status":          pr.status.value,
+        "class_match":     pr.class_match.value,
+        "method_match":    pr.method_match.value,
+        "class_strategy":  pr.class_strategy,
         "method_strategy": pr.method_strategy,
-        "message":        pr.message,
+        "message":         pr.message,
     }
 
 
@@ -180,9 +189,9 @@ def _apply_class_module(
     Returns a class-level result dict with per-patch rows that include
     CLASS MATCH and METHOD MATCH strategy information.
     """
-    jar_name      = getattr(mod, "TARGET_JAR",           "?")
-    target_class  = getattr(mod, "TARGET_CLASS",         "?")
-    patches       = getattr(mod, "PATCHES",              [])
+    jar_name       = getattr(mod, "TARGET_JAR",           "?")
+    target_class   = getattr(mod, "TARGET_CLASS",         "?")
+    patches        = getattr(mod, "PATCHES",              [])
     fallback_names = getattr(mod, "CLASS_FALLBACK_NAMES", [])
     class_anchors  = getattr(mod, "CLASS_ANCHORS",        [])
 
@@ -198,7 +207,6 @@ def _apply_class_module(
     smali_patches = [p for p in patches if p.get("type") != "dex_add"]
 
     for p in smali_patches:
-        # Inject module-level class metadata into the rule dict
         enriched = dict(p)
         enriched["target_class"] = target_class
         if fallback_names and "class_fallback_names" not in enriched:
@@ -215,24 +223,21 @@ def _apply_class_module(
                 )
         except Exception as exc:
             cr["patch_results"].append({
-                "patch_id":       p.get("id", "?"),
-                "method":         p.get("method", ""),
-                "type":           p.get("type", "?"),
-                "status":         "FAILED",
-                "class_match":    "UNKNOWN",
-                "method_match":   "UNKNOWN",
-                "class_strategy": "",
+                "patch_id":        p.get("id", "?"),
+                "method":          p.get("method", ""),
+                "type":            p.get("type", "?"),
+                "status":          "FAILED",
+                "class_match":     "UNKNOWN",
+                "method_match":    "UNKNOWN",
+                "class_strategy":  "",
                 "method_strategy": "",
-                "message":        f"exception: {exc}",
+                "message":         f"exception: {exc}",
             })
             cr["errors"].append(f"{p.get('id', '?')}: exception: {exc}")
 
-    patched = sum(
-        1 for r in cr["patch_results"]
-        if r["status"] in ("PATCHED", "EXISTS")
-    )
-    would = sum(1 for r in cr["patch_results"] if r["status"] == "WOULD_PATCH")
-    failed = sum(1 for r in cr["patch_results"] if r["status"] == "FAILED")
+    patched = sum(1 for r in cr["patch_results"] if r["status"] in ("PATCHED", "EXISTS"))
+    would   = sum(1 for r in cr["patch_results"] if r["status"] == "WOULD_PATCH")
+    failed  = sum(1 for r in cr["patch_results"] if r["status"] == "FAILED")
 
     if failed:
         cr["status"] = "FAILED"
@@ -292,6 +297,42 @@ def _apply_dex_patches_for_jar(
     return dex_results
 
 
+# ── Config-gated mod runner ───────────────────────────────────────────────────
+
+def _run_jar_mods(
+    jar_group: str,
+    unpack_dir: Path,
+    config: dict,
+    dry_run: bool,
+) -> dict[str, dict]:
+    """
+    Run all registered mods for a JAR group from the mod registry.
+    Returns {mod_id: result_dict}.
+    """
+    mod_ids  = LEGEND_JAR_MODS.get(jar_group, [])
+    base_pkg = f"factory.patch.legend.mods.{jar_group}"
+    results: dict[str, dict] = {}
+
+    for mod_id in mod_ids:
+        full_module = f"{base_pkg}.{mod_id}.mod"
+        try:
+            mod    = importlib.import_module(full_module)
+            result = mod.apply(unpack_dir, config, dry_run)
+            results[mod_id] = result
+        except ImportError as exc:
+            results[mod_id] = {
+                "mod_id": mod_id, "status": "SKIPPED_MISSING_MODULE",
+                "errors": [str(exc)], "warnings": [],
+            }
+        except Exception as exc:
+            results[mod_id] = {
+                "mod_id": mod_id, "status": "FAILED",
+                "errors": [str(exc)], "warnings": [],
+            }
+
+    return results
+
+
 # ── Per-JAR orchestration ─────────────────────────────────────────────────────
 
 def _patch_one_jar(
@@ -300,6 +341,7 @@ def _patch_one_jar(
     work_dir: Path,
     add_dex_search: Path,
     execute: bool,
+    mods_config: dict,
 ) -> dict:
     jar_name  = jar_cfg["jar_name"]
     partition = jar_cfg["partition"]
@@ -315,6 +357,7 @@ def _patch_one_jar(
         "unpack_status":     "N/A",
         "dex_add_results":   [],
         "class_results":     [],
+        "mod_results":       {},
         "rebuild_status":    "N/A",
         "restore_status":    "N/A",
         "restored_filename": jar_name,
@@ -329,7 +372,6 @@ def _patch_one_jar(
     smali_patches_mods = [m for m in modules if any(
         p.get("type") != "dex_add" for p in getattr(m, "PATCHES", [])
     )]
-    dex_mods = modules  # all modules potentially have dex_add entries
 
     # Locate JAR in project
     parts = rel_path.split("/")
@@ -345,6 +387,11 @@ def _patch_one_jar(
     jr["project_jar_path"] = str(project_jar)
 
     if not execute:
+        mod_ids = LEGEND_JAR_MODS.get(pkg_sub, [])
+        jr["mod_results"] = {
+            mod_id: {"mod_id": mod_id, "status": "WOULD_RUN"}
+            for mod_id in mod_ids
+        }
         jr["final_status"] = "WOULD_PATCH"
         jr["unpack_status"]  = "WOULD_UNPACK"
         jr["rebuild_status"] = "WOULD_REBUILD"
@@ -389,8 +436,8 @@ def _patch_one_jar(
         return jr
 
     # Unpack JAR + baksmali
-    unpack_dir   = unpack_dir_for(work_dir, jar_name)
-    unpack_result = unpack_jar(workspace_jar, unpack_dir)
+    unpack_dir_path = unpack_dir_for(work_dir, jar_name)
+    unpack_result   = unpack_jar(workspace_jar, unpack_dir_path)
     if unpack_result.errors:
         jr["unpack_status"] = "FAILED"
         jr["errors"].extend(unpack_result.errors)
@@ -399,27 +446,36 @@ def _patch_one_jar(
     jr["unpack_status"] = "OK"
 
     # DEX add payloads
-    smali_roots = _smali_dirs_in(unpack_dir)
+    smali_roots = _smali_dirs_in(unpack_dir_path)
     dex_results = _apply_dex_patches_for_jar(
-        dex_mods, unpack_dir, jar_name, add_dex_search, dry_run=False,
+        modules, unpack_dir_path, jar_name, add_dex_search, dry_run=False,
     )
     jr["dex_add_results"] = dex_results
-    smali_roots = _smali_dirs_in(unpack_dir)   # refresh after possible dex merge
+    smali_roots = _smali_dirs_in(unpack_dir_path)   # refresh after possible dex merge
 
     # Per-class patches
     print(f"[legend_mtcr] Applying {len(smali_patches_mods)} class patches: {jar_name}")
     for mod in smali_patches_mods:
         cr = _apply_class_module(mod, smali_roots, dry_run=False)
         jr["class_results"].append(cr)
-        s = cr["status"]
+        s   = cr["status"]
         cls = cr["class"]
         print(f"[legend_mtcr]   {s:30s}  {cls}")
         if cr["errors"]:
             jr["warnings"].extend(cr["errors"])
 
+    # Config-gated mods
+    print(f"[legend_mtcr] Running mods for: {jar_name}")
+    jr["mod_results"] = _run_jar_mods(pkg_sub, unpack_dir_path, mods_config, dry_run=False)
+    for mod_id, mr in jr["mod_results"].items():
+        st = mr.get("status", "?")
+        print(f"[legend_mtcr]   mod {mod_id}: {st}")
+        if mr.get("errors"):
+            jr["warnings"].extend(f"{mod_id}: {e}" for e in mr["errors"])
+
     # smali → DEX
     print(f"[legend_mtcr] Recompiling smali: {jar_name}")
-    dex_compile = repack_smali_to_dex(unpack_dir)
+    dex_compile = repack_smali_to_dex(unpack_dir_path)
     failed_dex  = [(n, e) for (n, ok, e) in dex_compile if not ok]
     if failed_dex:
         jr["rebuild_status"] = "FAILED"
@@ -431,7 +487,7 @@ def _patch_one_jar(
 
     # DEX → JAR
     rebuilt_jar = work_dir / f"{jar_name}.rebuilt"
-    jar_result  = repack_dir_to_jar(unpack_dir, rebuilt_jar)
+    jar_result  = repack_dir_to_jar(unpack_dir_path, rebuilt_jar)
     if not jar_result.success:
         jr["rebuild_status"] = "FAILED_JAR"
         jr["errors"].append(f"JAR repack failed: {jar_result.error}")
@@ -453,57 +509,6 @@ def _patch_one_jar(
     jr["final_status"]      = "APPLIED"
     print(f"[legend_mtcr] APPLIED: {jar_name} -> {project_jar.name}")
     return jr
-
-
-# ── Cross-JAR stages ──────────────────────────────────────────────────────────
-
-def _run_cross_jar_stages(work_dir: Path, flavor: str, execute: bool, android_major: int | None = None) -> dict:
-    stages: dict = {}
-    for mod_name, attr_name, call_kwargs in [
-        (
-            "factory.patch.legend.signature_bypass_legacy",
-            "apply_legacy_signature_bypass",
-            {"work_dir": work_dir, "android_major": android_major, "flavor": flavor, "execute": execute},
-        ),
-        (
-            "factory.patch.legend.jar_misc_legacy",
-            "apply_legend_jar_misc_legacy_patches",
-            {"work_dir": work_dir, "android_major": android_major, "flavor": flavor, "execute": execute},
-        ),
-        (
-            "factory.patch.legend.kaori_legacy",
-            "apply_kaori_legacy_patch",
-            {"work_dir": work_dir, "flavor": flavor, "android_major": android_major, "execute": execute},
-        ),
-    ]:
-        stage_key = mod_name.rsplit(".", 1)[-1]
-        try:
-            mod = importlib.import_module(mod_name)
-            fn  = getattr(mod, attr_name, None)
-            if fn is None:
-                stages[stage_key] = {"status": "SKIPPED_MISSING_MODULE"}
-                continue
-            if not execute:
-                stages[stage_key] = {"status": "WOULD_RUN"}
-                continue
-            rep = fn(**call_kwargs)
-            if hasattr(rep, "status"):
-                stages[stage_key] = {
-                    "status":   str(getattr(rep, "status", "UNKNOWN")),
-                    "warnings": list(getattr(rep, "warnings", [])),
-                    "errors":   list(getattr(rep, "errors", [])),
-                }
-            else:
-                stages[stage_key] = {
-                    "status":   rep.get("status", "UNKNOWN"),
-                    "warnings": rep.get("warnings", []),
-                    "errors":   rep.get("errors", []),
-                }
-        except ImportError:
-            stages[stage_key] = {"status": "SKIPPED_MISSING_MODULE"}
-        except Exception as exc:
-            stages[stage_key] = {"status": "FAILED", "errors": [str(exc)], "warnings": []}
-    return stages
 
 
 # ── Report formatting ─────────────────────────────────────────────────────────
@@ -552,10 +557,10 @@ def _format_text_report(report: dict) -> str:
                 lines.append(f"        jar    : {cr['jar']}")
                 lines.append(f"        status : {cr['status']}")
                 for pr in cr.get("patch_results", []):
-                    cm  = pr.get("class_match", "")
-                    mm  = pr.get("method_match", "")
-                    cs  = pr.get("class_strategy", "")
-                    ms  = pr.get("method_strategy", "")
+                    cm = pr.get("class_match",    "")
+                    mm = pr.get("method_match",   "")
+                    cs = pr.get("class_strategy", "")
+                    ms = pr.get("method_strategy","")
                     lines.append(
                         f"        PATCH [{pr['status']:20s}]  "
                         f"CLASS={cm:10s}  METHOD={mm:12s}  "
@@ -570,13 +575,51 @@ def _format_text_report(report: dict) -> str:
                 for ce in cr.get("errors", []):
                     lines.append(f"        ! {ce}")
 
-    cross = report.get("cross_jar_stages", {})
-    if cross:
-        lines.append("\nCross-JAR stages:")
-        for stage_name, sr in cross.items():
-            lines.append(f"  {stage_name}: {sr.get('status', '?')}")
-            for e in sr.get("errors", []):
-                lines.append(f"    ! {e}")
+        mod_results = jr.get("mod_results", {})
+        if mod_results:
+            lines.append(f"    Config-gated mods ({len(mod_results)}):")
+            for mod_id, mr in mod_results.items():
+                st = mr.get("status", "?")
+                lines.append(f"      [{st:30s}]  {mod_id}")
+                if "patched_classes" in mr:
+                    for cls in mr.get("patched_classes", []):
+                        lines.append(f"        patched : {cls}")
+                if "skipped_missing" in mr:
+                    for cls in mr.get("skipped_missing", []):
+                        lines.append(f"        missing : {cls}")
+                if "invoke_custom_files_found" in mr:
+                    lines.append(f"        invoke_custom_found   : {mr['invoke_custom_files_found']}")
+                    lines.append(f"        invoke_custom_patched : {mr['invoke_custom_files_patched']}")
+                if "files_patched" in mr:
+                    for f in mr.get("files_patched", []):
+                        lines.append(f"        replaced : {f}")
+                    lines.append(f"        occurrences : {mr.get('occurrences_replaced', 0)}")
+                if "freeform_max_count" in mr:
+                    lines.append(f"        freeform_max_count : {mr['freeform_max_count']}")
+                for e in mr.get("errors", []):
+                    lines.append(f"        ! {e}")
+                for w in mr.get("warnings", []):
+                    lines.append(f"        ~ {w}")
+
+    mods = report.get("legend_jar_mods", {})
+    if mods:
+        lines.append("\nlegend_jar_mods (effective config):")
+        _REPORT_KEYS = (
+            "mezo_core",
+            "volume_button_music_control",
+            "gboard_replace_baidu",
+            "multi_floating_window",
+            "freeform_max_count",
+            "invoke_custom_handling",
+            "kaorios_toolbox_v203",
+            "signature_verification_bypass",
+            "process_control",
+            "greeze_policy",
+            "shortcut_settings_observer",
+        )
+        for k in _REPORT_KEYS:
+            if k in mods:
+                lines.append(f"  {k}: {mods[k]}")
 
     warnings = report.get("warnings", [])
     lines.append("\nWarnings:")
@@ -610,19 +653,28 @@ def apply_legend_mtcr_patches(
     flavor: str,
     execute: bool = False,
     android_major: int | None = None,
+    legend_jar_mods: dict | None = None,
 ) -> dict:
     """
     Apply (or dry-run) all Legend MTCR JAR patches at class/method level.
 
-    No MTCR binary files are read at runtime.  No Legend/ directory required.
-    All patch rules are compiled into per-class Python modules under:
-      factory/patch/legend/mtcr/{framework,services,miui_framework,miui_services}/
+    No MTCR binary files are read at runtime.  No Legend/ directory required
+    for class-level patches (Kaorios DEX must be placed manually when enabled).
 
     Parameters
     ----------
-    project_dir : Path   Root of unpacked ROM project.
-    flavor      : str    ROM flavor: "legend" | "deadzone_legend" | other.
-    execute     : bool   True → apply; False (default) → dry-run.
+    project_dir     : Path   Root of unpacked ROM project.
+    flavor          : str    ROM flavor: "legend" | "deadzone_legend" | other.
+    execute         : bool   True → apply; False (default) → dry-run.
+    android_major   : int    Android major version (14, 15, 16, …).
+    legend_jar_mods : dict   Mod-group enable/disable overrides applied on top
+                             of LEGEND_MINIMAL_REAL_PROFILE.  Key examples:
+                               signature_verification_bypass (default False)
+                               gboard_replace_baidu          (default True)
+                               multi_floating_window         (default True)
+                               freeform_max_count            (default 50)
+                               invoke_custom_handling        (default True)
+                               kaorios_toolbox_v203          (default False)
 
     Returns
     -------
@@ -632,21 +684,25 @@ def apply_legend_mtcr_patches(
     ts          = time.strftime("%Y%m%d_%H%M%S")
     work_dir    = _OUTPUT_ROOT / "work" / f"legend_mtcr_{ts}"
     add_dex_dir = _add_dex_dir()
+    mods_config = merge_profile(legend_jar_mods)
+    if android_major is not None:
+        mods_config["android_major"] = android_major
 
     report: dict = {
-        "stage":            "legend_mtcr",
-        "flavor":           flavor,
-        "dry_run":          not execute,
-        "project_dir":      str(project_dir),
-        "work_dir":         str(work_dir),
-        "add_dex_dir":      str(add_dex_dir),
-        "backup_policy":    "disabled",
-        "jars":             {},
-        "cross_jar_stages": {},
-        "warnings":         [],
-        "errors":           [],
-        "final_status":     "DRY_RUN",
-        "report_files":     {},
+        "stage":           "legend_mtcr",
+        "flavor":          flavor,
+        "dry_run":         not execute,
+        "android_major":   android_major,
+        "project_dir":     str(project_dir),
+        "work_dir":        str(work_dir),
+        "add_dex_dir":     str(add_dex_dir),
+        "backup_policy":   "disabled",
+        "legend_jar_mods": mods_config,
+        "jars":            {},
+        "warnings":        [],
+        "errors":          [],
+        "final_status":    "DRY_RUN",
+        "report_files":    {},
     }
 
     # Flavor guard
@@ -676,6 +732,7 @@ def apply_legend_mtcr_patches(
             work_dir=work_dir,
             add_dex_search=add_dex_dir,
             execute=execute,
+            mods_config=mods_config,
         )
         report["jars"][jar_cfg["jar_name"]] = jr
 
@@ -684,13 +741,6 @@ def apply_legend_mtcr_patches(
             report["errors"].extend(jr.get("errors", []))
         else:
             report["warnings"].extend(jr.get("warnings", []))
-
-    # Cross-JAR stages
-    print("[legend_mtcr] --- Cross-JAR stages ---")
-    report["cross_jar_stages"] = _run_cross_jar_stages(work_dir, flavor, execute=execute, android_major=android_major)
-    for stage_key, sr in report["cross_jar_stages"].items():
-        if sr.get("errors"):
-            report["warnings"].extend(f"{stage_key}: {e}" for e in sr["errors"])
 
     if execute:
         report["final_status"] = "FAILED" if any_failed else "APPLIED"
@@ -706,9 +756,26 @@ def apply_legend_mtcr_patches(
 
 def _main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Legend MTCR class/method-level patch runner")
-    p.add_argument("--project", required=True, help="Path to unpacked ROM project directory")
-    p.add_argument("--flavor",  required=True, help="ROM flavor: legend | deadzone_legend | …")
-    p.add_argument("--execute", action="store_true", help="Apply patches (default: dry-run)")
+    p.add_argument("--project",       required=True,
+                   help="Path to unpacked ROM project directory")
+    p.add_argument("--flavor",        required=True,
+                   help="ROM flavor: legend | deadzone_legend | …")
+    p.add_argument("--android-major", dest="android_major", type=int, default=None,
+                   help="Android major version (14, 15, 16, …)")
+    p.add_argument("--execute",       action="store_true",
+                   help="Apply patches (default: dry-run)")
+    p.add_argument("--enable-sig-bypass",     action="store_true", default=None,
+                   help="Enable signature_verification_bypass mod (default: off)")
+    p.add_argument("--enable-kaorios",        action="store_true", default=None,
+                   help="Enable kaorios_toolbox_v203 mod (default: off)")
+    p.add_argument("--disable-gboard",        action="store_true", default=None,
+                   help="Disable gboard_replace_baidu mod (default: on)")
+    p.add_argument("--disable-freeform",      action="store_true", default=None,
+                   help="Disable multi_floating_window mod (default: on)")
+    p.add_argument("--freeform-count",        dest="freeform_count", type=int, default=None,
+                   help="Max freeform window count (default: 50)")
+    p.add_argument("--disable-invoke-custom", action="store_true", default=None,
+                   help="Disable invoke_custom_handling mod (default: on)")
     args = p.parse_args(argv)
 
     project_dir = Path(args.project).resolve()
@@ -716,10 +783,26 @@ def _main(argv: list[str] | None = None) -> int:
         print(f"[legend_mtcr] ERROR: project directory not found: {project_dir}", file=sys.stderr)
         return 2
 
+    mods_override: dict = {}
+    if args.enable_sig_bypass:
+        mods_override["signature_verification_bypass"] = True
+    if args.enable_kaorios:
+        mods_override["kaorios_toolbox_v203"] = True
+    if args.disable_gboard:
+        mods_override["gboard_replace_baidu"] = False
+    if args.disable_freeform:
+        mods_override["multi_floating_window"] = False
+    if args.freeform_count is not None:
+        mods_override["freeform_max_count"] = args.freeform_count
+    if args.disable_invoke_custom:
+        mods_override["invoke_custom_handling"] = False
+
     report = apply_legend_mtcr_patches(
         project_dir=project_dir,
         flavor=args.flavor,
         execute=args.execute,
+        android_major=args.android_major,
+        legend_jar_mods=mods_override if mods_override else None,
     )
 
     for w in report.get("warnings", []):
