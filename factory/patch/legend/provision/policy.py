@@ -36,3 +36,55 @@ def strip_build_flag_refs(text: str) -> str:
         text = text.replace(flag, "")
     return "".join(text.split())
 
+
+# ── Minimal-real mode ──────────────────────────────────────────────────────────
+# When True, only PROVISION_MINIMAL_REAL_ALLOWLIST patch IDs are applied.
+# All other smali patches are classified, counted, and skipped.
+MINIMAL_REAL_MODE: bool = True
+
+_LOTTIE_PKG   = "com/airbnb/lottie"
+_ONETRACK_PKG = "com/xiaomi/onetrack"
+_MIUIX_PKG    = "miuix/"
+_ELITE_KW     = (
+    "IS_ELITE_DEVELOPMENT_BUILD",
+    "IS_ELITE_DEVELOPMENT_BUILDD",
+    "elite",
+)
+
+# Manually approved patch IDs for minimal_real mode.
+# Each entry must be hand-reviewed and must contain no Elite/flag rewrites.
+PROVISION_MINIMAL_REAL_ALLOWLIST: frozenset[str] = frozenset({
+    # GMS-CN state fix: corrects if-ne → if-eq in the GMS app-enabled loop.
+    # Uses IS_INTERNATIONAL_BUILD only as a guard (stock value unchanged),
+    # no Elite/IS_ELITE_DEVELOPMENT_BUILD references.
+    "com_android_provision_Utils__setGmsAppEnabledStateForCn",
+})
+
+
+def classify_provision_patch_skip(
+    target_class: str,
+    patch_id: str,
+    search: str = "",
+    reason: str = "",
+) -> str:
+    """
+    Return the skip-reason category for a patch excluded in minimal_real mode.
+
+    Returns one of:
+      'skipped_library_rules'        – Lottie or miuix library patch
+      'skipped_onetrack_delete_rules' – OneTrack class/method deletion
+      'skipped_elite_flag_rules'     – references IS_ELITE_DEVELOPMENT_BUILD or 'elite'
+      'dex_mtcr_broad_rules_skipped' – all other broad dex.mtcr-sourced rules
+    """
+    tc  = target_class.replace("\\", "/").lower()
+    hay = (patch_id + search + reason).lower()
+
+    if _LOTTIE_PKG in tc or _MIUIX_PKG in tc:
+        return "skipped_library_rules"
+    if _ONETRACK_PKG in tc:
+        return "skipped_onetrack_delete_rules"
+    for kw in _ELITE_KW:
+        if kw.lower() in hay:
+            return "skipped_elite_flag_rules"
+    return "dex_mtcr_broad_rules_skipped"
+

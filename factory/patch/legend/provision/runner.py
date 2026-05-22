@@ -22,6 +22,11 @@ from factory.patch.apk.apk_workspace import (
 )
 from factory.patch.legend.provision.branding import apply_visible_branding
 from factory.patch.legend.provision.model import load_class_patch
+from factory.patch.legend.provision.policy import (
+    MINIMAL_REAL_MODE,
+    PROVISION_MINIMAL_REAL_ALLOWLIST,
+    classify_provision_patch_skip,
+)
 from factory.patch.legend.smart_smali_patcher import (
     ClassMatchResult,
     ClassMatchStatus,
@@ -170,11 +175,52 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
     results = []
     class_count = 0
     method_count = 0
-    skipped_build_flag_ids = []
-    partial_build_flag_ids = []
+    skipped_build_flag_ids: list[str] = []
+    partial_build_flag_ids: list[str] = []
+
+    # minimal_real mode skip buckets
+    _minimal_skipped: dict[str, list[str]] = {
+        "dex_mtcr_broad_rules_skipped": [],
+        "skipped_elite_flag_rules": [],
+        "skipped_library_rules": [],
+        "skipped_onetrack_delete_rules": [],
+    }
+    minimal_real_applied: list[str] = []
+
     for cp in _load_smali_rules():
         class_count += 1
         for patch in cp.patches:
+            # ── 1. Existing build-flag policy gate ──────────────────────────
+            if patch.policy_status == "SKIPPED_BUILD_FLAG_POLICY" or patch.type == "policy_skip":
+                skipped_build_flag_ids.append(patch.id)
+                results.append({
+                    "id": patch.id, "type": patch.type,
+                    "target_class": cp.target_class,
+                    "status": "SKIPPED_BUILD_FLAG_POLICY",
+                })
+                continue
+
+            if patch.policy_status == "BUILD_FLAG_PARTIALLY_SKIPPED":
+                partial_build_flag_ids.append(patch.id)
+
+            # ── 2. minimal_real allowlist ───────────────────────────────────
+            if MINIMAL_REAL_MODE and patch.id not in PROVISION_MINIMAL_REAL_ALLOWLIST:
+                cat = classify_provision_patch_skip(
+                    cp.target_class,
+                    patch.id,
+                    patch.search or "",
+                    patch.reason or "",
+                )
+                _minimal_skipped[cat].append(patch.id)
+                results.append({
+                    "id": patch.id, "type": patch.type,
+                    "target_class": cp.target_class,
+                    "status": "SKIPPED_NOT_IN_ALLOWLIST",
+                    "skip_reason": cat,
+                })
+                continue
+
+            # ── 3. Apply ────────────────────────────────────────────────────
             rule = {
                 "id": patch.id,
                 "type": patch.type,
@@ -188,12 +234,6 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
                 "class_fallback_names": cp.class_fallback_names,
                 "class_anchors": cp.class_anchors,
             }
-            if patch.policy_status == "SKIPPED_BUILD_FLAG_POLICY" or patch.type == "policy_skip":
-                skipped_build_flag_ids.append(patch.id)
-                results.append({"id": patch.id, "type": patch.type, "target_class": cp.target_class, "status": "SKIPPED_BUILD_FLAG_POLICY"})
-                continue
-            if patch.policy_status == "BUILD_FLAG_PARTIALLY_SKIPPED":
-                partial_build_flag_ids.append(patch.id)
             if patch.type in {"class_delete", "method_delete"}:
                 item = _apply_delete_rule(roots, rule, dry_run)
                 item.update({"type": patch.type, "target_class": cp.target_class})
@@ -211,6 +251,8 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
                 })
             if patch.type.startswith("method_"):
                 method_count += 1
+            minimal_real_applied.append(patch.id)
+
     failures = [r for r in results if str(r.get("status", "")).startswith("FAILED")]
     return {
         "class_count": class_count,
@@ -219,28 +261,58 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
         "failures": failures,
         "skipped_build_flag_ids": skipped_build_flag_ids,
         "partial_build_flag_ids": partial_build_flag_ids,
+        "dex_mtcr_broad_rules_skipped": _minimal_skipped["dex_mtcr_broad_rules_skipped"],
+        "minimal_real_rules_applied": minimal_real_applied,
+        "skipped_elite_flag_rules": _minimal_skipped["skipped_elite_flag_rules"],
+        "skipped_library_rules": _minimal_skipped["skipped_library_rules"],
+        "skipped_onetrack_delete_rules": _minimal_skipped["skipped_onetrack_delete_rules"],
     }
 
 
 def _summarize_smali_rules() -> dict:
     class_count = 0
     method_count = 0
-    skipped = []
-    partial = []
+    skipped: list[str] = []
+    partial: list[str] = []
+    _minimal_skipped: dict[str, list[str]] = {
+        "dex_mtcr_broad_rules_skipped": [],
+        "skipped_elite_flag_rules": [],
+        "skipped_library_rules": [],
+        "skipped_onetrack_delete_rules": [],
+    }
+    minimal_real_applied: list[str] = []
+
     for cp in _load_smali_rules():
         class_count += 1
         for patch in cp.patches:
-            if patch.type.startswith("method_"):
-                method_count += 1
             if patch.policy_status == "SKIPPED_BUILD_FLAG_POLICY" or patch.type == "policy_skip":
                 skipped.append(patch.id)
+                continue
             if patch.policy_status == "BUILD_FLAG_PARTIALLY_SKIPPED":
                 partial.append(patch.id)
+            if MINIMAL_REAL_MODE and patch.id not in PROVISION_MINIMAL_REAL_ALLOWLIST:
+                cat = classify_provision_patch_skip(
+                    cp.target_class,
+                    patch.id,
+                    patch.search or "",
+                    patch.reason or "",
+                )
+                _minimal_skipped[cat].append(patch.id)
+                continue
+            if patch.type.startswith("method_"):
+                method_count += 1
+            minimal_real_applied.append(patch.id)
+
     return {
         "class_count": class_count,
         "method_patch_count": method_count,
         "skipped_build_flag_ids": skipped,
         "partial_build_flag_ids": partial,
+        "dex_mtcr_broad_rules_skipped": _minimal_skipped["dex_mtcr_broad_rules_skipped"],
+        "minimal_real_rules_applied": minimal_real_applied,
+        "skipped_elite_flag_rules": _minimal_skipped["skipped_elite_flag_rules"],
+        "skipped_library_rules": _minimal_skipped["skipped_library_rules"],
+        "skipped_onetrack_delete_rules": _minimal_skipped["skipped_onetrack_delete_rules"],
     }
 
 
@@ -323,16 +395,25 @@ def _format_text_report(report: dict) -> str:
     lines = [
         "Legend Provision APK Patch Report",
         "=" * 60,
-        f"Final status: {report.get('final_status')}",
-        f"Original APK path: {report.get('original_apk_path')}",
-        f"Restored APK path: {report.get('restored_apk_path')}",
-        f"Final filename: {report.get('final_filename')}",
-        f"Smali class count: {report.get('smali_class_count')}",
-        f"Smali method patch count: {report.get('smali_method_patch_count')}",
-        f"Manifest/XML patch count: {report.get('manifest_xml_patch_count')}",
-        f"ARSC/resource patch count: {report.get('arsc_resource_patch_count')}",
-        f"Branding changes count: {report.get('branding_changes_count')}",
-        f"Skipped build flag patch count: {report.get('skipped_build_flag_patch_count')}",
+        f"Final status               : {report.get('final_status')}",
+        f"Minimal-real mode          : {report.get('minimal_real_mode', MINIMAL_REAL_MODE)}",
+        f"Original APK path          : {report.get('original_apk_path')}",
+        f"Restored APK path          : {report.get('restored_apk_path')}",
+        f"Final filename             : {report.get('final_filename')}",
+        "",
+        "Smali rule counts:",
+        f"  minimal_real_rules_applied       : {report.get('minimal_real_rules_applied', 0)}",
+        f"  dex_mtcr_broad_rules_skipped     : {report.get('dex_mtcr_broad_rules_skipped', 0)}",
+        f"  skipped_elite_flag_rules         : {report.get('skipped_elite_flag_rules', 0)}",
+        f"  skipped_library_rules            : {report.get('skipped_library_rules', 0)}",
+        f"  skipped_onetrack_delete_rules    : {report.get('skipped_onetrack_delete_rules', 0)}",
+        f"  skipped_build_flag_patch_count   : {report.get('skipped_build_flag_patch_count', 0)}",
+        f"  smali_class_count                : {report.get('smali_class_count', 0)}",
+        f"  smali_method_patch_count         : {report.get('smali_method_patch_count', 0)}",
+        "",
+        f"Manifest/XML patch count   : {report.get('manifest_xml_patch_count')}",
+        f"ARSC/resource patch count  : {report.get('arsc_resource_patch_count')}",
+        f"Branding changes count     : {report.get('branding_changes_count')}",
         "",
         "Failures:",
     ]
@@ -353,6 +434,7 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
         "stage": "legend_provision",
         "flavor": flavor,
         "dry_run": not execute,
+        "minimal_real_mode": MINIMAL_REAL_MODE,
         "project_dir": str(project_dir),
         "work_dir": str(effective_work_dir),
         "original_apk_path": "",
@@ -366,6 +448,12 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
         "skipped_build_flag_patch_count": 0,
         "skipped_build_flag_patch_ids": [],
         "partial_build_flag_skips": [],
+        # minimal_real mode counters
+        "dex_mtcr_broad_rules_skipped": 0,
+        "minimal_real_rules_applied": 0,
+        "skipped_elite_flag_rules": 0,
+        "skipped_library_rules": 0,
+        "skipped_onetrack_delete_rules": 0,
         "unsafe_branding_candidates_skipped": [],
         "review_required_branding_candidates": [],
         "failure_list": [],
@@ -382,6 +470,11 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
         "skipped_build_flag_patch_count": len(static_smali["skipped_build_flag_ids"]),
         "skipped_build_flag_patch_ids": static_smali["skipped_build_flag_ids"],
         "partial_build_flag_skips": static_smali["partial_build_flag_ids"],
+        "dex_mtcr_broad_rules_skipped": len(static_smali["dex_mtcr_broad_rules_skipped"]),
+        "minimal_real_rules_applied": len(static_smali["minimal_real_rules_applied"]),
+        "skipped_elite_flag_rules": len(static_smali["skipped_elite_flag_rules"]),
+        "skipped_library_rules": len(static_smali["skipped_library_rules"]),
+        "skipped_onetrack_delete_rules": len(static_smali["skipped_onetrack_delete_rules"]),
     })
     if not _is_legend(flavor):
         report["final_status"] = "SKIPPED_OPTIONAL"
@@ -416,6 +509,11 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
             "skipped_build_flag_patch_count": len(smali.get("skipped_build_flag_ids", [])),
             "skipped_build_flag_patch_ids": smali.get("skipped_build_flag_ids", []),
             "partial_build_flag_skips": smali.get("partial_build_flag_ids", []),
+            "dex_mtcr_broad_rules_skipped": len(smali.get("dex_mtcr_broad_rules_skipped", [])),
+            "minimal_real_rules_applied": len(smali.get("minimal_real_rules_applied", [])),
+            "skipped_elite_flag_rules": len(smali.get("skipped_elite_flag_rules", [])),
+            "skipped_library_rules": len(smali.get("skipped_library_rules", [])),
+            "skipped_onetrack_delete_rules": len(smali.get("skipped_onetrack_delete_rules", [])),
         })
         _write_reports(report)
         return report
@@ -443,6 +541,11 @@ def apply_legend_provision_patch(project_dir: Path, flavor: str, execute: bool =
         "skipped_build_flag_patch_count": len(smali["skipped_build_flag_ids"]),
         "skipped_build_flag_patch_ids": smali["skipped_build_flag_ids"],
         "partial_build_flag_skips": smali["partial_build_flag_ids"],
+        "dex_mtcr_broad_rules_skipped": len(smali["dex_mtcr_broad_rules_skipped"]),
+        "minimal_real_rules_applied": len(smali["minimal_real_rules_applied"]),
+        "skipped_elite_flag_rules": len(smali["skipped_elite_flag_rules"]),
+        "skipped_library_rules": len(smali["skipped_library_rules"]),
+        "skipped_onetrack_delete_rules": len(smali["skipped_onetrack_delete_rules"]),
         "unsafe_branding_candidates_skipped": branding["unsafe"],
         "review_required_branding_candidates": branding["review"],
         "failure_list": failures,
