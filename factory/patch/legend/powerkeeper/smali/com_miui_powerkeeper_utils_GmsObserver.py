@@ -38,29 +38,7 @@ PATCHES = [
     return p0
 .end method""",
         'replacement': """.method private isGmsControlEnabled()Z
-    .registers 3
-
-    iget-object v0, p0, Lcom/miui/powerkeeper/utils/GmsObserver;->mContext:Landroid/content/Context;
-
-    const-string v1, "com.android.vending"
-
-    invoke-static {v0, v1}, Lcom/miui/powerkeeper/provider/UserConfigureHelper;->getUserConfigureHelperByPkg(Landroid/content/Context;Ljava/lang/String;)Lcom/miui/powerkeeper/provider/UserConfigureHelper;
-
-    move-result-object v0
-
-    iput-object v0, p0, Lcom/miui/powerkeeper/utils/GmsObserver;->mGmsUserConfigure:Lcom/miui/powerkeeper/provider/UserConfigureHelper;
-
-    invoke-virtual {v0}, Lcom/miui/powerkeeper/provider/UserConfigureHelper;->getBgControl()Ljava/lang/String;
-
-    move-result-object p0
-
-    const-string v0, "noRestrict"
-
-    invoke-virtual {p0, v0}, Ljava/lang/Object;->equals(Ljava/lang/Object;)Z
-
-    move-result p0
-
-    xor-int/lit8 p0, p0, 0x1
+    .registers 2
 
     const/4 p0, 0x0
 

@@ -20,6 +20,154 @@ from factory.patch.apk.apk_workspace import (
 )
 from factory.patch.legend.powerkeeper.policy import POWERKEEPER_ALLOWED_FLAG_REWRITES
 from factory.patch.legend.powerkeeper.model import load_class_patch
+
+# Exact allowlist of 23 method patches from dex(1).mtcr.
+# Any patch whose id is not in this dict will be skipped and counted as unexpected.
+EXACT_PATCH_ALLOWLIST: dict[str, dict] = {
+    "com_miui_powerkeeper_cloudcontrol_CloudUpdateHideMode__parseResult": {
+        "class_path": "com/miui/powerkeeper/cloudcontrol/CloudUpdateHideMode.smali",
+        "method_signature": "parseResult(Landroid/content/Context;Ljava/lang/String;[Ljava/lang/String;)Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_cloudcontrol_LocalUpdateUtils__getCloudServer": {
+        "class_path": "com/miui/powerkeeper/cloudcontrol/LocalUpdateUtils.smali",
+        "method_signature": "getCloudServer(Landroid/content/Context;)Ljava/lang/String;",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_cloudcontrol_LocalUpdateUtils__setServerConfigurations": {
+        "class_path": "com/miui/powerkeeper/cloudcontrol/LocalUpdateUtils.smali",
+        "method_signature": "setServerConfigurations(Landroid/content/Context;)V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_controller_DeviceIdleController__1__init": {
+        "class_path": "com/miui/powerkeeper/controller/DeviceIdleController$1.smali",
+        "method_signature": "<init>()V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_customerpower_CustomerPowerCheck__outputResultPassAndNone": {
+        "class_path": "com/miui/powerkeeper/customerpower/CustomerPowerCheck.smali",
+        "method_signature": "outputResultPassAndNone(Ljava/io/PrintWriter;I)V",
+        "patch_type": "A",
+        "expected_replacements": 8,
+    },
+    "com_miui_powerkeeper_dfs_UsageAppTracker__init": {
+        "class_path": "com/miui/powerkeeper/dfs/UsageAppTracker.smali",
+        "method_signature": "<init>(Lcom/miui/powerkeeper/dfs/CloudData;Lcom/miui/powerkeeper/dfs/UsageManager;Landroid/os/Looper;)V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_feedbackcontrol_ThermalLogUploader__uploadFiles": {
+        "class_path": "com/miui/powerkeeper/feedbackcontrol/ThermalLogUploader.smali",
+        "method_signature": "uploadFiles()V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_powerchecker_PowerCheckerCloudPolicy__getOldCloud": {
+        "class_path": "com/miui/powerkeeper/powerchecker/PowerCheckerCloudPolicy.smali",
+        "method_signature": "getOldCloud(Landroid/content/Context;)Ljava/lang/String;",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_statemachine_DisplayFrameSetting__getValidLocalConfigPath": {
+        "class_path": "com/miui/powerkeeper/statemachine/DisplayFrameSetting.smali",
+        "method_signature": "getValidLocalConfigPath(Landroid/content/Context;)Ljava/lang/String;",
+        "patch_type": "A",
+        "expected_replacements": 2,
+    },
+    "com_miui_powerkeeper_statemachine_DisplayFrameSetting__isSupportDevice": {
+        "class_path": "com/miui/powerkeeper/statemachine/DisplayFrameSetting.smali",
+        "method_signature": "isSupportDevice()Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_tracker_TrackerManager__PrivacyPolicy__updateLicense": {
+        "class_path": "com/miui/powerkeeper/tracker/TrackerManager$PrivacyPolicy.smali",
+        "method_signature": "updateLicense()V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_unionpower_utils_UnionPowerConfig__d": {
+        "class_path": "com/miui/powerkeeper/unionpower/utils/UnionPowerConfig.smali",
+        "method_signature": "d(Landroid/content/Context;)Ljava/util/Map;",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_utils_GmsObserver__init": {
+        "class_path": "com/miui/powerkeeper/utils/GmsObserver.smali",
+        "method_signature": "<init>(Landroid/content/Context;)V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_utils_GmsObserver__updateGoogleSync": {
+        "class_path": "com/miui/powerkeeper/utils/GmsObserver.smali",
+        "method_signature": "updateGoogleSync(Z)V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_utils_Utils__isCloudControlAllowed": {
+        "class_path": "com/miui/powerkeeper/utils/Utils.smali",
+        "method_signature": "isCloudControlAllowed(Landroid/content/Context;)Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "com_miui_powerkeeper_utils_Utils__isUserExperienceAndPrivacyAllowed": {
+        "class_path": "com/miui/powerkeeper/utils/Utils.smali",
+        "method_signature": "isUserExperienceAndPrivacyAllowed(Landroid/content/Context;)Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "miui_payment_PaymentManager__isMibiServiceDisabled": {
+        "class_path": "miui/payment/PaymentManager.smali",
+        "method_signature": "isMibiServiceDisabled()Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "miui_provider_ExtraNetwork__navigateToOperatorSettingActivity": {
+        "class_path": "miui/provider/ExtraNetwork.smali",
+        "method_signature": "navigateToOperatorSettingActivity(Landroid/content/Context;I)V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "miui_theme_ThemeManagerHelper__needDisableTheme": {
+        "class_path": "miui/theme/ThemeManagerHelper.smali",
+        "method_signature": "needDisableTheme(Landroid/content/Context;)Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "miui_yellowpage_HostManager__clinit": {
+        "class_path": "miui/yellowpage/HostManager.smali",
+        "method_signature": "<clinit>()V",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    "miui_yellowpage_YellowPageUtils__isYellowPageAvailable": {
+        "class_path": "miui/yellowpage/YellowPageUtils.smali",
+        "method_signature": "isYellowPageAvailable(Landroid/content/Context;)Z",
+        "patch_type": "A",
+        "expected_replacements": 1,
+    },
+    # Patch type B — FPS lock guard insertion
+    "com_miui_powerkeeper_statemachine_DisplayFrameSetting__setScreenEffect": {
+        "class_path": "com/miui/powerkeeper/statemachine/DisplayFrameSetting.smali",
+        "method_signature": "setScreenEffect(Ljava/lang/String;II)V",
+        "patch_type": "B",
+        "expected_replacements": 1,
+    },
+    # Patch type C — force GMS control disabled
+    "com_miui_powerkeeper_utils_GmsObserver__isGmsControlEnabled": {
+        "class_path": "com/miui/powerkeeper/utils/GmsObserver.smali",
+        "method_signature": "isGmsControlEnabled()Z",
+        "patch_type": "C",
+        "expected_replacements": 1,
+    },
+}
+
+_ALLOWLIST_METHOD_PATCH_COUNT = len(EXACT_PATCH_ALLOWLIST)
+_ALLOWLIST_CLASS_COUNT = len({e["class_path"] for e in EXACT_PATCH_ALLOWLIST.values()})
 from factory.patch.legend.smart_smali_patcher import (
     ClassMatchStatus,
     MethodMatchStatus,
@@ -130,18 +278,28 @@ def _apply_delete_rule(smali_roots: list[Path], rule: dict, dry_run: bool) -> di
 def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
     roots = _find_smali_roots(decompiled_dir)
     results = []
-    class_count = 0
+    applied_classes: set[str] = set()
     method_count = 0
     flag_rewrite_count = 0
+    unexpected_skipped = 0
     lock_status = "FAILED_NOT_FOUND"
     gms_status = "FAILED_NOT_FOUND"
 
     for class_patch in _load_smali_rules():
-        class_count += 1
         for patch in class_patch.patches:
+            if patch.id not in EXACT_PATCH_ALLOWLIST:
+                unexpected_skipped += 1
+                continue
+
+            entry = EXACT_PATCH_ALLOWLIST[patch.id]
+            expected_replacements = entry["expected_replacements"]
+            patch_type_label = entry["patch_type"]
+
             if patch.type.startswith("method_"):
                 method_count += 1
             flag_rewrite_count += patch.flag_rewrite_count
+            applied_classes.add(class_patch.target_class)
+
             rule = {
                 "id": patch.id,
                 "type": patch.type,
@@ -169,18 +327,41 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
                     "method_match": smart.method_match.value,
                     "message": smart.message,
                 }
-            item["flag_rewrite_count"] = patch.flag_rewrite_count
+
+            status = item["status"]
+            if status in ("PATCHED", "WOULD_PATCH"):
+                actual_replacements = patch.flag_rewrite_count if patch_type_label == "A" else 1
+            else:
+                actual_replacements = 0
+
+            count_ok = actual_replacements == expected_replacements
+            if status in ("PATCHED", "WOULD_PATCH") and not count_ok:
+                status = "FAILED_COUNT_MISMATCH"
+                item["status"] = status
+
+            item.update({
+                "flag_rewrite_count": patch.flag_rewrite_count,
+                "class_path": entry["class_path"],
+                "method_signature": entry["method_signature"],
+                "patch_type": patch_type_label,
+                "expected_replacements": expected_replacements,
+                "actual_replacements": actual_replacements,
+                "replacement_count_ok": count_ok,
+            })
             results.append(item)
-            if class_patch.target_class.endswith("DisplayFrameSetting.smali") and patch.method_name == "setScreenEffect":
+
+            if patch.method_name == "setScreenEffect" and class_patch.target_class.endswith("DisplayFrameSetting.smali"):
                 lock_status = item["status"]
-            if class_patch.target_class.endswith("GmsObserver.smali") and patch.method_name == "isGmsControlEnabled":
+            if patch.method_name == "isGmsControlEnabled" and class_patch.target_class.endswith("GmsObserver.smali"):
                 gms_status = item["status"]
 
     failures = [r for r in results if str(r.get("status", "")).startswith("FAILED")]
     return {
-        "class_count": class_count,
+        "class_count": len(applied_classes),
         "method_patch_count": method_count,
         "flag_rewrite_patch_count": flag_rewrite_count,
+        "unexpected_powerkeeper_rules_skipped": unexpected_skipped,
+        "exact_powerkeeper_patch_mode": True,
         "lock_max_fps_mezo_patch_status": lock_status,
         "gms_observer_force_false_patch_status": gms_status,
         "results": results,
@@ -189,34 +370,47 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
 
 
 def _summarize_smali_rules() -> dict:
-    class_count = 0
+    applied_classes: set[str] = set()
     method_count = 0
     flag_rewrite_count = 0
+    unexpected_skipped = 0
     lock_status = "WOULD_PATCH"
     gms_status = "WOULD_PATCH"
     results = []
     for class_patch in _load_smali_rules():
-        class_count += 1
         for patch in class_patch.patches:
+            if patch.id not in EXACT_PATCH_ALLOWLIST:
+                unexpected_skipped += 1
+                continue
+            entry = EXACT_PATCH_ALLOWLIST[patch.id]
             if patch.type.startswith("method_"):
                 method_count += 1
             flag_rewrite_count += patch.flag_rewrite_count
+            applied_classes.add(class_patch.target_class)
             item = {
                 "id": patch.id,
                 "type": patch.type,
                 "target_class": class_patch.target_class,
                 "status": "WOULD_PATCH",
                 "flag_rewrite_count": patch.flag_rewrite_count,
+                "class_path": entry["class_path"],
+                "method_signature": entry["method_signature"],
+                "patch_type": entry["patch_type"],
+                "expected_replacements": entry["expected_replacements"],
+                "actual_replacements": entry["expected_replacements"],
+                "replacement_count_ok": True,
             }
             results.append(item)
-            if class_patch.target_class.endswith("DisplayFrameSetting.smali") and patch.method_name == "setScreenEffect":
+            if patch.method_name == "setScreenEffect" and class_patch.target_class.endswith("DisplayFrameSetting.smali"):
                 lock_status = item["status"]
-            if class_patch.target_class.endswith("GmsObserver.smali") and patch.method_name == "isGmsControlEnabled":
+            if patch.method_name == "isGmsControlEnabled" and class_patch.target_class.endswith("GmsObserver.smali"):
                 gms_status = item["status"]
     return {
-        "class_count": class_count,
+        "class_count": len(applied_classes),
         "method_patch_count": method_count,
         "flag_rewrite_patch_count": flag_rewrite_count,
+        "unexpected_powerkeeper_rules_skipped": unexpected_skipped,
+        "exact_powerkeeper_patch_mode": True,
         "lock_max_fps_mezo_patch_status": lock_status,
         "gms_observer_force_false_patch_status": gms_status,
         "results": results,
@@ -236,13 +430,22 @@ def _format_text_report(report: dict) -> str:
         f"Changed class count: {report.get('changed_class_count')}",
         f"Method patch count: {report.get('method_patch_count')}",
         f"Flag rewrite patch count: {report.get('flag_rewrite_patch_count')}",
+        f"Exact PowerKeeper patch mode: {report.get('exact_powerkeeper_patch_mode')}",
+        f"Unexpected PowerKeeper rules skipped: {report.get('unexpected_powerkeeper_rules_skipped')}",
         f"lock_max_fps_mezo patch status: {report.get('lock_max_fps_mezo_patch_status')}",
         f"GmsObserver force false patch status: {report.get('gms_observer_force_false_patch_status')}",
         "",
         "Patch statuses:",
     ]
     for item in report.get("patch_statuses", []):
-        lines.append(f"  - {item.get('id')}: {item.get('status')} ({item.get('target_class')})")
+        expected = item.get("expected_replacements", "?")
+        actual = item.get("actual_replacements", "?")
+        ptype = item.get("patch_type", "?")
+        sig = item.get("method_signature", item.get("target_class", ""))
+        lines.append(
+            f"  - [{ptype}] {item.get('id')}: {item.get('status')}"
+            f" expected={expected} actual={actual} ({sig})"
+        )
     lines.extend(["", "Failures:"])
     failures = report.get("failures", [])
     lines.extend([f"  - {failure}" for failure in failures] or ["  (none)"])
@@ -278,6 +481,8 @@ def apply_legend_powerkeeper_patch(
         "changed_class_count": static_smali["class_count"],
         "method_patch_count": static_smali["method_patch_count"],
         "flag_rewrite_patch_count": static_smali["flag_rewrite_patch_count"],
+        "exact_powerkeeper_patch_mode": True,
+        "unexpected_powerkeeper_rules_skipped": static_smali["unexpected_powerkeeper_rules_skipped"],
         "build_flag_rewrite_rules": POWERKEEPER_ALLOWED_FLAG_REWRITES,
         "lock_max_fps_mezo_patch_status": static_smali["lock_max_fps_mezo_patch_status"],
         "gms_observer_force_false_patch_status": static_smali["gms_observer_force_false_patch_status"],
@@ -329,14 +534,24 @@ def apply_legend_powerkeeper_patch(
         "changed_class_count": smali["class_count"],
         "method_patch_count": smali["method_patch_count"],
         "flag_rewrite_patch_count": smali["flag_rewrite_patch_count"],
+        "exact_powerkeeper_patch_mode": True,
+        "unexpected_powerkeeper_rules_skipped": smali["unexpected_powerkeeper_rules_skipped"],
         "lock_max_fps_mezo_patch_status": smali["lock_max_fps_mezo_patch_status"],
         "gms_observer_force_false_patch_status": smali["gms_observer_force_false_patch_status"],
         "patch_statuses": smali["results"],
         "failures": smali["failures"],
     })
     if smali["failures"]:
-        report["final_status"] = "FAILED_NOT_FOUND"
-        report["errors"].append(f"{len(smali['failures'])} required PowerKeeper smali patches failed")
+        count_mismatches = [f for f in smali["failures"] if f.get("status") == "FAILED_COUNT_MISMATCH"]
+        if count_mismatches:
+            report["final_status"] = "FAILED_NOT_FOUND"
+            report["errors"].append(
+                f"{len(count_mismatches)} PowerKeeper patches have replacement count mismatch "
+                f"(expected != actual)"
+            )
+        else:
+            report["final_status"] = "FAILED_NOT_FOUND"
+            report["errors"].append(f"{len(smali['failures'])} required PowerKeeper smali patches failed")
         _write_reports(report)
         return report
 
