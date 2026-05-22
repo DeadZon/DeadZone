@@ -819,6 +819,13 @@ def apply_smart_patch(
             (i for i, l in enumerate(lines) if l.strip().startswith(".registers")),
             None,
         )
+        using_locals = False
+        if reg_idx is None:
+            reg_idx = next(
+                (i for i, l in enumerate(lines) if l.strip().startswith(".locals")),
+                None,
+            )
+            using_locals = reg_idx is not None
         if reg_idx is None:
             return PatchResult(
                 patch_id=pid, method=method_sig, type=patch_type, required=required,
@@ -827,6 +834,18 @@ def apply_smart_patch(
                 method_match=method_result.status,
                 message=".registers directive not found in method block",
             )
+
+        # If the method uses .locals and the count is < 2, bump it so v0/v1 are safe.
+        if using_locals:
+            loc_line = lines[reg_idx]
+            stripped = loc_line.strip()
+            parts = stripped.split()
+            try:
+                count = int(parts[1])
+            except (IndexError, ValueError):
+                count = 0
+            if count < 2:
+                lines[reg_idx] = loc_line.replace(stripped, f".locals 2", 1)
 
         # Idempotency guard: if the replacement label already appears in the block,
         # the guard was already inserted — treat as already patched.
@@ -852,7 +871,7 @@ def apply_smart_patch(
                 class_strategy=class_result.strategy,
                 method_match=method_result.status,
                 method_strategy=method_result.strategy,
-                message=f"would insert after .registers via {class_result.strategy} / {method_result.strategy}",
+                message=f"would insert after .registers/.locals via {class_result.strategy} / {method_result.strategy}",
             )
 
         guard_text = "\n" + replacement.rstrip("\n") + "\n"
@@ -891,7 +910,7 @@ def apply_smart_patch(
             class_strategy=class_result.strategy,
             method_match=method_result.status,
             method_strategy=method_result.strategy,
-            message=f"inserted guard after .registers via {class_result.strategy} / {method_result.strategy}",
+            message=f"inserted after .registers/.locals via {class_result.strategy} / {method_result.strategy}",
         )
 
     # ── method_token_replace ──────────────────────────────────────────────────
