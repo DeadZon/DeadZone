@@ -197,6 +197,74 @@ def rebuild_apk(apkeditor_jar: Path, decompiled_dir: Path) -> bool:
         return False
 
 
+def rebuild_apk_with_diagnostics(apkeditor_jar: Path, decompiled_dir: Path) -> dict:
+    """
+    Like rebuild_apk but captures and returns full diagnostics.
+
+    Returns a dict with keys:
+      command, returncode, stdout, stderr, success, output_apk
+    Never raises — all errors are captured into the returned dict.
+    """
+    raw = decompiled_dir.name
+    apk_base = raw[: -len("_apk_src")] if raw.endswith("_apk_src") else raw
+    output_apk = decompiled_dir.parent / (apk_base + ".apk")
+
+    if output_apk.exists():
+        try:
+            output_apk.unlink()
+        except Exception:
+            pass
+
+    cmd = [
+        "java", "-jar", str(apkeditor_jar),
+        "b",
+        "-framework-version", str(APK_EDITOR_FRAMEWORK_VERSION),
+        "-i", str(decompiled_dir),
+        "-o", str(output_apk),
+    ]
+
+    result: dict = {
+        "command": " ".join(cmd),
+        "returncode": None,
+        "stdout": "",
+        "stderr": "",
+        "success": False,
+        "output_apk": str(output_apk),
+    }
+
+    print(f"[apk_workspace] Rebuilding {apk_base}.apk from {decompiled_dir.name} ...")
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(decompiled_dir.parent),
+        )
+        result["returncode"] = proc.returncode
+        result["stdout"] = proc.stdout or ""
+        result["stderr"] = proc.stderr or ""
+        if proc.returncode == 0 and output_apk.is_file():
+            result["success"] = True
+            print(f"[apk_workspace] Rebuild OK -> {output_apk.name}")
+        else:
+            err = (proc.stderr or proc.stdout or "").strip()
+            tail = err[-600:] if len(err) > 600 else err
+            if tail:
+                print(f"[apk_workspace] Rebuild ERROR {apk_base}.apk: {tail}")
+            else:
+                print(f"[apk_workspace] Rebuild ERROR {apk_base}.apk: exit code {proc.returncode}")
+    except FileNotFoundError:
+        result["returncode"] = -1
+        result["stderr"] = "java not found in PATH"
+        print("[apk_workspace] ERROR: java not found in PATH")
+    except Exception as exc:
+        result["returncode"] = -1
+        result["stderr"] = str(exc)
+        print(f"[apk_workspace] Rebuild ERROR {apk_base}.apk: {exc}")
+
+    return result
+
+
 def restore_rebuilt_apk_no_backup(rebuilt_apk: Path, target_apk: Path) -> dict:
     """
     Replace target_apk with rebuilt_apk. No backup is created.

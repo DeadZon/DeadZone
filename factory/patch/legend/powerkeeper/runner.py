@@ -16,6 +16,7 @@ from factory.patch.apk.apk_workspace import (
     find_apk,
     prepare_apk_work_dir,
     rebuild_apk,
+    rebuild_apk_with_diagnostics,
     restore_rebuilt_apk_no_backup,
 )
 from factory.patch.legend.powerkeeper.policy import POWERKEEPER_ALLOWED_FLAG_REWRITES
@@ -180,11 +181,14 @@ from factory.patch.legend.smart_smali_patcher import (
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _PKG_ROOT = Path(__file__).resolve().parent
 _REPORTS_DIR = _REPO_ROOT / "output" / "reports"
+_LOGS_DIR = _REPO_ROOT / "output" / "logs"
 _WORK_DIR_DEFAULT = _REPO_ROOT / "output" / "work" / "powerkeeper_legend_apk_work"
 _LEGEND_FLAVORS = frozenset({"legend", "deadzone_legend"})
 
 POWERKEEPER_APK_NAME = "PowerKeeper.apk"
 POWERKEEPER_APK_SRC_DIR_NAME = "PowerKeeper_apk_src"
+POWERKEEPER_STOCK_SRC_DIR_NAME = "PowerKeeper_stock_apk_src"
+POWERKEEPER_BISECT_SRC_DIR_NAME = "PowerKeeper_bisect_apk_src"
 
 
 def _is_legend(flavor: str) -> bool:
@@ -275,7 +279,11 @@ def _apply_delete_rule(smali_roots: list[Path], rule: dict, dry_run: bool) -> di
     return {"id": rule["id"], "status": "WOULD_PATCH" if dry_run else "PATCHED", "message": "method delete"}
 
 
-def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
+def _apply_smali_rules(
+    decompiled_dir: Path,
+    dry_run: bool,
+    only_groups: set[str] | None = None,
+) -> dict:
     roots = _find_smali_roots(decompiled_dir)
     results = []
     applied_classes: set[str] = set()
@@ -294,6 +302,9 @@ def _apply_smali_rules(decompiled_dir: Path, dry_run: bool) -> dict:
             entry = EXACT_PATCH_ALLOWLIST[patch.id]
             expected_replacements = entry["expected_replacements"]
             patch_type_label = entry["patch_type"]
+
+            if only_groups is not None and patch_type_label not in only_groups:
+                continue
 
             if patch.type.startswith("method_"):
                 method_count += 1
@@ -418,6 +429,176 @@ def _summarize_smali_rules() -> dict:
     }
 
 
+# ── Diagnostics helpers ───────────────────────────────────────────────────────
+
+def _first_error_line(text: str) -> str:
+    """Extract the first meaningful error/exception line from rebuild output."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped and any(kw in stripped.lower() for kw in ("error", "exception", "failed", "cannot", "unable")):
+            return stripped
+    for line in reversed(text.splitlines()):
+        if line.strip():
+            return line.strip()
+    return "(no output)"
+
+
+def _write_rebuild_logs(rebuild_result: dict, prefix: str = "powerkeeper") -> dict:
+    """Write rebuild diagnostics to output/logs/. Returns paths dict."""
+    _LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    cmd_path    = _LOGS_DIR / f"{prefix}_rebuild_command.txt"
+    stdout_path = _LOGS_DIR / f"{prefix}_rebuild_stdout.txt"
+    stderr_path = _LOGS_DIR / f"{prefix}_rebuild_stderr.txt"
+    cmd_path.write_text(rebuild_result.get("command", ""), encoding="utf-8")
+    stdout_path.write_text(rebuild_result.get("stdout", ""), encoding="utf-8")
+    stderr_path.write_text(rebuild_result.get("stderr", ""), encoding="utf-8")
+    return {
+        "rebuild_command": str(cmd_path),
+        "rebuild_stdout":  str(stdout_path),
+        "rebuild_stderr":  str(stderr_path),
+    }
+
+
+# ── Stock rebuild test ────────────────────────────────────────────────────────
+
+def _run_stock_rebuild_test(
+    apkeditor_jar: Path,
+    work_dir: Path,
+    work_apk: Path,
+) -> dict:
+    """
+    Decompile work_apk into a separate stock dir and immediately rebuild it.
+    Verifies that APKEditor can round-trip this APK before any patches are applied.
+    Returns a dict with keys: status, error_line (on failure), rebuild_result (on failure).
+    """
+    stock_dir = work_dir / POWERKEEPER_STOCK_SRC_DIR_NAME
+    print("[legend_powerkeeper] Stock rebuild test: decompiling ...")
+    if not decompile_apk(apkeditor_jar, work_apk, stock_dir):
+        return {"status": "FAILED_STOCK_DECOMPILE", "error_line": "Stock APK decompile failed"}
+
+    print("[legend_powerkeeper] Stock rebuild test: rebuilding ...")
+    result = rebuild_apk_with_diagnostics(apkeditor_jar, stock_dir)
+
+    shutil.rmtree(stock_dir, ignore_errors=True)
+    stock_rebuilt = work_dir / "PowerKeeper_stock.apk"
+    try:
+        stock_rebuilt.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    if not result["success"]:
+        combined = (result.get("stderr", "") + "\n" + result.get("stdout", "")).strip()
+        return {
+            "status": "FAILED_STOCK_REBUILD",
+            "error_line": _first_error_line(combined),
+            "returncode": result.get("returncode"),
+            "rebuild_result": result,
+        }
+
+    print("[legend_powerkeeper] Stock rebuild test: OK")
+    return {"status": "STOCK_REBUILD_OK"}
+
+
+# ── Bisection ─────────────────────────────────────────────────────────────────
+
+def _run_bisection(
+    apkeditor_jar: Path,
+    work_apk: Path,
+    work_dir: Path,
+) -> dict:
+    """
+    Incremental group bisection on a fresh decompile of work_apk.
+    Applies groups A → B → C in order, rebuilding after each.
+    Stops at the first failing group and reports it.
+    """
+    bisect_dir = work_dir / POWERKEEPER_BISECT_SRC_DIR_NAME
+    print("[legend_powerkeeper] Bisection: decompiling fresh ...")
+    if not decompile_apk(apkeditor_jar, work_apk, bisect_dir):
+        return {
+            "status": "FAILED_BISECT_DECOMPILE",
+            "failing_group": None,
+            "last_patch_id_at_failure": None,
+            "group_results": {},
+        }
+
+    group_results: dict[str, dict] = {}
+    failing_group: str | None = None
+    last_patch_id: str | None = None
+
+    for group in ("A", "B", "C"):
+        roots = _find_smali_roots(bisect_dir)
+        patches_in_group: list[str] = []
+
+        for class_patch in _load_smali_rules():
+            for patch in class_patch.patches:
+                if patch.id not in EXACT_PATCH_ALLOWLIST:
+                    continue
+                entry = EXACT_PATCH_ALLOWLIST[patch.id]
+                if entry["patch_type"] != group:
+                    continue
+
+                rule = {
+                    "id": patch.id,
+                    "type": patch.type,
+                    "method": patch.method,
+                    "method_name": patch.method_name,
+                    "method_anchors": patch.method_anchors,
+                    "search": patch.search,
+                    "replacement": patch.replacement,
+                    "required": patch.required,
+                    "target_class": class_patch.target_class,
+                    "class_fallback_names": class_patch.class_fallback_names,
+                    "class_anchors": class_patch.class_anchors,
+                }
+                if patch.type in {"class_delete", "method_delete"}:
+                    _apply_delete_rule(roots, rule, dry_run=False)
+                else:
+                    apply_smart_patch(roots, rule, dry_run=False)
+
+                patches_in_group.append(patch.id)
+                last_patch_id = patch.id
+
+        print(f"[legend_powerkeeper] Bisection: rebuilding after group {group} ({len(patches_in_group)} patches) ...")
+        rebuild_result = rebuild_apk_with_diagnostics(apkeditor_jar, bisect_dir)
+        combined = (rebuild_result.get("stderr", "") + "\n" + rebuild_result.get("stdout", "")).strip()
+
+        group_results[group] = {
+            "patches_applied": len(patches_in_group),
+            "patch_ids": patches_in_group,
+            "last_patch_id": last_patch_id,
+            "rebuild_success": rebuild_result["success"],
+            "rebuild_returncode": rebuild_result["returncode"],
+            "rebuild_error_line": _first_error_line(combined) if not rebuild_result["success"] else None,
+        }
+
+        if not rebuild_result["success"] and failing_group is None:
+            failing_group = group
+            break
+
+    shutil.rmtree(bisect_dir, ignore_errors=True)
+    bisect_rebuilt = work_dir / "PowerKeeper_bisect.apk"
+    try:
+        bisect_rebuilt.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+    if failing_group:
+        status = f"BISECT_FAILED_GROUP_{failing_group}"
+        last_id = group_results[failing_group].get("last_patch_id")
+    else:
+        status = "BISECT_ALL_GROUPS_OK"
+        last_id = None
+
+    return {
+        "status": status,
+        "failing_group": failing_group,
+        "last_patch_id_at_failure": last_id,
+        "group_results": group_results,
+    }
+
+
+# ── Report formatting ─────────────────────────────────────────────────────────
+
 def _format_text_report(report: dict) -> str:
     lines = [
         "Legend PowerKeeper Patch Report",
@@ -446,6 +627,38 @@ def _format_text_report(report: dict) -> str:
             f"  - [{ptype}] {item.get('id')}: {item.get('status')}"
             f" expected={expected} actual={actual} ({sig})"
         )
+
+    stock = report.get("stock_rebuild")
+    if stock:
+        lines.extend(["", "Stock rebuild test:"])
+        lines.append(f"  status: {stock.get('status')}")
+        if stock.get("error_line"):
+            lines.append(f"  error:  {stock['error_line']}")
+
+    diag = report.get("rebuild_diagnostics")
+    if diag:
+        lines.extend(["", "Rebuild diagnostics:"])
+        lines.append(f"  returncode: {diag.get('returncode')}")
+        if diag.get("error_line"):
+            lines.append(f"  error_line: {diag['error_line']}")
+
+    bisect = report.get("bisection")
+    if bisect:
+        lines.extend(["", "Bisection:"])
+        lines.append(f"  status:        {bisect.get('status')}")
+        lines.append(f"  failing_group: {bisect.get('failing_group')}")
+        lines.append(f"  last_patch_id: {bisect.get('last_patch_id_at_failure')}")
+        for grp, gr in (bisect.get("group_results") or {}).items():
+            lines.append(f"  group {grp}: rebuild_success={gr.get('rebuild_success')} patches={gr.get('patches_applied')}")
+            if gr.get("rebuild_error_line"):
+                lines.append(f"    error: {gr['rebuild_error_line']}")
+
+    log_files = report.get("log_files", {})
+    if log_files:
+        lines.extend(["", "Log files:"])
+        for k, v in log_files.items():
+            lines.append(f"  {k}: {v}")
+
     lines.extend(["", "Failures:"])
     failures = report.get("failures", [])
     lines.extend([f"  - {failure}" for failure in failures] or ["  (none)"])
@@ -490,6 +703,11 @@ def apply_legend_powerkeeper_patch(
         "failures": [],
         "warnings": [],
         "errors": [],
+        "stock_rebuild": None,
+        "rebuild_diagnostics": None,
+        "bisection": None,
+        "log_files": {},
+        "report_files": {},
         "final_status": "WOULD_PATCH" if not execute else "PATCHED",
     }
     if not _is_legend(flavor):
@@ -519,8 +737,25 @@ def apply_legend_powerkeeper_patch(
         _write_reports(report)
         return report
 
+    # ── Execute ───────────────────────────────────────────────────────────────
+
     prepare_apk_work_dir(effective_work_dir, POWERKEEPER_APK_NAME)
     work_apk = copy_apk_to_work(powerkeeper_apk, effective_work_dir)
+
+    # 1. Stock rebuild test: verify APKEditor can round-trip the APK unmodified
+    stock = _run_stock_rebuild_test(apkeditor_jar, effective_work_dir, work_apk)
+    report["stock_rebuild"] = stock
+    if stock["status"] != "STOCK_REBUILD_OK":
+        if "rebuild_result" in stock:
+            report["log_files"] = _write_rebuild_logs(stock["rebuild_result"], "powerkeeper")
+        report["final_status"] = "FAILED_STOCK_REBUILD"
+        err = stock.get("error_line") or stock.get("status", "stock rebuild failed")
+        report["failures"].append(err)
+        report["errors"].append(err)
+        _write_reports(report)
+        return report
+
+    # 2. Decompile for patching
     decompiled_dir = effective_work_dir / POWERKEEPER_APK_SRC_DIR_NAME
     if not decompile_apk(apkeditor_jar, work_apk, decompiled_dir):
         report["final_status"] = "FAILED_NOT_FOUND"
@@ -529,6 +764,7 @@ def apply_legend_powerkeeper_patch(
         _write_reports(report)
         return report
 
+    # 3. Apply the 23 patches
     smali = _apply_smali_rules(decompiled_dir, dry_run=False)
     report.update({
         "changed_class_count": smali["class_count"],
@@ -555,14 +791,34 @@ def apply_legend_powerkeeper_patch(
         _write_reports(report)
         return report
 
-    if not rebuild_apk(apkeditor_jar, decompiled_dir):
-        report["final_status"] = "FAILED_REBUILD"
-        report["failures"].append("APK rebuild failed")
-        report["errors"].append("APK rebuild failed")
+    # 4. Rebuild with full diagnostics
+    print("[legend_powerkeeper] Rebuilding patched APK ...")
+    rebuild_result = rebuild_apk_with_diagnostics(apkeditor_jar, decompiled_dir)
+    report["log_files"] = _write_rebuild_logs(rebuild_result, "powerkeeper")
+    report["report_files"]["log_files"] = report["log_files"]
+
+    combined_output = (rebuild_result.get("stderr", "") + "\n" + rebuild_result.get("stdout", "")).strip()
+    report["rebuild_diagnostics"] = {
+        "returncode": rebuild_result["returncode"],
+        "error_line": _first_error_line(combined_output) if not rebuild_result["success"] else None,
+    }
+
+    if not rebuild_result["success"]:
+        # 5. Run bisection to find the failing patch group
+        print("[legend_powerkeeper] Patched rebuild failed — running bisection ...")
+        bisect = _run_bisection(apkeditor_jar, work_apk, effective_work_dir)
+        report["bisection"] = bisect
+
+        report["final_status"] = "FAILED_REBUILD_WITH_LOGS"
+        error_line = report["rebuild_diagnostics"]["error_line"] or "APK rebuild failed"
+        report["failures"].append(error_line)
+        report["errors"].append(error_line)
         _write_reports(report)
         return report
+
     shutil.rmtree(decompiled_dir, ignore_errors=True)
 
+    # 5. Restore rebuilt APK
     rebuilt = effective_work_dir / POWERKEEPER_APK_NAME
     restore = restore_rebuilt_apk_no_backup(rebuilt, powerkeeper_apk)
     if not restore.get("success"):

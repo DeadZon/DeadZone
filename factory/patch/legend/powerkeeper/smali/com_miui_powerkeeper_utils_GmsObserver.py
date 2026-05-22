@@ -40,9 +40,9 @@ PATCHES = [
         'replacement': """.method private isGmsControlEnabled()Z
     .registers 2
 
-    const/4 p0, 0x0
+    const/4 v0, 0x0
 
-    return p0
+    return v0
 .end method""",
         'required': True,
         'flag_rewrite_count': 0,
