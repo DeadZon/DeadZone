@@ -223,6 +223,11 @@ def build_final_fastboot_zip(
     soc: str | None = None,
     template_zip: Path | None = None,
     execute: bool = False,
+    # Optional ROM metadata forwarded to the BAT header generator
+    device_model: str | None = None,
+    android_version: str | None = None,
+    build_incremental: str | None = None,
+    platform: str | None = None,
 ) -> dict:
     images_dir = Path(images_dir)
     output_dir = Path(output_dir)
@@ -336,7 +341,13 @@ def build_final_fastboot_zip(
             *SCRIPT_NAMES,
         ]
         validation_status, forbidden = _validate_entries(planned_entries)
-        script_result = generate_windows_flash_scripts(staging_dir, images_dir, device=device, execute=False)
+        script_result = generate_windows_flash_scripts(
+            staging_dir, images_dir,
+            device=device, soc=soc, platform=platform, flavor=flavor,
+            device_model=device_model, android_version=android_version,
+            build_incremental=build_incremental,
+            execute=False,
+        )
         report["scripts_generated"] = script_result["scripts_generated"]
         report["zip_entries"] = planned_entries
         report["forbidden_entries"] = forbidden
@@ -367,7 +378,13 @@ def build_final_fastboot_zip(
         shutil.copy2(image, staged_images / image.name)
         report["files_copied"].append(f"images/{image.name}")
 
-    script_result = generate_windows_flash_scripts(staging_dir, staged_images, device=device, execute=True)
+    script_result = generate_windows_flash_scripts(
+        staging_dir, staged_images,
+        device=device, soc=soc, platform=platform, flavor=flavor,
+        device_model=device_model, android_version=android_version,
+        build_incremental=build_incremental,
+        execute=True,
+    )
     report["scripts_generated"] = script_result["scripts_generated"]
 
     staging_entries = [_normalize_entry(str(path.relative_to(staging_dir))) for path in _iter_staging_files(staging_dir)]
@@ -428,6 +445,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--soc", default=None)
     parser.add_argument("--template-zip", type=Path)
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--device-model", default=None)
+    parser.add_argument("--android-version", default=None)
+    parser.add_argument("--build-incremental", default=None)
+    parser.add_argument("--platform", default=None)
     return parser
 
 
@@ -442,6 +463,10 @@ def main(argv: list[str] | None = None) -> int:
         soc=args.soc,
         template_zip=args.template_zip,
         execute=args.execute,
+        device_model=args.device_model,
+        android_version=args.android_version,
+        build_incremental=args.build_incremental,
+        platform=args.platform,
     )
     print(f"final_status={report['final_status']}")
     print(f"validation_status={report['validation_status']}")
