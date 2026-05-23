@@ -1,13 +1,10 @@
 """
 Legend JAR patch rules — maps each MTCR pack to its target JAR.
 
-Canonical MTCR directory:
-  third_party/mezo_core/MEZO_LEGEND/jar/
+MTCR packs live in:
+  factory/patch/legend/assets/jar/
 
-Fallback directory (current working location):
-  Legend/jar/     (repo root)
-
-To add a new Legend JAR patch: place <name>_Legend.mtcr in the canonical dir
+To add a new Legend JAR patch: place <name>_Legend.mtcr in that directory
 and add an entry to LEGEND_JAR_RULES below.
 """
 from __future__ import annotations
@@ -15,13 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_MEZO_CORE = _REPO_ROOT / "third_party" / "mezo_core"
-
-# Canonical location per project spec.
-_CANONICAL_MTCR_DIR = _MEZO_CORE / "MEZO_LEGEND" / "jar"
-# Fallback: where the MTCR files currently live in this repo.
-_FALLBACK_MTCR_DIR  = _REPO_ROOT / "Legend" / "jar"
+_LEGEND_HOME = Path(__file__).resolve().parent
+_CANONICAL_MTCR_DIR = _LEGEND_HOME / "assets" / "jar"
 
 
 @dataclass(frozen=True)
@@ -63,22 +55,9 @@ LEGEND_JAR_RULES: list[LegendJarRule] = [
 
 
 def find_mtcr_dir() -> Path | None:
-    """
-    Return the directory containing Legend MTCR packs.
-
-    Priority:
-    1. Canonical: third_party/mezo_core/MEZO_LEGEND/jar/  (preferred going forward)
-    2. Fallback:  Legend/jar/  (current repo-root location)
-    """
-    # Check canonical first — even a single .mtcr there takes priority.
-    if _CANONICAL_MTCR_DIR.is_dir():
-        if any(_CANONICAL_MTCR_DIR.glob("*.mtcr")):
-            return _CANONICAL_MTCR_DIR
-
-    if _FALLBACK_MTCR_DIR.is_dir():
-        if any(_FALLBACK_MTCR_DIR.glob("*.mtcr")):
-            return _FALLBACK_MTCR_DIR
-
+    """Return factory/patch/legend/assets/jar/ if it contains MTCR packs."""
+    if _CANONICAL_MTCR_DIR.is_dir() and any(_CANONICAL_MTCR_DIR.glob("*.mtcr")):
+        return _CANONICAL_MTCR_DIR
     return None
 
 

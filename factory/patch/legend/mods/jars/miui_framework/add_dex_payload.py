@@ -19,7 +19,7 @@ PATCHES = [
         "required":     False,
         "reason":       (
             "Legend MTCR add.dex payload for miui-framework.jar. "
-            "Source: Legend/jar/miui-freamwork add.dex (typo in original filename preserved). "
+            "Source: factory/patch/legend/assets/jar/miui-freamwork add.dex (typo in original filename preserved). "
             "Injected as an additional DEX before JAR repack."
         ),
     },

@@ -1,9 +1,7 @@
 """
 Legend add.dex rules — maps each add.dex file to its target JAR.
 
-Canonical location: same directory as the MTCR packs
-  third_party/mezo_core/MEZO_LEGEND/jar/   (canonical)
-  Legend/jar/                              (current / fallback)
+Assets live in: factory/patch/legend/assets/jar/
 
 Current files:
   freamwork add.dex     → system/framework/framework.jar

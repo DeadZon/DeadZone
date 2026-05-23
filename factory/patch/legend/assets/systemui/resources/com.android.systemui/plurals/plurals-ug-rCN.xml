@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <plurals name="abbrev_a_hour_ago">
+        <item quantity="other">%d سائەت ئىلگىرى</item>
+    </plurals>
+    <plurals name="abbrev_half_hour_ago">
+        <item quantity="other">يېرىم سائەت ئىلگىرى</item>
+    </plurals>
+    <plurals name="abbrev_in_a_hour">
+        <item quantity="other">%d سائەتتىن كېيىن</item>
+    </plurals>
+    <plurals name="abbrev_in_half_hour">
+        <item quantity="other">يېرىم سائەتتىن كېيىن</item>
+    </plurals>
+    <plurals name="abbrev_in_less_than_one_minute">
+        <item quantity="other">ھازىر</item>
+    </plurals>
+    <plurals name="abbrev_in_num_minutes">
+        <item quantity="other">%dمىنۇتتىن كېيىن</item>
+    </plurals>
+    <plurals name="abbrev_less_than_one_minute_ago">
+        <item quantity="other">باياتىن</item>
+    </plurals>
+    <plurals name="abbrev_num_minutes_ago">
+        <item quantity="other">%dمىنۇت ئىلگىرى</item>
+    </plurals>
+    <plurals name="accessibility_descriptions_signal_strength">
+        <item quantity="other">سىگنال %1$d دانە جەمئىي %2$d دانە</item>
+    </plurals>
+    <plurals name="high_temperature_message">
+        <item quantity="other">ئۈسكۈنە تېمپىراتۇرىسى يۇقىرى، كۆپ كۆزنەك ھالىتى %d سېكۇنتتىن كېيىن چېكىنىدۇ</item>
+    </plurals>
+    <plurals name="info_focus_rebirth_percent">
+        <item quantity="other">%d سېكۇنت</item>
+    </plurals>
+    <plurals name="input_pattern_after_timeout_msg">
+        <item quantity="other">پارولنى ئۇنتۇپ قالماسلىق ئۈچۈن، ھەر %d سائەتتە ئاز بولغاندا بىر قېتىم پارولنى ئىشلىتىش</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_minutes_string">
+        <item quantity="other">%s مىنۇتتىن كېيىن قايتا سىناڭ</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_seconds_string">
+        <item quantity="other">%s سېكۇنتتىن كېيىن قايتا سىناڭ</item>
+    </plurals>
+    <plurals name="tiny_accessibility_battery_level">
+        <item quantity="other">توك مىقدارى %s پىرسەنت</item>
+    </plurals>
+    <plurals name="tiny_accessibility_battery_level_charging">
+        <item quantity="other">زەرەتلەۋاتىدۇ، %d پىرسەت تاماملاندى</item>
+    </plurals>
+</resources>

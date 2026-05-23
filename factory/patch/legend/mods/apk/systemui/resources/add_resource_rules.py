@@ -1,7 +1,7 @@
 """Legend MiuiSystemUI managed drawable/layout resource copy rules.
 Generated from the temporary Legend add pack into managed assets. Runtime
-uses only factory/assets/legend/systemui/resources; it does not read any
-temporary extraction directory or archive.
+uses only factory/patch/legend/assets/systemui/resources; it does not read
+any temporary extraction directory or archive.
 """
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ TARGET_APK = 'MiuiSystemUI.apk'
 SOURCE_GROUP = 'legend_miuisystemui_add_resources'
 
 _HERE = Path(__file__).resolve().parent
-_REPO_ROOT = _find_repo_root(_HERE)
-ASSETS_ROOT = _REPO_ROOT / 'factory' / 'assets' / 'legend' / 'systemui' / 'resources'
+_LEGEND_HOME = _HERE.parents[3]  # resources/→systemui/→apk/→mods/→legend/
+ASSETS_ROOT = _LEGEND_HOME / 'assets' / 'systemui' / 'resources'
 
 RESOURCE_RULES = [
     {

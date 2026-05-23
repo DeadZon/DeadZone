@@ -85,9 +85,9 @@ _REPORTS_DIR  = _OUTPUT_ROOT / "reports"
 
 _LEGEND_FLAVORS = {"legend", "deadzone_legend"}
 
-# Canonical add.dex search dir (canonical first, fallback second)
-_ADD_DEX_CANONICAL = _REPO_ROOT / "third_party" / "mezo_core" / "MEZO_LEGEND" / "jar"
-_ADD_DEX_FALLBACK  = _REPO_ROOT / "Legend" / "jar"
+_LEGEND_HOME = Path(__file__).resolve().parent
+# Add-DEX payloads live exclusively in factory/patch/legend/assets/jar/
+_ADD_DEX_CANONICAL = _LEGEND_HOME / "assets" / "jar"
 
 
 def _normalise_flavor(flavor: str) -> str:
@@ -95,9 +95,13 @@ def _normalise_flavor(flavor: str) -> str:
 
 
 def _add_dex_dir() -> Path:
-    if _ADD_DEX_CANONICAL.is_dir():
-        return _ADD_DEX_CANONICAL
-    return _ADD_DEX_FALLBACK
+    if not _ADD_DEX_CANONICAL.is_dir():
+        print(
+            f"[jar_patch] WARNING: DEX asset directory not found: {_ADD_DEX_CANONICAL} "
+            "— dex_add payloads will be skipped. "
+            "Place required JAR assets in factory/patch/legend/assets/jar/"
+        )
+    return _ADD_DEX_CANONICAL
 
 
 def _work_dir(project_dir: Path) -> Path:
@@ -242,7 +246,7 @@ class LegendJarPatcher:
         # -- Locate MTCR packs -
         mtcr_dir_real = find_mtcr_dir()
         if mtcr_dir_real is None:
-            msg = "MTCR directory not found. Check Legend/jar/ or third_party/mezo_core/MEZO_LEGEND/jar/."
+            msg = "MTCR directory not found. Place MTCR packs in factory/patch/legend/assets/jar/."
             session.errors.append(msg)
             print(f"[legend_jar] ERROR: {msg}")
             write_reports(session, _REPORTS_DIR)

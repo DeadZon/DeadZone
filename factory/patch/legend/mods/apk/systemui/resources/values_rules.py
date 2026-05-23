@@ -2,7 +2,7 @@
 Legend MiuiSystemUI add/ resource values rules.
 
 Points to managed factory assets at:
-  factory/assets/legend/systemui/resources/com.android.systemui/
+  factory/patch/legend/assets/systemui/resources/com.android.systemui/
 
 Runner merges all XML files from this asset path into the decompiled APK
 using the same logic as the original apply_add_resources().
@@ -35,10 +35,10 @@ def _find_repo_root(start: Path) -> Path:
 TARGET_APK = 'MiuiSystemUI.apk'
 
 _HERE = Path(__file__).resolve().parent
-_REPO_ROOT = _find_repo_root(_HERE)
+_LEGEND_HOME = _HERE.parents[3]  # resources/→systemui/→apk/→mods/→legend/
 
-# Managed asset root — do NOT read from Legend/ at runtime
-ASSETS_ROOT = _REPO_ROOT / 'factory' / 'assets' / 'legend' / 'systemui' / 'resources'
+# Managed asset root — lives exclusively in factory/patch/legend/assets/
+ASSETS_ROOT = _LEGEND_HOME / 'assets' / 'systemui' / 'resources'
 ADD_RESOURCES_SRC = ASSETS_ROOT / 'com.android.systemui'
 
 RESOURCE_TYPES = ['array', 'bool', 'dimen', 'integer', 'plurals', 'string']

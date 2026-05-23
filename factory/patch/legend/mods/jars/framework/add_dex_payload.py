@@ -19,7 +19,7 @@ PATCHES = [
         "required":     False,
         "reason":       (
             "Legend MTCR add.dex payload for framework.jar. "
-            "Source: Legend/jar/freamwork add.dex (typo in original filename preserved). "
+            "Source: factory/patch/legend/assets/jar/freamwork add.dex (typo in original filename preserved). "
             "Injected as an additional DEX before JAR repack."
         ),
     },

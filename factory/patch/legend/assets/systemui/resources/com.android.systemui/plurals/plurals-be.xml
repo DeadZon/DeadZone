@@ -1,0 +1,172 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <plurals name="abbrev_a_hour_ago">
+        <item quantity="one">Гадзіну таму</item>
+        <item quantity="few">Гадзіну таму</item>
+        <item quantity="many">Гадзіну таму</item>
+        <item quantity="other">Гадзіну таму</item>
+    </plurals>
+    <plurals name="abbrev_half_hour_ago">
+        <item quantity="one">Паўгадзіны таму</item>
+        <item quantity="few">Паўгадзіны таму</item>
+        <item quantity="many">Паўгадзіны таму</item>
+        <item quantity="other">Паўгадзіны таму</item>
+    </plurals>
+    <plurals name="abbrev_in_a_hour">
+        <item quantity="one">Праз гадзіну</item>
+        <item quantity="few">Праз гадзіну</item>
+        <item quantity="many">Праз гадзіну</item>
+        <item quantity="other">Праз гадзіну</item>
+    </plurals>
+    <plurals name="abbrev_in_half_hour">
+        <item quantity="one">Праз паўгадзіны</item>
+        <item quantity="few">Праз паўгадзіны</item>
+        <item quantity="many">Праз паўгадзіны</item>
+        <item quantity="other">Праз паўгадзіны</item>
+    </plurals>
+    <plurals name="abbrev_in_less_than_one_minute">
+        <item quantity="one">Неадкладна</item>
+        <item quantity="few">Неадкладна</item>
+        <item quantity="many">Неадкладна</item>
+        <item quantity="other">Неадкладна</item>
+    </plurals>
+    <plurals name="abbrev_in_num_minutes">
+        <item quantity="one">праз 1 хв.</item>
+        <item quantity="few">праз %d хв.</item>
+        <item quantity="many">праз %d хв.</item>
+        <item quantity="other">праз %d хв.</item>
+    </plurals>
+    <plurals name="abbrev_less_than_one_minute_ago">
+        <item quantity="one">Толькі што</item>
+        <item quantity="few">Толькі што</item>
+        <item quantity="many">Толькі што</item>
+        <item quantity="other">Толькі што</item>
+    </plurals>
+    <plurals name="abbrev_num_minutes_ago">
+        <item quantity="one">1 хв. таму</item>
+        <item quantity="few">%d хв. таму</item>
+        <item quantity="many">%d хв. таму</item>
+        <item quantity="other">%d хв. таму</item>
+    </plurals>
+    <plurals name="abc_slice_duration_days">
+        <item quantity="one">%d дзень таму</item>
+        <item quantity="few">%d дні таму</item>
+        <item quantity="many">%d дзён таму</item>
+        <item quantity="other">%d дзён таму</item>
+    </plurals>
+    <plurals name="abc_slice_duration_min">
+        <item quantity="one">%d хвіліну таму</item>
+        <item quantity="few">%d хвіліны таму</item>
+        <item quantity="many">%d хвілін таму</item>
+        <item quantity="other">%d хвілін таму</item>
+    </plurals>
+    <plurals name="abc_slice_duration_years">
+        <item quantity="one">%d год таму</item>
+        <item quantity="few">%d гады таму</item>
+        <item quantity="many">%d гадоў таму</item>
+        <item quantity="other">%d гадоў таму</item>
+    </plurals>
+    <plurals name="accessibility_descriptions_signal_strength">
+        <item quantity="one">&gt;Узровень сігналу: %1$d з %2$d паласы</item>
+        <item quantity="other">&gt;Узровень сігналу: %1$d з %2$d палос</item>
+    </plurals>
+    <plurals name="atmospheric_pressure_desc">
+        <item quantity="one">Ціск: %s мм.рт.сл.</item>
+        <item quantity="other">Ціск: %s мм.рт.сл.</item>
+    </plurals>
+    <plurals name="health_chart_calories_burned_schedule_format_desc">
+        <item quantity="one">Спалена калорый: %1$s</item>
+        <item quantity="other">Спалена калорый: %1$s</item>
+    </plurals>
+    <plurals name="health_chart_calories_goal_schedule_format_desc">
+        <item quantity="one">Мэта па калорыях: %1$s</item>
+        <item quantity="other">Мэта калорый: %1$s</item>
+    </plurals>
+    <plurals name="health_chart_calories_schedule_format">
+        <item quantity="one">%1$s/%2$s ккал</item>
+        <item quantity="other">%1$s/%2$s ккал</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_current_schedule_format_desc">
+        <item quantity="one">Час актыўнасці: %1$s хв.</item>
+        <item quantity="other">Час актыўнасці: %1$s хв.</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_goal_schedule_format_desc">
+        <item quantity="one">Мэта актыўнасці: %1$s хв.</item>
+        <item quantity="other">Мэта актыўнасці: %1$s хв.</item>
+    </plurals>
+    <plurals name="health_chart_sport_time_schedule_format">
+        <item quantity="one">%1$s/%2$s хв.</item>
+        <item quantity="other">%1$s/%2$s хв.</item>
+    </plurals>
+    <plurals name="health_chart_stand_count_schedule_format_desc">
+        <item quantity="one">Уставалі на працягу %1$s гадзіны</item>
+        <item quantity="other">Уставалі на працягу %1$s гадзін</item>
+    </plurals>
+    <plurals name="health_chart_stand_goal_schedule_format_desc">
+        <item quantity="one">Бягучая мэта: %1$s гадзіна</item>
+        <item quantity="other">Бягучая мэта: %1$s гадзін</item>
+    </plurals>
+    <plurals name="health_chart_stand_schedule_format">
+        <item quantity="one">%1$s/%2$s г.</item>
+        <item quantity="other">%1$s/%2$s г.</item>
+    </plurals>
+    <plurals name="health_chart_step_count_current_schedule_format_desc">
+        <item quantity="one">Бягучая колькасць крокаў: %1$s</item>
+        <item quantity="other">Бягучая колькасць крокаў: %1$s</item>
+    </plurals>
+    <plurals name="health_chart_step_count_goal_schedule_format_desc">
+        <item quantity="one">Мэта па кроках: %1$s</item>
+        <item quantity="other">Мэта па кроках: %1$s</item>
+    </plurals>
+    <plurals name="health_chart_step_count_schedule_format">
+        <item quantity="one">%1$s/%2$s крок</item>
+        <item quantity="few">%1$s/%2$s крока</item>
+        <item quantity="other">%1$s/%2$s крокаў</item>
+    </plurals>
+    <plurals name="high_temperature_message">
+        <item quantity="one">Прылада перагрэлася. Адключэнне шматваконнага рэжыму праз %d сек.</item>
+        <item quantity="other">Прылада перагрэлася. Адключэнне шматваконнага рэжыму праз %d сек.</item>
+    </plurals>
+    <plurals name="info_focus_rebirth_percent">
+        <item quantity="one">%d сек.</item>
+        <item quantity="other">%d сек.</item>
+    </plurals>
+    <plurals name="input_pattern_after_timeout_msg">
+        <item quantity="one">Увядзіце свой пароль хоць бы раз у %d гадзіну для яго запамінання</item>
+        <item quantity="few">Увядзіце свой пароль хоць бы раз у %d гадзіны для яго запамінання</item>
+        <item quantity="many">Увядзіце свой пароль хоць бы раз у %d гадзін для яго запамінання</item>
+        <item quantity="other">Увядзіце свой пароль хоць бы раз у %d гадзін для яго запамінання</item>
+    </plurals>
+    <plurals name="mtrl_badge_content_description">
+        <item quantity="one">%d новае апавяшчэнне</item>
+        <item quantity="few">%d новых апавяшчэння</item>
+        <item quantity="other">%d новых апавяшчэнняў</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_minutes_string">
+        <item quantity="one">Паўтарыце праз %d хвіліну</item>
+        <item quantity="few">Паўтарыце праз %d хвіліны</item>
+        <item quantity="many">Паўтарыце праз %d хвіліны</item>
+        <item quantity="other">Паўтарыце праз %d хвіліны</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_seconds_string">
+        <item quantity="one">Паўтарыце праз %d секунду</item>
+        <item quantity="few">Паўтарыце праз %d секунды</item>
+        <item quantity="many">Паўтарыце праз %d секунды</item>
+        <item quantity="other">Паўтарыце праз %d секунды</item>
+    </plurals>
+    <plurals name="tiny_accessibility_battery_level">
+        <item quantity="one">Цяпер узровень зарада батарэі складае %s працэнт</item>
+        <item quantity="few">Цяпер узровень зарада батарэі складае %s працэнта</item>
+        <item quantity="other">Цяпер узровень зарада батарэі складае %s працэнтаў</item>
+    </plurals>
+    <plurals name="tiny_accessibility_battery_level_charging">
+        <item quantity="one">Зарадка. Узровень зарада батарэі зараз складае %d працэнт.</item>
+        <item quantity="few">Зарадка. Узровень зарада батарэі зараз складае %d працэнта.</item>
+        <item quantity="other">Зарадка. Узровень зарада батарэі зараз складае %d працэнтаў.</item>
+    </plurals>
+    <plurals name="weather_temperature_desc">
+        <item quantity="one">Тэмпература: %1$s градус, %2$s</item>
+        <item quantity="few">Тэмпература: %1$s градуса, %2$s</item>
+        <item quantity="other">Тэмпература: %1$s градусаў, %2$s</item>
+    </plurals>
+</resources>

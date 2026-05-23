@@ -9,7 +9,7 @@ or patch comparison files are read at runtime.
   factory/patch/legend/systemui/smali/          -> 114 modified class patches
   factory/patch/legend/systemui/smali_added/    -> 313 added class patches
   factory/patch/legend/systemui/resources/      -> layout + arsc + values rules
-  factory/assets/legend/systemui/               -> managed XML assets
+  factory/patch/legend/assets/systemui/         -> managed XML assets
 
 Pipeline (execute mode):
   1. Find MiuiSystemUI.apk in the ROM project tree.

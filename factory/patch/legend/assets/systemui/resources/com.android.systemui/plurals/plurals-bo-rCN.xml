@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<resources offset16="true">
+    <plurals name="abbrev_a_hour_ago">
+        <item quantity="other">ཆུ་ཚོད་%d གོང་།</item>
+    </plurals>
+    <plurals name="abbrev_half_hour_ago">
+        <item quantity="other">དུས་ཚོད་ཕྱེད་ཀའི་སྔོན།</item>
+    </plurals>
+    <plurals name="abbrev_in_a_hour">
+        <item quantity="other">ཆུ་ཚོད་%d ཡི་རྗེས།</item>
+    </plurals>
+    <plurals name="abbrev_in_half_hour">
+        <item quantity="other">དུས་ཚོད་ཕྱེད་ཀའི་རྗེས།</item>
+    </plurals>
+    <plurals name="abbrev_in_less_than_one_minute">
+        <item quantity="other">མྱུར་ཏུ།</item>
+    </plurals>
+    <plurals name="abbrev_in_num_minutes">
+        <item quantity="other">སྐར་མ%dརྗེས།</item>
+    </plurals>
+    <plurals name="abbrev_less_than_one_minute_ago">
+        <item quantity="other">ད་གིན།</item>
+    </plurals>
+    <plurals name="abbrev_num_minutes_ago">
+        <item quantity="other">སྐར་མ%dསྔོན།</item>
+    </plurals>
+    <plurals name="accessibility_descriptions_signal_strength">
+        <item quantity="other">བརྡ་རྟགས་དྲག་ཚད་%1$dཁྱོན་བསྡོམས་%2$d</item>
+    </plurals>
+    <plurals name="high_temperature_message">
+        <item quantity="other">སྒྲིག་ཆས་དྲོད་ཚད་མཐོ་དྲགས་པས། འཆར་ངོས་མང་པོའི་རྣམ་པ་སྐར་ཆ་%dཡི་རྗེས་རང་འགུལ་གྱིས་ཕྱིར་ཐོན་བྱེད།</item>
+    </plurals>
+    <plurals name="info_focus_rebirth_percent">
+        <item quantity="other">སྐར་ཆ་%d</item>
+    </plurals>
+    <plurals name="input_pattern_after_timeout_msg">
+        <item quantity="other">གསང་ཨང་མི་བརྗེད་པའི་ཆེད་དུ། ཆུ་ཚོད%dརེར་ཉུང་མཐར་ཡང་གསང་ཨང་ཐེངས་རེ་བཀོལ་དགོས།</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_minutes_string">
+        <item quantity="other">སྐར་མ་ %s རྗེས་ཡང་ལྟ་གནང་རོགས།</item>
+    </plurals>
+    <plurals name="phone_locked_timeout_seconds_string">
+        <item quantity="other">སྐར་ཆ་ %s རྗེས་ཡང་ལྟ་གནང་རོགས།</item>
+    </plurals>
+    <plurals name="tiny_accessibility_battery_level">
+        <item quantity="other">གློག་རྫས་རྒྱ་ཆ་%s</item>
+    </plurals>
+    <plurals name="tiny_accessibility_battery_level_charging">
+        <item quantity="other">གློག་གསོག་བཞིན་ཡོད། བརྒྱ་ཆ་%dབསགས་ཟིན།</item>
+    </plurals>
+</resources>

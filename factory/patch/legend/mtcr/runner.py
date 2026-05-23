@@ -87,8 +87,8 @@ _MODS_JARS_PKG  = Path(__file__).resolve().parents[1] / "mods" / "jars"
 _OUTPUT_ROOT    = _REPO_ROOT / "output"
 _REPORTS_DIR    = _OUTPUT_ROOT / "reports"
 
-_ADD_DEX_CANONICAL = _REPO_ROOT / "third_party" / "mezo_core" / "MEZO_LEGEND" / "jar"
-_ADD_DEX_FALLBACK  = _REPO_ROOT / "Legend" / "jar"
+_LEGEND_HOME    = Path(__file__).resolve().parents[2]
+_ADD_DEX_CANONICAL = _LEGEND_HOME / "assets" / "jar"
 
 _REPORT_JSON = "legend_mtcr_report.json"
 _REPORT_TXT  = "legend_mtcr_report.txt"
@@ -153,7 +153,13 @@ def _discover_class_modules(pkg_subdir: str) -> list[Any]:
 # ── Add-DEX path resolver ─────────────────────────────────────────────────────
 
 def _add_dex_dir() -> Path:
-    return _ADD_DEX_CANONICAL if _ADD_DEX_CANONICAL.is_dir() else _ADD_DEX_FALLBACK
+    if not _ADD_DEX_CANONICAL.is_dir():
+        print(
+            f"[legend_mtcr] WARNING: DEX asset directory not found: {_ADD_DEX_CANONICAL} "
+            "— dex_add payloads will be skipped. "
+            "Place required JAR assets in factory/patch/legend/assets/jar/"
+        )
+    return _ADD_DEX_CANONICAL
 
 
 # ── Per-patch apply helpers ───────────────────────────────────────────────────

@@ -251,28 +251,21 @@ def _check_tools(report: dict[str, Any], vbmeta_mode: str | None) -> dict[str, A
 
 
 def _check_references(report: dict[str, Any], template_zip: Path | None) -> dict[str, Any]:
-    legacy_root = _REPO_ROOT / "third_party" / "mezo_core"
-    canonical_systemui = legacy_root / "MEZO_LEGEND" / "MiuiSystemUI"
-    fallback_systemui = _REPO_ROOT / "Legend" / "MiuiSystemUI"
-    template_dir = legacy_root / "templates" / "deadzone_fastboot"
+    legend_home = _REPO_ROOT / "factory" / "patch" / "legend"
+    legend_jar_dir = legend_home / "assets" / "jar"
+    legend_assets_dir = legend_home / "assets"
+    template_dir = _REPO_ROOT / "third_party" / "mezo_core" / "templates" / "deadzone_fastboot"
     template_zip_path = template_zip.resolve() if template_zip else None
 
     references: dict[str, Any] = {
-        "legend_jar": _path_record(legacy_root / "MEZO_LEGEND" / "jar"),
-        "legend_systemui_canonical": _path_record(canonical_systemui),
-        "legend_systemui_fallback": _path_record(fallback_systemui),
+        "legend_jar": _path_record(legend_jar_dir),
+        "legend_assets": _path_record(legend_assets_dir),
         "fastboot_template_dir": _path_record(template_dir),
         "fastboot_template_zip": _path_record(template_zip_path) if template_zip_path else {
             "path": None,
             "exists": False,
             "status": "NOT_PROVIDED",
         },
-    }
-    references["legend_systemui_effective"] = {
-        "path": str(canonical_systemui if canonical_systemui.is_dir() else fallback_systemui),
-        "exists": canonical_systemui.is_dir() or fallback_systemui.is_dir(),
-        "source": "canonical" if canonical_systemui.is_dir() else ("fallback" if fallback_systemui.is_dir() else None),
-        "status": "OK" if canonical_systemui.is_dir() or fallback_systemui.is_dir() else "MISSING",
     }
     references["fastboot_template_effective"] = {
         "path": str(template_zip_path if template_zip_path and template_zip_path.is_file() else template_dir),
@@ -282,11 +275,7 @@ def _check_references(report: dict[str, Any], template_zip: Path | None) -> dict
     }
 
     if references["legend_jar"]["status"] != "OK":
-        _append_problem(report, "error", "Legend JAR reference directory missing")
-    if references["legend_systemui_canonical"]["status"] != "OK":
-        _append_problem(report, "warning", "Canonical MiuiSystemUI reference missing; fallback will be used if present")
-    if references["legend_systemui_effective"]["status"] != "OK":
-        _append_problem(report, "warning", "MiuiSystemUI reference missing from canonical and fallback locations")
+        _append_problem(report, "warning", "Legend JAR asset directory missing: factory/patch/legend/assets/jar/")
     if references["fastboot_template_effective"]["status"] != "OK":
         _append_problem(report, "error", "Canonical DeadZone fastboot template folder or ZIP missing")
     return references
