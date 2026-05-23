@@ -78,7 +78,16 @@ FORBIDDEN_SUBSTRINGS = [
     ".git",
     "__pycache__",
     "HyperUR",
+    "work/",
 ]
+
+# Image filenames that must never appear in the final ZIP regardless of location.
+FORBIDDEN_IMAGE_NAMES: frozenset[str] = frozenset({
+    "super.unsparse.img",
+    "super_metadata.img",
+    "lpdump.img",
+    "lpdump_validation.img",
+})
 
 KNOWN_IMAGE_ORDER = [image for _, image in FLASH_ORDER]
 
@@ -104,6 +113,10 @@ def _forbidden_reason(name: str) -> str | None:
         return "forbidden file"
     if leaf.lower().endswith(".zip.sha256"):
         return "sidecar checksum"
+    if leaf.lower().endswith(".unsparse.img"):
+        return "unsparse image must not be in final ZIP"
+    if leaf in FORBIDDEN_IMAGE_NAMES:
+        return f"forbidden image: {leaf}"
     for pattern in FORBIDDEN_SUBSTRINGS:
         if pattern.lower() in lowered:
             return f"forbidden pattern: {pattern}"
@@ -131,17 +144,28 @@ def _is_dynamic_partition(name: str) -> bool:
     return name in DYNAMIC_PARTITION_IMAGES or name.endswith("_dlkm.img")
 
 
+def _is_excluded_super_artifact(name: str) -> bool:
+    """Return True for super build artifacts that must never enter the final ZIP."""
+    lower = name.lower()
+    return (
+        lower.endswith(".unsparse.img")
+        or name in FORBIDDEN_IMAGE_NAMES
+    )
+
+
 def _collect_image_files(
     images_dir: Path,
     exclude: frozenset[str] | None = None,
 ) -> tuple[list[Path], list[str]]:
     images = {path.name: path for path in Path(images_dir).glob("*.img") if path.is_file()}
     excluded_names: list[str] = []
-    if exclude:
-        for name in list(images.keys()):
-            if _is_dynamic_partition(name):
-                excluded_names.append(name)
-                del images[name]
+    for name in list(images.keys()):
+        if _is_excluded_super_artifact(name):
+            excluded_names.append(name)
+            del images[name]
+        elif exclude and _is_dynamic_partition(name):
+            excluded_names.append(name)
+            del images[name]
     ordered = [images.pop(name) for name in KNOWN_IMAGE_ORDER if name in images]
     ordered.extend(images[name] for name in sorted(images))
     return ordered, sorted(excluded_names)

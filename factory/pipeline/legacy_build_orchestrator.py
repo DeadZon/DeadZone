@@ -181,6 +181,16 @@ def apply_legacy_build_pipeline(
     telegram: bool = False,
 ) -> dict:
     output_dir = (Path(output_dir) if output_dir is not None else (_REPO_ROOT / "output")).resolve()
+
+    # Infer os_family / debloat_profile for legend builds when the caller omits
+    # them but the platform string makes the OS generation clear.
+    # "os3*" covers "os3", "os3_mt6886", "os3-zircon", etc.
+    if _is_legend(flavor) and str(platform or "").lower().startswith("os3"):
+        if not os_family:
+            os_family = "OS3"
+        if not debloat_profile:
+            debloat_profile = "legend_os3"
+
     images_dir = output_dir / "images"
     # MEZOBuildRom-style: dynamic partition EROFS images land in this temporary
     # directory, never in output/images/.  Super build reads from here, writes
@@ -302,12 +312,14 @@ def apply_legacy_build_pipeline(
 
     if not stopped:
         debloat_os3_stage = stages[2]
-        _os3_active = (
-            _is_legend(flavor)
-            and str(os_family or "").upper() in {"OS3", "HYPEROS3"}
-            and (debloat_profile or "").lower() == "legend_os3"
-        )
-        if not _os3_active:
+        if _is_legend(flavor):
+            # Debloat is executed inside the unified legend runner (stage legend_jar).
+            # Running it here separately would duplicate work.
+            stage_reports[debloat_os3_stage["id"]] = _skip_stage(
+                debloat_os3_stage, "handled by legend_runner"
+            )
+            live.update(stages, current=debloat_os3_stage["name"])
+        else:
             _skip_reason = (
                 f"[LEGEND OS3] Profile skipped: not Legend OS3 "
                 f"(flavor={flavor!r}, os_family={os_family!r}, "
@@ -318,32 +330,6 @@ def apply_legacy_build_pipeline(
                 debloat_os3_stage, _skip_reason
             )
             live.update(stages, current=debloat_os3_stage["name"])
-        else:
-            debloat_mod = _import_optional(
-                "factory.patches.legend.os3.debloat_executor"
-            )
-            if debloat_mod is None or not hasattr(
-                debloat_mod, "apply_legend_os3_debloat"
-            ):
-                stage_reports[debloat_os3_stage["id"]] = _skip_stage(
-                    debloat_os3_stage, "missing module: factory.patches.legend.os3.debloat_executor"
-                )
-                live.update(stages, current=debloat_os3_stage["name"])
-            else:
-                def debloat_os3_call() -> dict:
-                    return debloat_mod.apply_legend_os3_debloat(
-                        project_dir=project_dir,
-                        flavor=flavor,
-                        os_family=os_family or "OS3",
-                        debloat_profile=debloat_profile or "legend_os3",
-                        execute=execute,
-                    )
-
-                report, failed = _run_stage(
-                    debloat_os3_stage, stages, live, debloat_os3_call, execute=execute
-                )
-                stage_reports[debloat_os3_stage["id"]] = report
-                stopped = stop_if_needed(debloat_os3_stage, failed)
 
     if not stopped:
         assets_stage = stages[3]
@@ -369,71 +355,73 @@ def apply_legacy_build_pipeline(
             stage_reports[jar_stage["id"]] = _skip_stage(jar_stage, "non-Legend flavor")
             live.update(stages, current=jar_stage["name"])
         else:
-            # Prefer the modular MTCR runner; fall back to legacy LegendJarPatcher.
-            mtcr_runner = _import_optional("factory.patch.legend.mtcr.runner")
-            if mtcr_runner is not None and hasattr(mtcr_runner, "apply_legend_mtcr_patches"):
-                def jar_call() -> dict:
-                    return mtcr_runner.apply_legend_mtcr_patches(
-                        project_dir=project_dir,
-                        flavor=flavor,
-                        execute=execute,
-                        android_major=_android_major(android_version),
+            # Legend builds: delegate ALL legend patching to the unified runner.
+            # run_legend covers: fstab, props, OS3 debloat, APK mods
+            # (Provision/SystemUI/PowerKeeper), JAR mods (MTCR), permissions.
+            jar_stage["name"] = "Legend Runner"
+            runner_mod = _import_optional("factory.patch.legend.runner")
+            if runner_mod is not None and hasattr(runner_mod, "run_legend"):
+                def legend_runner_call() -> dict:
+                    return runner_mod.run_legend(
+                        root=project_dir,
+                        output_dir=_REPO_ROOT / "output",
+                        context={
+                            "flavor": flavor,
+                            "execute": execute,
+                            "android_major": _android_major(android_version),
+                            "os_family": os_family or "OS3",
+                            "debloat_profile": debloat_profile or "legend_os3",
+                        },
                     )
 
-                report, failed = _run_stage(jar_stage, stages, live, jar_call, execute=execute)
+                report, failed = _run_stage(jar_stage, stages, live, legend_runner_call, execute=execute)
                 stage_reports[jar_stage["id"]] = report
                 stopped = stop_if_needed(jar_stage, failed)
             else:
-                jar_mod = _import_optional("factory.patch.legend.jar_patch")
-                if jar_mod is None or not hasattr(jar_mod, "LegendJarPatcher"):
-                    stage_reports[jar_stage["id"]] = {"status": "FAILED", "errors": ["Legend JAR module missing"]}
-                    jar_stage["status"] = "FAIL"
-                    jar_stage["errors"] = ["Legend JAR module missing"]
-                    live.update(stages, current=jar_stage["name"], final_status="FAILED")
-                    stopped = execute
-                else:
-                    def jar_call() -> dict:  # type: ignore[misc]
-                        from factory.patch.common.patch_report import session_to_dict
-                        patcher = jar_mod.LegendJarPatcher(
-                            project_dir,
-                            flavor=flavor,
-                            android_major=_android_major(android_version),
-                            dry_run=not execute,
-                        )
-                        return session_to_dict(patcher.run())
-
-                    report, failed = _run_stage(jar_stage, stages, live, jar_call, execute=execute)
-                    stage_reports[jar_stage["id"]] = report
-                    stopped = stop_if_needed(jar_stage, failed)
+                stage_reports[jar_stage["id"]] = {
+                    "status": "FAILED",
+                    "errors": ["factory.patch.legend.runner module missing"],
+                }
+                jar_stage["status"] = "FAIL"
+                jar_stage["errors"] = ["factory.patch.legend.runner module missing"]
+                live.update(stages, current=jar_stage["name"], final_status="FAILED")
+                stopped = execute
 
     if not stopped:
         provision_stage = stages[5]
-
-        def provision_call() -> dict:
-            from factory.patch.apk.provision_legacy import _write_reports, apply_provision_legacy_patch
-            report = apply_provision_legacy_patch(
-                project_dir=project_dir,
-                flavor=flavor,
-                execute=execute,
+        if _is_legend(flavor):
+            stage_reports[provision_stage["id"]] = _skip_stage(
+                provision_stage, "handled by legend_runner"
             )
-            _write_reports(report)
-            return report
+            live.update(stages, current=provision_stage["name"])
+        else:
+            def provision_call() -> dict:
+                from factory.patch.apk.provision_legacy import _write_reports, apply_provision_legacy_patch
+                report = apply_provision_legacy_patch(
+                    project_dir=project_dir,
+                    flavor=flavor,
+                    execute=execute,
+                )
+                _write_reports(report)
+                return report
 
-        report, failed = _run_stage(
-            provision_stage,
-            stages,
-            live,
-            provision_call,
-            execute=execute,
-            fail_on_skip=True,
-        )
-        stage_reports[provision_stage["id"]] = report
-        stopped = stop_if_needed(provision_stage, failed)
+            report, failed = _run_stage(
+                provision_stage,
+                stages,
+                live,
+                provision_call,
+                execute=execute,
+                fail_on_skip=True,
+            )
+            stage_reports[provision_stage["id"]] = report
+            stopped = stop_if_needed(provision_stage, failed)
 
     if not stopped:
         systemui_stage = stages[6]
-        if not _is_legend(flavor):
-            stage_reports[systemui_stage["id"]] = _skip_stage(systemui_stage, "non-Legend flavor")
+        if _is_legend(flavor):
+            stage_reports[systemui_stage["id"]] = _skip_stage(
+                systemui_stage, "handled by legend_runner"
+            )
             live.update(stages, current=systemui_stage["name"])
         else:
             systemui_mod = _import_optional("factory.patch.apk.systemui_legend")
@@ -454,8 +442,10 @@ def apply_legacy_build_pipeline(
 
     if not stopped:
         powerkeeper_stage = stages[7]
-        if not _is_legend(flavor):
-            stage_reports[powerkeeper_stage["id"]] = _skip_stage(powerkeeper_stage, "non-Legend flavor")
+        if _is_legend(flavor):
+            stage_reports[powerkeeper_stage["id"]] = _skip_stage(
+                powerkeeper_stage, "handled by legend_runner"
+            )
             live.update(stages, current=powerkeeper_stage["name"])
         else:
             powerkeeper_mod = _import_optional("factory.patch.apk.powerkeeper_legend")
@@ -607,7 +597,8 @@ def apply_legacy_build_pipeline(
         final_zip = report.get("final_zip")
         stopped = stop_if_needed(final_stage, failed)
 
-        # ── Extract final packaging metrics from the ZIP report ──────────────
+        # ── Extract final 
+        # packaging metrics from the ZIP report ──────────────
         fz = stage_reports.get("final_zip", {})
         dynamic_images_excluded_from_final_zip: list[str] = fz.get("images_excluded_dynamic", [])
         final_zip_image_list: list[str] = fz.get("images_included", [])

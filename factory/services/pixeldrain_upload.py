@@ -79,18 +79,57 @@ def upload_to_pixeldrain_with_retry(
     attempts: int = _MAX_ATTEMPTS,
     delay: int = _RETRY_DELAY,
 ) -> dict:
-    """Upload with automatic retry on network/SSL/timeout failures."""
+    """Upload with automatic retry on network/SSL/timeout failures.
+
+    The returned dict always includes:
+        success       bool
+        file          str   absolute path
+        file_size_mib float
+        retry_count   int   total attempts made
+        final_status  str   "UPLOADED" | "FAILED"
+        error         str   last error message (empty on success)
+    """
+    path = Path(file_path)
+    file_size_mib = round(path.stat().st_size / 1024 / 1024, 1) if path.exists() else 0.0
     last_result: dict = {}
     for attempt in range(1, attempts + 1):
         if attempt > 1:
-            print(f"[PIXELDRAIN] Waiting {delay}s before retry {attempt}/{attempts} ...", flush=True)
+            print(
+                f"[PIXELDRAIN] Waiting {delay}s before retry {attempt}/{attempts} ...",
+                flush=True,
+            )
             time.sleep(delay)
-        print(f"[PIXELDRAIN] Attempt {attempt}/{attempts}", flush=True)
+        print(
+            f"[PIXELDRAIN] Attempt {attempt}/{attempts} — "
+            f"file={path.name} size={file_size_mib:.1f} MiB",
+            flush=True,
+        )
         result = upload_to_pixeldrain(file_path, api_key)
+        result["file_size_mib"] = file_size_mib
+        result["retry_count"] = attempt
         if result.get("success"):
+            result["final_status"] = "UPLOADED"
+            result["error"] = result.get("error", "")
+            print(
+                f"[PIXELDRAIN] SUCCESS after {attempt}/{attempts} attempt(s): {result.get('link', '')}",
+                flush=True,
+            )
             return result
         last_result = result
-        print(f"[PIXELDRAIN] Attempt {attempt} failed: {result.get('error', '')}", file=sys.stderr)
+        print(
+            f"[PIXELDRAIN] Attempt {attempt}/{attempts} FAILED: {result.get('error', 'unknown error')}",
+            file=sys.stderr,
+        )
+
+    last_result["file_size_mib"] = file_size_mib
+    last_result["retry_count"] = attempts
+    last_result["final_status"] = "FAILED"
+    print(
+        f"[PIXELDRAIN] All {attempts} attempt(s) failed — "
+        f"file={path.name} size={file_size_mib:.1f} MiB "
+        f"last_error={last_result.get('error', 'unknown')}",
+        file=sys.stderr,
+    )
     return last_result
 
 
