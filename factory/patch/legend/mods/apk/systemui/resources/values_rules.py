@@ -18,10 +18,24 @@ Total XML files : 224
 from __future__ import annotations
 from pathlib import Path
 
+
+def _find_repo_root(start: Path) -> Path:
+    """Walk upward until a directory containing factory/ and (.git or third_party/) is found."""
+    p = start.resolve()
+    while p != p.parent:
+        if (p / 'factory').is_dir() and ((p / '.git').exists() or (p / 'third_party').is_dir()):
+            return p
+        p = p.parent
+    raise RuntimeError(
+        f"Cannot locate repo root from {start!r}: "
+        "no directory with factory/ + (.git or third_party/) found"
+    )
+
+
 TARGET_APK = 'MiuiSystemUI.apk'
 
 _HERE = Path(__file__).resolve().parent
-_REPO_ROOT = _HERE.parents[4]
+_REPO_ROOT = _find_repo_root(_HERE)
 
 # Managed asset root — do NOT read from Legend/ at runtime
 ASSETS_ROOT = _REPO_ROOT / 'factory' / 'assets' / 'legend' / 'systemui' / 'resources'

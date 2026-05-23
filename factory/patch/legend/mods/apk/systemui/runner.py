@@ -80,7 +80,19 @@ from factory.patch.legend.mods.apk.systemui.model import (
 # Paths
 # ---------------------------------------------------------------------------
 
-_REPO_ROOT   = Path(__file__).resolve().parents[4]
+def _find_repo_root(start: Path) -> Path:
+    """Walk upward until a directory with factory/ and (.git or third_party/) is found."""
+    p = start.resolve()
+    while p != p.parent:
+        if (p / 'factory').is_dir() and ((p / '.git').exists() or (p / 'third_party').is_dir()):
+            return p
+        p = p.parent
+    raise RuntimeError(
+        f"Cannot locate repo root from {start!r}: "
+        "no directory with factory/ + (.git or third_party/) found"
+    )
+
+_REPO_ROOT   = _find_repo_root(Path(__file__).resolve().parent)
 _PKG_ROOT    = Path(__file__).resolve().parent
 _OUTPUT_ROOT = _REPO_ROOT / "output"
 _REPORTS_DIR = _OUTPUT_ROOT / "reports"
@@ -877,7 +889,8 @@ def _format_text_report(report: dict) -> str:
         "",
         "Stage results:",
         f"  Decompile          : {report.get('decompile_status', 'N/A')}",
-        f"  Resource copies    : {report.get('resource_copy_status', 'N/A')}",
+        f"  Resource copies    : {report.get('resource_copy_status', 'N/A')}  (missing: {report.get('missing_asset_count', 0)})",
+        f"  Asset root         : {report.get('systemui_asset_root', 'N/A')}",
         f"  Add resources      : {report.get('add_resource_status', 'N/A')}",
         f"  Layout patches     : {report.get('layout_status', 'N/A')}  ({report.get('layout_applied', 0)} blocks applied)",
         f"  Arsc patches       : {report.get('arsc_status', 'N/A')}  ({report.get('arsc_applied', 0)} entries applied)",
@@ -1151,15 +1164,29 @@ def apply_systemui_patch(
     print(f"[systemui_runner] Copying managed drawable/layout resources ...")
     resource_copy = _apply_resource_copy_rules(decompiled_dir, dry_run=False)
     report["resource_copy_status"] = resource_copy.get("status", "UNKNOWN")
+    report["systemui_asset_root"]  = resource_copy.get("asset_root", "UNKNOWN")
     report["copied_resource_count"] = resource_copy.get("copied", 0)
     report["copied_resource_by_folder"] = resource_copy.get("by_folder", {})
-    report["failed_missing_assets"] = resource_copy.get("missing_assets", [])
+    missing_assets = resource_copy.get("missing_assets", [])
+    report["failed_missing_assets"] = missing_assets
+    report["missing_asset_count"]   = len(missing_assets)
+    print(f"[systemui_runner] systemui_asset_root : {report['systemui_asset_root']}")
+    print(f"[systemui_runner] missing_asset_count : {report['missing_asset_count']}")
     if resource_copy.get("status") == "FAILED_MISSING_ASSET":
-        for missing in resource_copy.get("missing_assets", []):
-            errors.append(f"resource_copy: missing asset {missing.get('source')}")
-        report["final_status"] = "FAILED_MISSING_ASSET"
-        _write_reports(report)
-        return report
+        print(f"[systemui_runner] ERROR: required assets missing from {report['systemui_asset_root']}")
+        for entry in missing_assets[:20]:
+            src = entry.get("source", "?")
+            req = "REQUIRED" if entry.get("required", True) else "optional"
+            print(f"[systemui_runner]   [{req}] {src}")
+        for missing in missing_assets:
+            if missing.get("required", True):
+                errors.append(f"resource_copy: missing asset {missing.get('source')}")
+            else:
+                warnings.append(f"resource_copy: optional asset missing (skipped) {missing.get('source')}")
+        if any(m.get("required", True) for m in missing_assets):
+            report["final_status"] = "FAILED_MISSING_ASSET"
+            _write_reports(report)
+            return report
 
     # ── Step 3: Add resource XMLs ─────────────────────────────────────────────
     print(f"[systemui_runner] Merging managed add/ resource XMLs ...")
