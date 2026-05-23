@@ -37,7 +37,7 @@ _ALLOWED_PREFIXES: tuple[Path, ...] = (
 )
 
 _ALLOWED_SUFFIXES = (".md", ".txt", ".rst")
-_SKIP_DIRS = {".git", "__pycache__", ".mypy_cache", "node_modules"}
+_SKIP_DIRS = {".git", "__pycache__", ".mypy_cache", "node_modules", "output"}
 
 
 def _is_exempt(path: Path) -> bool:

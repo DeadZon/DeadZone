@@ -5,7 +5,7 @@ Legend/MiuiSystemUI/add/ then produces clean Python rule files under:
   factory/patch/legend/systemui/smali_added/    (313 added classes)
   factory/patch/legend/systemui/resources/      (layout + arsc + values rules)
   factory/patch/legend/systemui/dex/            (dex payload declarations)
-  factory/assets/legend/systemui/               (managed add/ XML assets + dex)
+  factory/patch/legend/assets/systemui/         (managed add/ XML assets + dex)
 
 Run once from repo root:
   python -m factory.patch.legend.systemui._generator_from_mtcr
@@ -24,7 +24,7 @@ REPO_ROOT   = Path(__file__).resolve().parents[4]
 MTCR_DIR    = REPO_ROOT / "Legend" / "MiuiSystemUI" / "compare"
 ADD_DIR     = REPO_ROOT / "Legend" / "MiuiSystemUI" / "add"
 OUT_ROOT    = REPO_ROOT / "factory" / "patch" / "legend" / "systemui"
-ASSETS_ROOT = REPO_ROOT / "factory" / "assets" / "legend" / "systemui"
+ASSETS_ROOT = REPO_ROOT / "factory" / "patch" / "legend" / "assets" / "systemui"
 
 TARGET_APK = "MiuiSystemUI.apk"
 
@@ -474,7 +474,7 @@ def gen_values_rules() -> None:
             type_counts[type_dir.name] = type_counts.get(type_dir.name, 0) + 1
             total += 1
 
-    print(f"[gen] Copied {total} add/ XMLs to factory/assets/legend/systemui/resources/")
+    print(f"[gen] Copied {total} add/ XMLs to factory/patch/legend/assets/systemui/resources/")
     for t, c in sorted(type_counts.items()):
         print(f"        {t}: {c} files")
 
@@ -487,7 +487,7 @@ def gen_values_rules() -> None:
         "Legend MiuiSystemUI add/ resource values rules.",
         "",
         "Points to managed factory assets at:",
-        "  factory/assets/legend/systemui/resources/com.android.systemui/",
+        "  factory/patch/legend/assets/systemui/resources/com.android.systemui/",
         "",
         "Runner merges all XML files from this asset path into the decompiled APK",
         "using the same logic as the original apply_add_resources().",
@@ -507,7 +507,7 @@ def gen_values_rules() -> None:
         "_REPO_ROOT = _HERE.parents[4]",
         "",
         "# Managed asset root — do NOT read from Legend/ at runtime",
-        "ASSETS_ROOT = _REPO_ROOT / 'factory' / 'assets' / 'legend' / 'systemui' / 'resources'",
+        "ASSETS_ROOT = _REPO_ROOT / 'factory' / 'patch' / 'legend' / 'assets' / 'systemui' / 'resources'",
         "ADD_RESOURCES_SRC = ASSETS_ROOT / 'com.android.systemui'",
         "",
         f"RESOURCE_TYPES = {sorted(type_counts.keys())!r}",
@@ -538,7 +538,7 @@ def gen_dex_payloads() -> None:
             shutil.copy2(src, dex_assets_dir / dex_name)
             size = src.stat().st_size
             payloads.append({"name": dex_name, "size": size})
-            print(f"[gen] Copied {dex_name} ({size} bytes) -> factory/assets/legend/systemui/dex/")
+            print(f"[gen] Copied {dex_name} ({size} bytes) -> factory/patch/legend/assets/systemui/dex/")
         else:
             print(f"[gen] WARNING: {dex_name} not found in add/")
 

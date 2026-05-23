@@ -32,13 +32,13 @@ Execution order (matches manifest execution_order section):
 
 CLI:
   # dry-run (default — nothing is changed):
-  python -m factory.patches.legend.os3.debloat_executor \\
+  python -m factory.patch.legend.mods.debloat.os3.debloat_executor \\
       --project path/to/unpacked_rom \\
       --flavor legend \\
       --os-family OS3
 
   # execute:
-  python -m factory.patches.legend.os3.debloat_executor \\
+  python -m factory.patch.legend.mods.debloat.os3.debloat_executor \\
       --project path/to/unpacked_rom \\
       --flavor legend \\
       --os-family OS3 \\
@@ -62,10 +62,10 @@ try:
 except ImportError:  # pragma: no cover
     yaml = None  # type: ignore[assignment]
 
-from factory.patches.legend.os3.legend_profile import guard as _profile_guard
+from factory.patch.legend.mods.debloat.os3.legend_profile import guard as _profile_guard
 
 _MANIFEST_PATH = Path(__file__).with_name("debloat_manifest.yml")
-_REPO_ROOT = Path(__file__).resolve().parents[4]
+_REPO_ROOT = Path(__file__).resolve().parents[6]
 _REPORTS_DIR = _REPO_ROOT / "output" / "reports"
 
 
@@ -736,4 +736,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-  

@@ -2,14 +2,4 @@ id: deadzone_legend
 name: DeadZone Legend
 output_prefix: DeadZone_Legend
 runner: factory.patch.legend.runner
-description: DeadZone Legend full mod package
-
-inherits:
-  - deadzone
-
-features:
-  max_features: true
-  premium_ui: true
-  full_mezo_app: true
-  advanced_overlay: true
-  debloat: custom
+description: DeadZone Legend full self-contained mod package

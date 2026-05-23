@@ -154,6 +154,27 @@ def run_legend(
         report["steps"]["props"] = {"errors": [str(exc)]}
     append_section("3. Props Patch", step_lines)
 
+    # ── Step 3b: Debloat (OS3 only — guard inside executor) ──────────────────
+    print("[legend_runner] Step 3b: debloat patch")
+    step_lines = []
+    try:
+        from factory.patch.legend.patchers.debloat_patcher import patch_debloat
+        os_family = str(ctx.get("os_family", "OS3"))
+        debloat_result = patch_debloat(
+            root, flavor,
+            os_family=os_family,
+            execute=execute,
+            report_lines=step_lines,
+        )
+        report["steps"]["debloat"] = debloat_result
+        if debloat_result.get("errors"):
+            report["warnings"].extend(debloat_result["errors"])
+    except Exception as exc:
+        step_lines.append(f"ERROR: {exc}")
+        report["warnings"].append(f"debloat_patcher: {exc}")
+        report["steps"]["debloat"] = {"errors": [str(exc)]}
+    append_section("3b. Debloat Patch", step_lines)
+
     # ── Step 4: APK mods ─────────────────────────────────────────────────────
     print("[legend_runner] Step 4: APK mods (Provision, SystemUI, PowerKeeper)")
     step_lines = []
