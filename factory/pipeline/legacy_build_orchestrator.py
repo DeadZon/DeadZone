@@ -175,6 +175,8 @@ def apply_legacy_build_pipeline(
     mi_incremental: str | None = None,
     vbmeta_mode: str | int | None = None,
     template_zip: Path | None = None,
+    os_family: str | None = None,
+    debloat_profile: str | None = None,
     execute: bool = False,
     telegram: bool = False,
 ) -> dict:
@@ -193,6 +195,7 @@ def apply_legacy_build_pipeline(
     stages = [
         _stage_record("unpack", "Unpack", critical=bool(rom_path)),
         _stage_record("common_rom_patches", "Common ROM patches"),
+        _stage_record("legend_os3_debloat", "Legend OS3 Debloat"),
         _stage_record("common_rom_assets", "Common ROM assets"),
         _stage_record("legend_jar", "Legend JAR"),
         _stage_record("provision_apk", "Provision APK"),
@@ -298,7 +301,52 @@ def apply_legacy_build_pipeline(
         stopped = stop_if_needed(common_stage, failed)
 
     if not stopped:
-        assets_stage = stages[2]
+        debloat_os3_stage = stages[2]
+        _os3_active = (
+            _is_legend(flavor)
+            and str(os_family or "").upper() in {"OS3", "HYPEROS3"}
+            and (debloat_profile or "").lower() == "legend_os3"
+        )
+        if not _os3_active:
+            _skip_reason = (
+                f"[LEGEND OS3] Profile skipped: not Legend OS3 "
+                f"(flavor={flavor!r}, os_family={os_family!r}, "
+                f"debloat_profile={debloat_profile!r})"
+            )
+            print(_skip_reason)
+            stage_reports[debloat_os3_stage["id"]] = _skip_stage(
+                debloat_os3_stage, _skip_reason
+            )
+            live.update(stages, current=debloat_os3_stage["name"])
+        else:
+            debloat_mod = _import_optional(
+                "factory.patches.legend.os3.debloat_executor"
+            )
+            if debloat_mod is None or not hasattr(
+                debloat_mod, "apply_legend_os3_debloat"
+            ):
+                stage_reports[debloat_os3_stage["id"]] = _skip_stage(
+                    debloat_os3_stage, "missing module: factory.patches.legend.os3.debloat_executor"
+                )
+                live.update(stages, current=debloat_os3_stage["name"])
+            else:
+                def debloat_os3_call() -> dict:
+                    return debloat_mod.apply_legend_os3_debloat(
+                        project_dir=project_dir,
+                        flavor=flavor,
+                        os_family=os_family or "OS3",
+                        debloat_profile=debloat_profile or "legend_os3",
+                        execute=execute,
+                    )
+
+                report, failed = _run_stage(
+                    debloat_os3_stage, stages, live, debloat_os3_call, execute=execute
+                )
+                stage_reports[debloat_os3_stage["id"]] = report
+                stopped = stop_if_needed(debloat_os3_stage, failed)
+
+    if not stopped:
+        assets_stage = stages[3]
         assets_mod = _import_optional("factory.patch.common_rom.assets_legacy")
         if assets_mod is None or not hasattr(assets_mod, "apply_common_rom_assets_legacy"):
             stage_reports[assets_stage["id"]] = _skip_stage(assets_stage, "missing module")
@@ -316,7 +364,7 @@ def apply_legacy_build_pipeline(
             stopped = stop_if_needed(assets_stage, failed)
 
     if not stopped:
-        jar_stage = stages[3]
+        jar_stage = stages[4]
         if not _is_legend(flavor):
             stage_reports[jar_stage["id"]] = _skip_stage(jar_stage, "non-Legend flavor")
             live.update(stages, current=jar_stage["name"])
@@ -359,7 +407,7 @@ def apply_legacy_build_pipeline(
                     stopped = stop_if_needed(jar_stage, failed)
 
     if not stopped:
-        provision_stage = stages[4]
+        provision_stage = stages[5]
 
         def provision_call() -> dict:
             from factory.patch.apk.provision_legacy import _write_reports, apply_provision_legacy_patch
@@ -383,7 +431,7 @@ def apply_legacy_build_pipeline(
         stopped = stop_if_needed(provision_stage, failed)
 
     if not stopped:
-        systemui_stage = stages[5]
+        systemui_stage = stages[6]
         if not _is_legend(flavor):
             stage_reports[systemui_stage["id"]] = _skip_stage(systemui_stage, "non-Legend flavor")
             live.update(stages, current=systemui_stage["name"])
@@ -405,7 +453,7 @@ def apply_legacy_build_pipeline(
                 stopped = stop_if_needed(systemui_stage, failed)
 
     if not stopped:
-        powerkeeper_stage = stages[6]
+        powerkeeper_stage = stages[7]
         if not _is_legend(flavor):
             stage_reports[powerkeeper_stage["id"]] = _skip_stage(powerkeeper_stage, "non-Legend flavor")
             live.update(stages, current=powerkeeper_stage["name"])
@@ -427,7 +475,7 @@ def apply_legacy_build_pipeline(
                 stopped = stop_if_needed(powerkeeper_stage, failed)
 
     if not stopped:
-        images_stage = stages[7]
+        images_stage = stages[8]
 
         def images_call() -> dict:
             from factory.images.pipeline_legacy import apply_images_vbmeta_legacy_stage
@@ -451,7 +499,7 @@ def apply_legacy_build_pipeline(
         stopped = stop_if_needed(images_stage, failed)
 
     if not stopped:
-        erofs_stage = stages[8]
+        erofs_stage = stages[9]
 
         def erofs_call() -> dict:
             from factory.repack.pipeline_erofs_legacy import apply_erofs_repack_legacy_stage
@@ -468,7 +516,7 @@ def apply_legacy_build_pipeline(
         stopped = stop_if_needed(erofs_stage, failed)
 
     if not stopped:
-        super_stage = stages[9]
+        super_stage = stages[10]
 
         def super_call() -> dict:
             from factory.repack.pipeline_super_legacy import apply_super_build_legacy_stage
@@ -509,7 +557,7 @@ def apply_legacy_build_pipeline(
         print(f"[legacy_pipeline] partition_staging_dir={partition_staging_dir}")
 
     if not stopped:
-        mtk_stage = stages[10]
+        mtk_stage = stages[11]
         if str(soc or "").lower() != "mtk":
             stage_reports[mtk_stage["id"]] = _skip_stage(mtk_stage, "non-MTK SoC")
             live.update(stages, current=mtk_stage["name"])
@@ -539,7 +587,7 @@ def apply_legacy_build_pipeline(
             stopped = stop_if_needed(mtk_stage, failed)
 
     if not stopped:
-        final_stage = stages[11]
+        final_stage = stages[12]
 
         def final_call() -> dict:
             from factory.output.final_zip_legacy import build_final_fastboot_zip
@@ -598,6 +646,8 @@ def apply_legacy_build_pipeline(
         "soc": soc,
         "platform": platform,
         "flavor": flavor,
+        "os_family": os_family,
+        "debloat_profile": debloat_profile,
         "android_version": android_version,
         "mi_incremental": mi_incremental,
         "project_dir": str(project_dir) if project_dir is not None else None,
@@ -641,6 +691,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--mi-version", dest="mi_version", default=None)
     parser.add_argument("--vbmeta-mode", default=None)
     parser.add_argument("--template-zip", type=Path, default=None)
+    parser.add_argument("--os-family", dest="os_family", default=None,
+                        help="OS family for profile selection (e.g. OS3, HyperOS3)")
+    parser.add_argument("--debloat-profile", dest="debloat_profile", default=None,
+                        help="Debloat profile key (e.g. legend_os3)")
     parser.add_argument("--telegram", action="store_true")
     parser.add_argument("--execute", action="store_true")
     return parser
@@ -661,6 +715,8 @@ def main(argv: list[str] | None = None) -> int:
         mi_incremental=args.mi_version,
         vbmeta_mode=args.vbmeta_mode,
         template_zip=args.template_zip,
+        os_family=args.os_family,
+        debloat_profile=args.debloat_profile,
         execute=args.execute,
         telegram=args.telegram,
     )
