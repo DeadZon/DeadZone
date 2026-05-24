@@ -34,6 +34,46 @@ from typing import Any, Optional
 _LEGEND_FLAVORS = frozenset({"legend", "deadzone_legend"})
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
+# ── Vendor safety rule ────────────────────────────────────────────────────────
+# Only fstab_patcher may touch vendor/.  Everything else is blocked.
+_VENDOR_ALLOWED_REL_PATHS: frozenset[str] = frozenset({
+    "vendor/etc/fstab.emmc",
+    "vendor/etc/fstab.mt6886",
+    "vendor/etc/fstab.emmc.dzlegend.bak",
+    "vendor/etc/fstab.mt6886.dzlegend.bak",
+})
+
+
+def _vendor_snapshot(root: Path) -> dict[str, tuple[int, float]]:
+    """Return {posix-rel-path: (size, mtime)} for every file under vendor/."""
+    vendor_dir = root / "vendor"
+    if not vendor_dir.is_dir():
+        return {}
+    snap: dict[str, tuple[int, float]] = {}
+    for f in vendor_dir.rglob("*"):
+        if f.is_file():
+            rel = f.relative_to(root).as_posix()
+            try:
+                st = f.stat()
+                snap[rel] = (st.st_size, st.st_mtime)
+            except OSError:
+                pass
+    return snap
+
+
+def _check_vendor_violations(
+    before: dict[str, tuple[int, float]],
+    after: dict[str, tuple[int, float]],
+) -> list[str]:
+    """Return sorted list of vendor/ paths that changed outside allowed set."""
+    violations: list[str] = []
+    for p in sorted(set(before) | set(after)):
+        if p in _VENDOR_ALLOWED_REL_PATHS:
+            continue
+        if before.get(p) != after.get(p):
+            violations.append(p)
+    return violations
+
 
 def run_legend(
     root: Path | str,
@@ -100,10 +140,14 @@ def run_legend(
         "steps": {},
         "warnings": [],
         "errors": [],
+        "vendor_violations": [],
         "final_status": "DRY_RUN" if not execute else "PENDING",
     }
 
     any_failed = False
+
+    # Snapshot vendor/ before any patches so we can detect unauthorised changes.
+    _vendor_before: dict[str, tuple[int, float]] = _vendor_snapshot(root) if execute else {}
 
     # ── Step 1: Validate Legend home ─────────────────────────────────────────
     print("[legend_runner] Step 1: validate Legend home")
@@ -241,6 +285,68 @@ def run_legend(
         report["warnings"].append(f"permissions_patcher: {exc}")
         report["steps"]["permissions"] = {"errors": [str(exc)]}
     append_section("7. Permissions Patch", step_lines)
+
+    # ── Step 8: Vendor safety check ──────────────────────────────────────────
+    print("[legend_runner] Step 8: vendor safety check")
+    step_lines = []
+    if execute:
+        _vendor_after = _vendor_snapshot(root)
+        vendor_violations = _check_vendor_violations(_vendor_before, _vendor_after)
+        report["vendor_violations"] = vendor_violations
+        if vendor_violations:
+            any_failed = True
+            for v in vendor_violations:
+                msg = f"VENDOR_SAFETY_VIOLATION: unauthorised vendor modification: {v}"
+                report["errors"].append(msg)
+                step_lines.append(f"BLOCKED: {v}")
+                print(f"[legend_runner] {msg}")
+            step_lines.insert(0, f"{len(vendor_violations)} blocked vendor modification(s):")
+        else:
+            step_lines.append("No unauthorised vendor modifications detected.")
+    else:
+        step_lines.append("DRY-RUN: vendor safety check skipped (no filesystem changes).")
+    step_lines.append(f"Vendor allowed paths: {sorted(_VENDOR_ALLOWED_REL_PATHS)}")
+    append_section("8. Vendor Safety Check", step_lines)
+
+    # ── Step 9: Flash map & safety summary ───────────────────────────────────
+    print("[legend_runner] Step 9: flash map & safety summary")
+    step_lines = []
+    try:
+        from factory.output.flash_scripts import FLASH_ORDER
+        step_lines.append(
+            f"Flash map: {len(FLASH_ORDER)} entries — strict _ab rule, no fallback targets"
+        )
+        for target, image in FLASH_ORDER:
+            step_lines.append(f"  {image} -> {target}")
+        step_lines.append("")
+        super_size = 9126805504
+        step_lines.append(f"Super size: {super_size} bytes ({super_size / 2**30:.2f} GiB)")
+        step_lines.append("Metadata source: pipeline (device registry + ROM incremental string)")
+        step_lines.append("")
+        step_lines.append("Vendor modifications allowed (fstab_patcher only):")
+        for p in sorted(_VENDOR_ALLOWED_REL_PATHS):
+            step_lines.append(f"  + {p}")
+        vendor_violations = report.get("vendor_violations", [])
+        if vendor_violations:
+            step_lines.append("")
+            step_lines.append("BLOCKED vendor modifications:")
+            for v in vendor_violations:
+                step_lines.append(f"  ! {v}")
+        else:
+            step_lines.append("")
+            step_lines.append("No blocked vendor modifications.")
+        step_lines.append("")
+        step_lines.append("Confirmation: no fallback flash targets used.")
+        report["steps"]["flash_map_summary"] = {
+            "flash_order_count": len(FLASH_ORDER),
+            "super_size": super_size,
+            "vendor_allowed": sorted(_VENDOR_ALLOWED_REL_PATHS),
+            "vendor_violations": vendor_violations,
+        }
+    except Exception as exc:
+        step_lines.append(f"ERROR generating flash map summary: {exc}")
+        report["warnings"].append(f"flash_map_summary: {exc}")
+    append_section("9. Flash Map & Safety Summary", step_lines)
 
     # ── Final status ──────────────────────────────────────────────────────────
     if execute:

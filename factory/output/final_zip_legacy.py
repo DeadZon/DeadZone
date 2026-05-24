@@ -372,6 +372,14 @@ def build_final_fastboot_zip(
             build_incremental=build_incremental,
             execute=False,
         )
+        if script_result.get("status") == "FAILED":
+            report["errors"].append(
+                f"flash script generation failed: {script_result.get('error', 'unknown error')}"
+            )
+            report["validation_status"] = "FAILED"
+            report["final_status"] = "FAILED"
+            report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
+            return report
         report["scripts_generated"] = script_result["scripts_generated"]
         report["zip_entries"] = planned_entries
         report["forbidden_entries"] = forbidden
@@ -409,6 +417,14 @@ def build_final_fastboot_zip(
         build_incremental=build_incremental,
         execute=True,
     )
+    if script_result.get("status") == "FAILED":
+        report["errors"].append(
+            f"flash script generation failed: {script_result.get('error', 'unknown error')}"
+        )
+        report["validation_status"] = "FAILED"
+        report["final_status"] = "FAILED"
+        report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
+        return report
     report["scripts_generated"] = script_result["scripts_generated"]
 
     staging_entries = [_normalize_entry(str(path.relative_to(staging_dir))) for path in _iter_staging_files(staging_dir)]

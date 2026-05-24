@@ -95,6 +95,17 @@ _REGION_MAP: dict[str, str] = {
 _SEP = "echo %C_CYAN%============================================================%C_RST%"
 _BLK = "echo."
 
+# Flavor → human-facing edition name.  Only known editions are allowed.
+_FLAVOR_EDITION_MAP: dict[str, str] = {
+    "legend": "Legend",
+    "deadzone_legend": "Legend",
+    "gaming": "Gaming",
+    "deadzone_gaming": "Gaming",
+    "epic": "Epic",
+    "deadzone_epic": "Epic",
+    "deadzone": "DeadZone",
+}
+
 
 # ── Metadata ─────────────────────────────────────────────────────────────────
 
@@ -102,19 +113,19 @@ _BLK = "echo."
 class FlashScriptMetadata:
     """All per-ROM metadata injected into generated BAT headers."""
 
-    flavor: str = "unknown"
-    device_codename: str = "unknown"
-    device_model: str = "unknown"
-    os_name: str = "Unknown OS"
-    android_version: str = "unknown"
-    build_incremental: str = "unknown"
-    region: str = "Unknown"
+    edition: str = ""
+    device_codename: str = ""
+    device_model: str = ""
+    os_name: str = ""
+    android_version: str = ""
+    build_incremental: str = ""
+    region: str = ""
     image_count: int = 0
 
     @staticmethod
     def detect_os_name(incremental: str | None) -> str:
         if not incremental:
-            return "Unknown OS"
+            return ""
         inc = incremental.upper()
         if "OS3" in inc:
             return "HyperOS 3"
@@ -124,18 +135,18 @@ class FlashScriptMetadata:
             return "HyperOS 1"
         if "MIUI" in inc:
             return "MIUI"
-        return "Unknown OS"
+        return ""
 
     @staticmethod
     def detect_region(incremental: str | None) -> str:
         if not incremental:
-            return "Unknown"
+            return ""
         parts = incremental.upper().split(".")
         suffix = parts[-1] if parts else ""
         for key, region in _REGION_MAP.items():
             if suffix.endswith(key):
                 return region
-        return "Unknown"
+        return ""
 
     @classmethod
     def build(
@@ -147,15 +158,46 @@ class FlashScriptMetadata:
         build_incremental: str | None = None,
         image_count: int = 0,
     ) -> "FlashScriptMetadata":
-        inc = build_incremental or ""
+        inc = (build_incremental or "").strip()
+        norm_flavor = (flavor or "").strip().lower().replace("-", "_")
+        edition = _FLAVOR_EDITION_MAP.get(norm_flavor, "")
+        os_name = cls.detect_os_name(inc)
+        region = cls.detect_region(inc)
+        resolved_model = (device_model or device_codename or "").strip()
+
+        errors: list[str] = []
+        if not edition:
+            errors.append(f"flavor {flavor!r} does not map to a known edition")
+        if not device_codename or device_codename.lower() in ("unknown", ""):
+            errors.append("device_codename is missing")
+        if not resolved_model or resolved_model.lower() in ("unknown", ""):
+            errors.append("device_model is missing")
+        if not os_name:
+            errors.append(
+                f"OS name could not be determined from build_incremental={inc!r}"
+            )
+        if not android_version or android_version.lower() in ("unknown", ""):
+            errors.append("android_version is missing")
+        if not inc or inc.lower() in ("unknown", ""):
+            errors.append("build_incremental is missing")
+        if not region:
+            errors.append(
+                f"region could not be determined from build_incremental={inc!r}"
+            )
+        if errors:
+            raise ValueError(
+                "flash script metadata validation failed — script generation aborted:\n"
+                + "\n".join(f"  - {e}" for e in errors)
+            )
+
         return cls(
-            flavor=flavor or "unknown",
-            device_codename=device_codename or "unknown",
-            device_model=device_model or device_codename or "unknown",
-            os_name=cls.detect_os_name(inc),
-            android_version=android_version or "unknown",
-            build_incremental=inc or "unknown",
-            region=cls.detect_region(inc),
+            edition=edition,
+            device_codename=device_codename,
+            device_model=resolved_model,
+            os_name=os_name,
+            android_version=android_version,
+            build_incremental=inc,
+            region=region,
             image_count=image_count,
         )
 
@@ -206,7 +248,7 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
         f"echo   Developer  : {DEVELOPER}",
         f"echo   Device     : {meta.device_codename}",
         f"echo   Model      : {meta.device_model}",
-        f"echo   Flavor     : {meta.flavor}",
+        f"echo   Edition    : {meta.edition}",
         f"echo   OS         : {meta.os_name}",
         f"echo   Android    : {meta.android_version}",
         f"echo   Build      : {meta.build_incremental}",
@@ -235,6 +277,27 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
         "echo %C_GREEN%[OK]%C_RST% Connected: %detected%",
         _BLK,
     ]
+
+
+def _preflight_image_checks(commands: list[tuple[str, str]]) -> list[str]:
+    """Emit image-existence guards that must pass before set_active or flash."""
+    lines: list[str] = [
+        _SEP,
+        "echo   [SECTION] Pre-flight Image Verification",
+        _SEP,
+    ]
+    for _, image in commands:
+        lines += [
+            f"if not exist \"images\\{image}\" (",
+            f"    echo %C_RED%[MISSING]%C_RST% images\\{image}",
+            f"    goto :missing_image",
+            f")",
+        ]
+    lines += [
+        "echo %C_GREEN%[OK]%C_RST% All required images present.",
+        _BLK,
+    ]
+    return lines
 
 
 def _run_flash_commands(commands: list[tuple[str, str]]) -> list[str]:
@@ -306,12 +369,24 @@ def _success_footer(message: str) -> list[str]:
         "echo %C_RED%============================================================%C_RST%",
         "echo [%DATE% %TIME%] FAILED >> \"%LOG_FILE%\" 2>nul",
         "exit /b 1",
+        "",
+        ":missing_image",
+        "color 0C",
+        _BLK,
+        "echo %C_RED%============================================================%C_RST%",
+        "echo   FAILED. A required image file is missing from images\\.",
+        "echo   Do not disconnect the device.",
+        "echo   Keep the phone in fastboot mode.",
+        "echo %C_RED%============================================================%C_RST%",
+        "echo [%DATE% %TIME%] MISSING_IMAGE >> \"%LOG_FILE%\" 2>nul",
+        "exit /b 1",
     ]
 
 
 def _script_text(kind: str, commands: list[tuple[str, str]], meta: FlashScriptMetadata) -> str:
     if kind == "clean":
         lines = _bat_header(meta, "Clean Install and Format Data")
+        lines += _preflight_image_checks(commands)
         lines += _run_flash_commands(commands)
         lines += _run_wipe_commands()
         lines += _success_footer("Clean install completed.")
@@ -323,6 +398,7 @@ def _script_text(kind: str, commands: list[tuple[str, str]], meta: FlashScriptMe
             _SEP,
             _BLK,
         ]
+        lines += _preflight_image_checks(commands)
         lines += _run_flash_commands(commands)
         lines += _success_footer("Upgrade install completed.")
     elif kind == "format":
@@ -357,14 +433,23 @@ def generate_windows_flash_scripts(
     staging_dir = Path(staging_dir)
     images_dir = Path(images_dir)
     commands = _present_flash_commands(images_dir)
-    meta = FlashScriptMetadata.build(
-        flavor=flavor,
-        device_codename=device,
-        device_model=device_model,
-        android_version=android_version,
-        build_incremental=build_incremental,
-        image_count=len(commands),
-    )
+    try:
+        meta = FlashScriptMetadata.build(
+            flavor=flavor,
+            device_codename=device,
+            device_model=device_model,
+            android_version=android_version,
+            build_incremental=build_incremental,
+            image_count=len(commands),
+        )
+    except ValueError as exc:
+        return {
+            "status": "FAILED",
+            "error": str(exc),
+            "scripts_generated": [],
+            "flash_commands": [],
+            "flash_command_count": 0,
+        }
     scripts = {
         "windows_install_and_format_data.bat": _script_text("clean", commands, meta),
         "windows_install_upgrade.bat": _script_text("upgrade", commands, meta),

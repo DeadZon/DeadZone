@@ -16,6 +16,24 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _LEGEND_FLAVORS = {"legend", "deadzone_legend"}
 
 
+def _lookup_device_model(device: str | None) -> str | None:
+    """Read model field from registry/devices/<soc>/<device>.yml without yaml dep."""
+    import re as _re
+    if not device:
+        return None
+    for subdir in ("mtk", "snapdragon"):
+        candidate = _REPO_ROOT / "registry" / "devices" / subdir / f"{device}.yml"
+        if candidate.is_file():
+            try:
+                text = candidate.read_text(encoding="utf-8")
+                m = _re.search(r"^model:\s*(.+)$", text, _re.MULTILINE)
+                if m:
+                    return m.group(1).strip()
+            except Exception:
+                pass
+    return None
+
+
 def _is_legend(flavor: str) -> bool:
     return flavor.lower().replace("-", "_") in _LEGEND_FLAVORS
 
@@ -588,7 +606,11 @@ def apply_legacy_build_pipeline(
                 device=device or "unknown",
                 flavor=flavor,
                 soc=soc,
+                platform=platform,
                 template_zip=template_zip,
+                device_model=_lookup_device_model(device),
+                android_version=android_version,
+                build_incremental=mi_incremental,
                 execute=execute,
             )
 
