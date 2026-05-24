@@ -1,0 +1,20 @@
+edition: gaming
+display_name: Gaming
+description: Gaming edition — performance and gaming-focused patches
+
+build_package:
+  required: false
+  env: GAMING_BUILD_URL
+  allowed_partitions:
+    - system
+    - product
+    - system_ext
+    - vendor
+    - odm
+    - mi_ext
+
+patchers:
+  - id: common_rom
+    module: factory.patch.common_rom.project_legacy
+    function: apply_common_project_legacy_patches
+    required: true

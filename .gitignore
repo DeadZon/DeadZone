@@ -1,13 +1,13 @@
-﻿__pycache__/
+__pycache__/
 *.pyc
 *.pyo
 
-work/
 output/
-tmp/
-rom/
-payload_extracted/
-downloads/
+!factory/output/
+!factory/output/**
+_output/
+_input_roms/
+*_unpacked/
 
 *.img
 *.zip
@@ -20,42 +20,52 @@ downloads/
 *.br
 
 .env
+.env.local
 *.key
 *.jks
 *.keystore
 
+# Edition build packages — large binary files, never commit
+factory/patch/editions/base/build/
+factory/patch/editions/base/*.zip
+factory/patch/editions/gaming/build/
+factory/patch/editions/gaming/*.zip
+factory/patch/editions/legend/build/
+factory/patch/editions/legend/*.zip
+factory/patch/editions/epic/build/
+factory/patch/editions/epic/*.zip
+
+# Legacy legend build location (kept as compat shim, build/ ignored)
+factory/patch/legend/build/
+factory/patch/legend/*.zip
+
+# Output work paths
+output/work/
+output/final/
+output/logs/
+output/reports/
+
+# Third-party private app data
 third_party/mezo_core/MEZO_APP/
 third_party/mezo_core/_asset_downloads/
 
-# Factory outputs and caches (never commit)
-output/
-!factory/output/
-!factory/output/*.py
-_input_roms/
-_asset_downloads/
+# Build artifacts and caches
 assets/cache/
-
-# Additional binary/archive types
 *.new.dat
 *.new.dat.br
 *.img.zst
 *.log
 logs/
 
-# Python
-.env
-.env.local
-
-.claude/
-
-# Legend build package — large binary files, never commit
-factory/patch/legend/build/
-factory/patch/legend/*.zip
-output/work/legend_build/
-
-# Local ROM reference / comparison folders -- never commit (anchored to repo root)
+# Local ROM reference / comparison folders — never commit
 /Legend/
 /DeadZone Fastboot Script/
 *_compare*/
 *_comparison*/
 *_reference*/
+
+# Python env
+.env
+
+# Claude IDE
+.claude/

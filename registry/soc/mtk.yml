@@ -1,6 +1,11 @@
 id: mtk
 name: MediaTek
 
+defaults:
+  super_size: 9126805504
+  slot_mode: VAB
+  super_output_format: sparse
+
 default_dynamic_group: qti_dynamic_partitions
 default_slot_mode: vab
 default_flash_profile: mtk_vab
@@ -9,10 +14,6 @@ default_vbmeta_policy: binary_flags_3
 engine:
   name: mtk_engine
   base: mezo_legacy_engine
-  flash_scripts:
-    - "third_party/mezo_core/flash/windows_install_upgrade.bat"
-    - "third_party/mezo_core/flash/windows_install_and_format_data.bat"
-    - "third_party/mezo_core/flash/windows_format_data_only.bat"
 
 required_images:
   - apusys.img

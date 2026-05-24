@@ -3,133 +3,38 @@ name: DeadZone Snapdragon Factory
 on:
   workflow_dispatch:
     inputs:
-      rom_url:
-        description: "ROM download URL"
-        required: true
-        type: string
-
-      device:
-        description: "Snapdragon device codename"
+      codename:
+        description: "Snapdragon device codename (e.g. garnet)"
         required: true
         type: choice
         default: select_device_codename
         options:
           - select_device_codename
-          - "amethyst | Redmi Note 14 Pro+ 5G"
-          - "aurora | Xiaomi 14 Ultra"
-          - "babylon | Xiaomi MIX Fold 3"
-          - "breeze | Redmi 13 5G / Redmi Note 13R / POCO M6 Plus 5G"
-          - "chenfeng | Xiaomi Civi 4 Pro"
-          - "cupid | Xiaomi 12"
-          - "dada | Xiaomi 15"
-          - "dagu | Xiaomi Pad 5 Pro 12.4"
-          - "diting | Xiaomi 12T Pro / Redmi K50 Ultra"
-          - "dizi | Redmi Pad Pro"
-          - "flame | Redmi 14R 5G / Redmi 14C 5G / POCO M7 5G"
-          - "fuxi | Xiaomi 13"
-          - "garnet | Redmi Note 13 Pro 5G / POCO X6 5G"
-          - "goku | Xiaomi MIX Fold 4"
-          - "haotian | Xiaomi 15 Pro"
-          - "haydn | Redmi K40 Pro / K40 Pro+ / Mi 11i"
-          - "houji | Xiaomi 14"
-          - "ingres | Redmi K50 Gaming / POCO F4 GT"
-          - "ishtar | Xiaomi 13 Ultra"
-          - "lisa | Xiaomi 11 Lite 5G NE"
-          - "liuqin | Xiaomi Pad 6 Pro"
-          - "marble | Redmi Note 12 Turbo / POCO F5"
-          - "mayfly | Xiaomi 12S"
-          - "miro | Redmi K80 Pro / POCO F7 Ultra"
-          - "mondrian | Redmi K60 / POCO F5 Pro"
-          - "moonstone | POCO X5 5G"
-          - "munch | Redmi K40S / POCO F4"
-          - "muyu | Xiaomi Pad 7 Pro"
-          - "myron | Redmi K90 Pro Max / POCO F8 Ultra"
-          - "nezha | Xiaomi 17 Ultra"
-          - "nuwa | Xiaomi 13 Pro"
-          - "odin | Xiaomi MIX 4"
-          - "onyx | Redmi Turbo 4 Pro / POCO F7"
-          - "pandora | Xiaomi 17 Pro"
-          - "peridot | Redmi Turbo 3 / POCO F6"
-          - "piano | Xiaomi Pad 8 Pro"
-          - "pipa | Xiaomi Pad 6"
-          - "popsicle | Xiaomi 17 Pro Max"
-          - "pudding | Xiaomi 17"
-          - "redwood | Redmi Note 12 Pro Speed / POCO X5 Pro 5G"
-          - "ruan | Redmi Pad Pro 5G / POCO Pad 5G"
-          - "sapphire | Redmi Note 13 4G"
-          - "sapphiren | Redmi Note 13 4G NFC"
-          - "sheng | Xiaomi Pad 6S Pro 12.4"
-          - "shennong | Xiaomi 14 Pro"
-          - "sky | Redmi 12 5G / Redmi Note 12R / POCO M6 Pro 5G"
-          - "socrates | Redmi K60 Pro"
-          - "star | Xiaomi Mi 11 Ultra"
-          - "sunstone | Redmi Note 12 5G / Redmi Note 12R Pro"
-          - "taoyao | Xiaomi 12 Lite 5G"
-          - "tapas | Redmi Note 12 4G"
-          - "thor | Xiaomi 12S Ultra"
-          - "topaz | Redmi Note 12 4G NFC"
-          - "uke | Xiaomi Pad 7"
-          - "unicorn | Xiaomi 12S Pro"
-          - "venus | Xiaomi Mi 11"
-          - "vermeer | Redmi K70"
-          - "vili | Xiaomi 11T Pro"
-          - "xuanyuan | Xiaomi 15 Ultra"
-          - "xun | Redmi Pad SE"
-          - "yudi | Xiaomi Pad 6 Max 14"
-          - "yupei | Xiaomi Pad 8"
-          - "zeus | Xiaomi 12 Pro"
-          - "zijin | Xiaomi Civi 1S"
-          - "ziyi | Xiaomi 13 Lite / Xiaomi Civi 2"
-          - "zizhan | Xiaomi MIX Fold 2"
-          - "zorn | Redmi K80 / POCO F7 Pro"
+          - garnet
 
-      custom_device:
-        description: "Optional custom codename. If set, overrides the selected device."
+      custom_codename:
+        description: "Optional custom codename (overrides selection)"
         required: false
         type: string
 
-      final_name:
-        description: "Final build name (e.g. DeadZone_Legend_V1)"
-        required: true
-        type: string
-
-      platform:
-        description: "ROM platform (e.g. os3_a16)"
-        required: true
-        type: string
-        default: os3_a16
-
-      flavor:
-        description: "DeadZone flavor"
+      edition:
+        description: "ROM edition"
         required: true
         type: choice
-        default: legend
+        default: base
         options:
           - base
           - gaming
-          - epic
           - legend
+          - epic
 
-      android_version:
-        description: "Android version number"
+      rom_url:
+        description: "ROM download URL"
         required: true
         type: string
-        default: "16"
-
-      mi_version:
-        description: "MI/OS incremental version string"
-        required: true
-        type: string
-        default: OS3.0.303.0.WNOCNXM
-
-      vbmeta_mode:
-        description: "vbmeta patch mode"
-        required: true
-        type: string
-        default: "3"
 
       mode:
-        description: "dry_run = plan only (safe) | execute = real build"
+        description: "dry_run = plan only | execute = real build"
         required: true
         type: choice
         default: dry_run
@@ -137,567 +42,69 @@ on:
           - dry_run
           - execute
 
+      upload_pixeldrain:
+        description: "Upload to PixelDrain after build"
+        required: true
+        type: boolean
+        default: true
+
       notify_telegram:
         description: "Send Telegram notifications"
         required: true
         type: boolean
         default: true
 
-      runner_label:
-        description: "GitHub runner label. Use ubuntu-latest unless a larger runner is configured."
-        required: true
-        type: string
-        default: ubuntu-latest
-
 jobs:
-  snapdragon-factory:
-    name: "Snapdragon | ${{ inputs.final_name }} | ${{ inputs.platform }} | ${{ inputs.flavor }}"
-    runs-on: ${{ inputs.runner_label }}
-    timeout-minutes: 360
-
-    env:
-      SOC: snapdragon
-      PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
-      TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID || secrets.TELEGRAM_SNAPDRAGON_THREAD_ID || secrets.TELEGRAM_MESSAGE_THREAD_ID }}
-      DZ_FACTORY_NAME: DeadZone Snapdragon Factory
-      DZ_MODE: ${{ inputs.mode }}
-      DZ_NOTIFY: ${{ inputs.notify_telegram }}
-      DZ_BUILD: ${{ inputs.final_name }}
-      DZ_DEVICE: ${{ inputs.custom_device || inputs.device }}
+  trigger-fly-build:
+    name: "Snapdragon | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install factory requirements
-        run: |
-          python -m pip install --upgrade pip wheel
-          python -m pip install -r requirements.txt
-
-      # ── Write Telegram live helper and send initial status ───────────────────
-
-      - name: Telegram live start
-        run: |
-          cat > _dz_tg.py << 'PYEOF'
-          """DeadZone factory Telegram live status helper."""
-          import json
-          import os
-          import sys
-          import urllib.error
-          import urllib.request
-
-          _TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-          _CHAT = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
-          _THREAD = (
-              os.environ.get("TELEGRAM_THREAD_ID", "")
-              or os.environ.get("TELEGRAM_MESSAGE_THREAD_ID", "")
-          ).strip()
-          _NOTIFY = os.environ.get("DZ_NOTIFY", "true").strip().lower()
-          _GH_ENV = os.environ.get("GITHUB_ENV", "")
-          _FACTORY = os.environ.get("DZ_FACTORY_NAME", "DeadZone Factory")
-          _MODE = os.environ.get("DZ_MODE", "")
-
-
-          def _usable():
-              if _NOTIFY not in ("true", "1", "yes"):
-                  return False
-              return bool(_TOKEN and _CHAT)
-
-
-          def _post(method, payload):
-              url = f"https://api.telegram.org/bot{_TOKEN}/{method}"
-              data = json.dumps(payload, ensure_ascii=True).encode()
-              req = urllib.request.Request(
-                  url, data=data, headers={"Content-Type": "application/json"}
-              )
-              try:
-                  with urllib.request.urlopen(req, timeout=20) as resp:
-                      return json.loads(resp.read().decode())
-              except urllib.error.HTTPError as exc:
-                  body = exc.read().decode(errors="replace")
-                  if "message is not modified" in body.lower():
-                      return {"ok": True}
-                  print(f"[TG] HTTP {exc.code}: {body[:200]}", file=sys.stderr)
-                  return {"ok": False}
-              except Exception as exc:
-                  print(f"[TG] Error: {exc}", file=sys.stderr)
-                  return {"ok": False}
-
-
-          def _make_text(status, current="", extra=""):
-              build = os.environ.get("FINAL_NAME") or os.environ.get("DZ_BUILD", "")
-              device = (
-                  os.environ.get("EFFECTIVE_DEVICE") or os.environ.get("DZ_DEVICE", "")
-              ).split(" | ")[0].strip()
-              mode = os.environ.get("DZ_MODE", _MODE)
-              lines = [
-                  _FACTORY,
-                  f"Build: {build}",
-                  f"Device: {device}",
-                  f"Mode: {mode}",
-                  f"Status: {status}",
-              ]
-              if current:
-                  lines.append(f"Current: {current}")
-              if extra:
-                  lines.append(extra)
-              return "\n".join(lines)
-
-
-          def do_send(text):
-              if not _usable():
-                  print("[TG] Telegram live status disabled")
-                  return
-              payload = {"chat_id": _CHAT, "text": text}
-              if _THREAD:
-                  try:
-                      payload["message_thread_id"] = int(_THREAD)
-                  except ValueError:
-                      pass
-              resp = _post("sendMessage", payload)
-              if resp.get("ok"):
-                  mid = resp.get("result", {}).get("message_id")
-                  print(f"[TG] Message sent (id={mid})")
-                  if mid and _GH_ENV:
-                      with open(_GH_ENV, "a", encoding="utf-8") as fh:
-                          fh.write(f"DEADZONE_TELEGRAM_MESSAGE_ID={mid}\n")
-              else:
-                  print(f"[TG] Send failed (non-fatal): {resp}", file=sys.stderr)
-
-
-          def do_edit(text):
-              if not _usable():
-                  return
-              mid = os.environ.get("DEADZONE_TELEGRAM_MESSAGE_ID", "").strip()
-              if not mid:
-                  print("[TG] Edit skipped: no DEADZONE_TELEGRAM_MESSAGE_ID")
-                  return
-              try:
-                  mid_int = int(mid)
-              except ValueError:
-                  print(f"[TG] Edit skipped: invalid message id: {mid}", file=sys.stderr)
-                  return
-              payload = {"chat_id": _CHAT, "message_id": mid_int, "text": text}
-              if _THREAD:
-                  try:
-                      payload["message_thread_id"] = int(_THREAD)
-                  except ValueError:
-                      pass
-              resp = _post("editMessageText", payload)
-              if resp.get("ok"):
-                  print(f"[TG] Message updated (id={mid})")
-              else:
-                  print(f"[TG] Edit failed (non-fatal): {resp}", file=sys.stderr)
-
-
-          if __name__ == "__main__":
-              if len(sys.argv) < 2:
-                  print("Usage: python _dz_tg.py send|edit STATUS [CURRENT] [EXTRA]")
-                  sys.exit(0)
-              action = sys.argv[1]
-              status = sys.argv[2] if len(sys.argv) > 2 else "UNKNOWN"
-              current = sys.argv[3] if len(sys.argv) > 3 else ""
-              extra = sys.argv[4] if len(sys.argv) > 4 else ""
-              text = _make_text(status, current, extra)
-              if action == "send":
-                  do_send(text)
-              elif action == "edit":
-                  do_edit(text)
-              else:
-                  print(f"[TG] Unknown action: {action}", file=sys.stderr)
-                  sys.exit(1)
-          PYEOF
-          python _dz_tg.py send STARTING "Preparing runner" || true
-
-      # ── Validate canonical fastboot template ─────────────────────────────────
-
-      - name: Validate fastboot template
-        run: |
-          python _dz_tg.py edit VALIDATING_TEMPLATE "Checking fastboot template" || true
-          TEMPLATE="third_party/mezo_core/templates/deadzone_fastboot"
-          MISSING=0
-          for f in bin/windows/fastboot.exe bin/windows/AdbWinApi.dll bin/windows/AdbWinUsbApi.dll; do
-            if [ ! -f "$TEMPLATE/$f" ]; then
-              echo "[ERROR] Missing template file: $TEMPLATE/$f"
-              MISSING=1
-            fi
-          done
-          if [ "$MISSING" = "1" ]; then
-            echo "[ERROR] Canonical fastboot template is incomplete: $TEMPLATE"
-            echo "[ERROR] Required files: bin/windows/fastboot.exe  AdbWinApi.dll  AdbWinUsbApi.dll"
-            python _dz_tg.py edit FAILED "Fastboot template files missing" || true
-            exit 1
-          fi
-          echo "[OK] Fastboot template validated: $TEMPLATE"
-
-      # ── Validate registry ────────────────────────────────────────────────────
-
-      - name: Validate registry
-        run: |
-          python _dz_tg.py edit VALIDATING_INPUTS "Validating device registry" || true
-          python -m factory.cli validate-registry
-
-      # ── Resolve device and flavor ────────────────────────────────────────────
-
-      - name: Resolve device and flavor
+      - name: Resolve codename
         id: resolve
         run: |
-          CUSTOM="${{ inputs.custom_device }}"
-          SELECTED="${{ inputs.device }}"
-
+          CUSTOM="${{ inputs.custom_codename }}"
+          SELECTED="${{ inputs.codename }}"
           if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "select_device_codename" ]; then
-            EFFECTIVE_DEVICE="$CUSTOM"
+            CODENAME="$CUSTOM"
           else
-            EFFECTIVE_DEVICE="${SELECTED%% | *}"
+            CODENAME="$SELECTED"
           fi
-
-          if [ -z "$EFFECTIVE_DEVICE" ] || [ "$EFFECTIVE_DEVICE" = "select_device_codename" ]; then
-            echo "[ERROR] Please select a device codename or provide custom_device."
-            python _dz_tg.py edit FAILED "No device codename selected" || true
+          if [ -z "$CODENAME" ] || [ "$CODENAME" = "select_device_codename" ]; then
+            echo "[ERROR] Select a device codename or provide custom_codename"
             exit 1
           fi
+          echo "codename=$CODENAME" >> "$GITHUB_OUTPUT"
 
-          case "${{ inputs.flavor }}" in
-            base)   FLAVOR="deadzone"        ;;
-            gaming) FLAVOR="deadzone_gaming" ;;
-            epic)   FLAVOR="deadzone_epic"   ;;
-            legend) FLAVOR="deadzone_legend" ;;
-            *)      FLAVOR="${{ inputs.flavor }}" ;;
-          esac
-
-          echo "EFFECTIVE_DEVICE=$EFFECTIVE_DEVICE" >> "$GITHUB_ENV"
-          echo "FLAVOR=$FLAVOR"                     >> "$GITHUB_ENV"
-          echo "FINAL_NAME=${{ inputs.final_name }}" >> "$GITHUB_ENV"
-          echo "effective_device=$EFFECTIVE_DEVICE" >> "$GITHUB_OUTPUT"
-          echo "[INFO] device=$EFFECTIVE_DEVICE  flavor=$FLAVOR  build=${{ inputs.final_name }}"
-          python _dz_tg.py edit VALIDATING_INPUTS "Inputs resolved: device=$EFFECTIVE_DEVICE" || true
-
-      # ── Free disk space (execute only) ───────────────────────────────────────
-
-      - name: Free disk space
-        if: inputs.mode == 'execute'
+      - name: Send build job to Fly builder
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
-          docker system prune -af || true
-          df -h
-
-      # ── Install system dependencies (execute only) ───────────────────────────
-
-      - name: Install system dependencies
-        if: inputs.mode == 'execute'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            openjdk-17-jre zip unzip p7zip-full \
-            zstd brotli lz4 \
-            file ca-certificates curl wget erofs-utils
-
-      # ── Install MEZO requirements (execute only) ─────────────────────────────
-
-      - name: Install MEZO requirements
-        if: inputs.mode == 'execute'
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          src = Path("third_party/mezo_core/requirements.txt")
-          dst = Path("third_party/mezo_core/.requirements.ci.txt")
-          if not src.is_file():
-              src.write_text(
-                  "cryptography>=42.0.0\nhttpx>=0.27.0\nprotobuf>=4.25.0\n"
-                  "pycryptodome>=3.19.0\nrequests>=2.31.0\ntoml>=0.10.2\n"
-                  "zstandard>=0.22.0\nbrotli>=1.1.0\n",
-                  encoding="utf-8", newline="\n",
-              )
-          lines = src.read_text(encoding="utf-8-sig", errors="ignore").splitlines()
-          cleaned = []
-          found_brotli = False
-          for line in lines:
-              raw = line.strip()
-              low = raw.lower()
-              if not raw or raw.startswith("#"):
-                  cleaned.append(line)
-                  continue
-              if low.startswith("lzma") or low.startswith("google"):
-                  continue
-              if low.startswith("brotli"):
-                  found_brotli = True
-              cleaned.append(raw)
-          if not found_brotli:
-              cleaned.append("brotli>=1.1.0")
-          dst.write_text("\n".join(cleaned) + "\n", encoding="utf-8", newline="\n")
-          PY
-          python -m pip install -r third_party/mezo_core/.requirements.ci.txt
-
-      # ── Prepare MEZO tools (execute only) ────────────────────────────────────
-
-      - name: Prepare MEZO tools
-        if: inputs.mode == 'execute'
-        working-directory: third_party/mezo_core
-        run: |
-          find bin -type f -exec chmod +x {} \; || true
-          python -m py_compile MEZOBuildRom.py
-          mkdir -p MEZO_APP/product MEZO_APP/system MEZO_APP/appMod
-          mkdir -p MEZO_APP/OS3_A16 MEZO_APP/OS3_A15 MEZO_APP/OS2_A15
-          mkdir -p MEZO_APP/OS2_A14 MEZO_APP/OS1_A14
-          echo "MEZO core ready."
-
-      # ── Download ROM ──────────────────────────────────────────────────────────
-
-      - name: Download ROM
-        run: |
-          python _dz_tg.py edit DOWNLOADING_ROM "Downloading ROM" || true
-          mkdir -p _input_roms
-          python - <<'PY'
-          import urllib.parse, urllib.request
-          from pathlib import Path
-          url = "${{ inputs.rom_url }}"
-          parsed_name = Path(urllib.parse.urlparse(url).path).name
-          name = urllib.parse.unquote(parsed_name) if parsed_name else "input_rom.zip"
-          if not name or name in ("/", "."):
-              name = "input_rom.zip"
-          out = Path("_input_roms") / name
-          print(f"[ROM] Downloading: {url}", flush=True)
-          print(f"[ROM] Saving to  : {out}", flush=True)
-          req = urllib.request.Request(url, headers={"User-Agent": "DeadZoneFactory/1.0"})
-          with urllib.request.urlopen(req, timeout=1800) as resp:
-              total     = resp.headers.get("Content-Length")
-              total_int = int(total) if total and total.isdigit() else 0
-              done      = 0
-              with out.open("wb") as f:
-                  while True:
-                      chunk = resp.read(1024 * 1024)
-                      if not chunk:
-                          break
-                      f.write(chunk)
-                      done += len(chunk)
-                      if total_int:
-                          pct = done * 100 / total_int
-                          print(f"[ROM] {done/1024/1024:.1f} MiB / {total_int/1024/1024:.1f} MiB ({pct:.1f}%)", flush=True)
-                      else:
-                          print(f"[ROM] {done/1024/1024:.1f} MiB downloaded", flush=True)
-          print(f"[ROM] Done: {out} ({out.stat().st_size} bytes)", flush=True)
-          PY
-          echo "ROM files:"
-          ls -lah _input_roms
-          python _dz_tg.py edit ROM_DOWNLOADED "ROM download complete" || true
-
-      # ── Device/ROM mismatch guard (execute only) ──────────────────────────────
-
-      - name: Device/ROM mismatch guard
-        if: inputs.mode == 'execute'
-        run: |
-          python _dz_tg.py edit PREFLIGHT "Running device/ROM mismatch guard" || true
-          python - <<'PY'
-          import sys, yaml
-          from pathlib import Path
-          device = "${{ steps.resolve.outputs.effective_device }}".lower().strip()
-          rom_files = [f for f in Path("_input_roms").iterdir() if f.is_file()]
-          if not rom_files:
-              print("[DEVICE GUARD] No ROM file found — guard skipped.")
-              sys.exit(0)
-          rom_filename = rom_files[0].name.lower()
-          print(f"[DEVICE GUARD] Selected device : {device}")
-          print(f"[DEVICE GUARD] ROM filename    : {rom_filename}")
-          from factory.core.paths import REGISTRY_ROOT
-          group_yml = REGISTRY_ROOT / "device_groups" / "snapdragon.yml"
-          known = set()
-          if group_yml.exists():
-              with group_yml.open() as fh:
-                  data = yaml.safe_load(fh)
-              for entry in data.get("devices", []):
-                  c = entry.get("codename", "")
-                  if c:
-                      known.add(c.lower())
-          detected = None
-          for codename in known:
-              if (
-                  rom_filename.startswith(f"{codename}-") or
-                  rom_filename.startswith(f"{codename}_") or
-                  f"_{codename}-" in rom_filename or
-                  f"_{codename}_" in rom_filename or
-                  f"-{codename}-" in rom_filename
-              ):
-                  detected = codename
-                  break
-          if detected is None:
-              print("[DEVICE GUARD] Could not detect codename from ROM filename — warning only, continuing.")
-              sys.exit(0)
-          print(f"[DEVICE GUARD] Detected ROM device: {detected}")
-          if detected != device:
-              print(f"[DEVICE GUARD] MISMATCH: selected={device}  detected={detected}")
-              print("[DEVICE GUARD] Refusing to build mismatched ROM.")
-              sys.exit(1)
-          print(f"[DEVICE GUARD] Device match confirmed: {device}")
-          PY
-
-      # ── Build pipeline (dry_run) ──────────────────────────────────────────────
-
-      - name: Build pipeline (dry_run)
-        if: inputs.mode == 'dry_run'
-        run: |
-          ROM_FILE="$(find _input_roms -type f | head -n 1)"
-          [ -z "$ROM_FILE" ] && { echo "[ERROR] No ROM in _input_roms"; exit 1; }
-          TELEGRAM_FLAG=""
-          if [ "${{ inputs.notify_telegram }}" = "true" ] && \
-             [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            TELEGRAM_FLAG="--telegram"
-          fi
-          python _dz_tg.py edit RUNNING_PIPELINE "Running dry-run pipeline" || true
-          python -m factory.pipeline.legacy_build_orchestrator \
-            --rom           "$ROM_FILE" \
-            --output-dir    output \
-            --build-name    "$FINAL_NAME" \
-            --device        "$EFFECTIVE_DEVICE" \
-            --soc           "$SOC" \
-            --platform      "${{ inputs.platform }}" \
-            --flavor        "$FLAVOR" \
-            --android-version "${{ inputs.android_version }}" \
-            --mi-version    "${{ inputs.mi_version }}" \
-            --vbmeta-mode   "${{ inputs.vbmeta_mode }}" \
-            --template-zip  third_party/mezo_core/templates/deadzone_fastboot \
-            $TELEGRAM_FLAG
-
-      # ── Build pipeline (execute) ──────────────────────────────────────────────
-
-      - name: Build pipeline (execute)
-        if: inputs.mode == 'execute'
-        run: |
-          ROM_FILE="$(find _input_roms -type f | head -n 1)"
-          [ -z "$ROM_FILE" ] && { echo "[ERROR] No ROM in _input_roms"; exit 1; }
-          TELEGRAM_FLAG=""
-          if [ "${{ inputs.notify_telegram }}" = "true" ] && \
-             [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
-            TELEGRAM_FLAG="--telegram"
-          fi
-          python _dz_tg.py edit RUNNING_PIPELINE "Running execute pipeline" || true
-          python -m factory.pipeline.legacy_build_orchestrator \
-            --rom           "$ROM_FILE" \
-            --output-dir    output \
-            --build-name    "$FINAL_NAME" \
-            --device        "$EFFECTIVE_DEVICE" \
-            --soc           "$SOC" \
-            --platform      "${{ inputs.platform }}" \
-            --flavor        "$FLAVOR" \
-            --android-version "${{ inputs.android_version }}" \
-            --mi-version    "${{ inputs.mi_version }}" \
-            --vbmeta-mode   "${{ inputs.vbmeta_mode }}" \
-            --template-zip  third_party/mezo_core/templates/deadzone_fastboot \
-            --execute \
-            $TELEGRAM_FLAG
-
-      # ── Cleanup staging and temp files (always) ───────────────────────────────
-
-      - name: Cleanup staging and temp files
-        if: always()
-        run: |
-          python _dz_tg.py edit CLEANING_OUTPUT "Removing staging and temp files" || true
-          echo "[CLEANUP] Disk usage before cleanup:"
-          df -h
-          du -h -d 2 output 2>/dev/null || true
-          du -h -d 1 _input_roms 2>/dev/null || true
-          rm -rf _input_roms/ || true
-          find output -maxdepth 3 -name '*_unpacked' -type d -exec rm -rf {} + 2>/dev/null || true
-          rm -rf output/tmp output/work || true
-          find output/final -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
-          echo "[CLEANUP] Disk usage after staging cleanup:"
-          df -h
-
-      # ── Upload final ZIP to PixelDrain (execute + success only) ──────────────
-      # Retries 3 times with 25s delay. On all-retries-exhausted the step still
-      # exits 0 so the workflow is marked success; error is saved for Telegram.
-
-      - name: Upload to PixelDrain
-        if: inputs.mode == 'execute' && success()
-        run: |
-          python _dz_tg.py edit UPLOADING_PIXELDRAIN "Uploading to PixelDrain" || true
-          FINAL_ZIP="$(find output/final -maxdepth 1 -name '*.zip' -type f 2>/dev/null | head -n 1)"
-          if [ -z "$FINAL_ZIP" ]; then
-            echo "[ERROR] No final ZIP found in output/final after execute pipeline."
-            python _dz_tg.py edit FAILED "PixelDrain upload failed: final ZIP not found" || true
+          PAYLOAD=$(cat <<EOF
+          {
+            "codename": "${{ steps.resolve.outputs.codename }}",
+            "edition": "${{ inputs.edition }}",
+            "rom_url": "${{ inputs.rom_url }}",
+            "mode": "${{ inputs.mode }}",
+            "upload_pixeldrain": ${{ inputs.upload_pixeldrain }},
+            "notify_telegram": ${{ inputs.notify_telegram }}
+          }
+          EOF
+          )
+          echo "[FACTORY] Sending job to Fly builder..."
+          echo "[FACTORY] Codename : ${{ steps.resolve.outputs.codename }}"
+          echo "[FACTORY] Edition  : ${{ inputs.edition }}"
+          echo "[FACTORY] Mode     : ${{ inputs.mode }}"
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "${{ secrets.FLY_BUILDER_URL }}/build" \
+            -H "Authorization: Bearer ${{ secrets.BUILDER_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "[FACTORY] Response: $BODY"
+          if [ "$HTTP_STATUS" != "202" ]; then
+            echo "[ERROR] Fly builder returned HTTP $HTTP_STATUS"
             exit 1
           fi
-          echo "[PIXELDRAIN] Uploading: $FINAL_ZIP"
-          mkdir -p output/reports
-          set +e
-          python -m factory.services.pixeldrain_upload "$FINAL_ZIP"
-          PD_EXIT=$?
-          set -e
-          if [ "$PD_EXIT" = "0" ]; then
-            PD_LINK="$(python - <<'PY'
-          import json
-          from pathlib import Path
-          sidecar = Path("output/reports/pixeldrain_upload.json")
-          if sidecar.exists():
-              data = json.loads(sidecar.read_text(encoding="utf-8"))
-              print(data.get("link", ""), end="")
-          PY
-          )"
-            if [ -n "$PD_LINK" ]; then
-              echo "[PIXELDRAIN] Link: $PD_LINK"
-              echo "$PD_LINK" > output/reports/pixeldrain_link.txt
-            fi
-            rm -rf output/images/ output/work/ output/tmp/ _input_roms/ || true
-            find output/final -name '*.zip' -delete 2>/dev/null || true
-            echo "[CLEANUP] Post-upload cleanup complete."
-          else
-            python - <<'PY'
-          import json, sys
-          from pathlib import Path
-          sidecar = Path("output/reports/pixeldrain_upload.json")
-          err = "unknown error"
-          if sidecar.exists():
-              data = json.loads(sidecar.read_text(encoding="utf-8"))
-              err = data.get("error", "unknown error")
-          Path("output/reports").mkdir(parents=True, exist_ok=True)
-          Path("output/reports/pixeldrain_error.txt").write_text(err, encoding="utf-8")
-          print("[PIXELDRAIN] All attempts failed. Error: " + err, file=sys.stderr)
-          PY
-          fi
-          echo "[PIXELDRAIN] Disk usage:"
-          df -h
-          du -h -d 2 output 2>/dev/null || true
-
-      # ── Telegram: uploading reports ───────────────────────────────────────────
-
-      - name: Telegram update - uploading reports
-        if: success()
-        run: python _dz_tg.py edit UPLOADING_REPORTS "Uploading reports artifact" || true
-
-      # ── Upload reports artifact (always, reports/logs only) ───────────────────
-
-      - name: Upload reports artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: "reports-snapdragon-${{ steps.resolve.outputs.effective_device }}-${{ github.run_number }}"
-          path: |
-            output/reports/**
-            output/logs/**
-          if-no-files-found: warn
-          retention-days: 14
-
-      # ── Telegram: final status ────────────────────────────────────────────────
-
-      - name: Telegram final success
-        if: success()
-        run: |
-          PD_LINK="$(cat output/reports/pixeldrain_link.txt 2>/dev/null || echo "")"
-          if [ -n "$PD_LINK" ]; then
-            python _dz_tg.py edit DONE "Done. PixelDrain: $PD_LINK" || true
-          elif [ -f output/reports/pixeldrain_error.txt ]; then
-            PD_ERR="$(tr '\n' ' ' < output/reports/pixeldrain_error.txt | cut -c1-200)"
-            python _dz_tg.py edit BUILD_OK "Build succeeded. PixelDrain upload failed: $PD_ERR" || true
-          else
-            python _dz_tg.py edit DONE "Build complete. Reports uploaded." || true
-          fi
-
-      - name: Telegram final failure
-        if: failure()
-        run: python _dz_tg.py edit FAILED "Build failed. Check workflow logs." || true
+          JOB_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('job_id',''))")
+          echo "[FACTORY] Job queued: $JOB_ID"

@@ -1,0 +1,10 @@
+id: base
+display_name: DeadZone
+output_suffix: ""
+runner: factory.patch.editions.base.runner
+build_url_env: BASE_BUILD_URL
+enabled: true
+required: false
+description: >
+  Base DeadZone build. Common patches only — no edition-specific mods.
+  Output name: DeadZone_<codename>_V1

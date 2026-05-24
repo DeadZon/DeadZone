@@ -1,0 +1,20 @@
+edition: legend
+display_name: Legend
+description: Legend edition — full MTCR jar patches, APK mods, debloat, build package overlay
+
+build_package:
+  required: false
+  env: LEGEND_BUILD_URL
+  allowed_partitions:
+    - system
+    - product
+    - system_ext
+    - vendor
+    - odm
+    - mi_ext
+
+patchers:
+  - id: legend_runner
+    module: factory.patch.editions.legend.runner
+    function: run_edition
+    required: true

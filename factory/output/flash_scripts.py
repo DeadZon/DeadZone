@@ -1,9 +1,29 @@
+"""Image-driven flash script generator.
+
+Rules (per spec):
+  - super.img    →  super  (no _ab suffix)
+  - all others   →  <stem>_ab  (e.g. boot.img → boot_ab)
+
+Scripts are generated from ACTUAL images present in images_dir.
+Hardcoded image lists are NOT used to decide what to flash.
+
+No:
+  fastboot -w
+  --disable-verity / --disable-verification
+  lk1 / bootloader2
+  tee1 / tee2
+  scp1 / scp2
+  per-device handwritten scripts
+
+Preflight: every referenced image is verified to exist before
+set_active, flash, or wipe. Failure: no reboot, no wipe, phone
+stays in fastboot.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-# ── Fixed brand constants — only these two values are hardcoded ──────────────
 BRAND: str = "DeadZone"
 DEVELOPER: str = "Mezo"
 
@@ -13,73 +33,41 @@ SCRIPT_NAMES = [
     "windows_format_data_only.bat",
 ]
 
-MTK_VAB_REQUIRED_IMAGES: list[str] = [
+# Ordered flash preference: images listed here flash in this order if present.
+# Images NOT in this list but found in images_dir are appended alphabetically
+# after, except super.img which always flashes last.
+_PREFERRED_ORDER: list[str] = [
     "apusys.img",
     "audio_dsp.img",
+    "boot.img",
     "ccu.img",
     "connsys_bt.img",
     "connsys_gnss.img",
     "connsys_wifi.img",
     "dpm.img",
+    "dtbo.img",
     "gpueb.img",
     "gz.img",
+    "init_boot.img",
+    "lk.img",
+    "logo.img",
     "mcf_ota.img",
     "mcupm.img",
     "md1img.img",
     "mvpu_algo.img",
     "pi_img.img",
+    "preloader_raw.img",
     "scp.img",
     "spmfw.img",
     "sspm.img",
     "tee.img",
-    "vcp.img",
-    "boot.img",
-    "dtbo.img",
-    "init_boot.img",
-    "lk.img",
-    "logo.img",
-    "vendor_boot.img",
     "vbmeta.img",
     "vbmeta_system.img",
     "vbmeta_vendor.img",
-    "super.img",
+    "vcp.img",
+    "vendor_boot.img",
 ]
 
-FLASH_ORDER: list[tuple[str, str]] = [
-    ("apusys_ab", "apusys.img"),
-    ("audio_dsp_ab", "audio_dsp.img"),
-    ("boot_ab", "boot.img"),
-    ("ccu_ab", "ccu.img"),
-    ("connsys_bt_ab", "connsys_bt.img"),
-    ("connsys_gnss_ab", "connsys_gnss.img"),
-    ("connsys_wifi_ab", "connsys_wifi.img"),
-    ("dpm_ab", "dpm.img"),
-    ("dtbo_ab", "dtbo.img"),
-    ("gpueb_ab", "gpueb.img"),
-    ("gz_ab", "gz.img"),
-    ("init_boot_ab", "init_boot.img"),
-    ("lk_ab", "lk.img"),
-    ("logo_ab", "logo.img"),
-    ("mcf_ota_ab", "mcf_ota.img"),
-    ("mcupm_ab", "mcupm.img"),
-    ("md1img_ab", "md1img.img"),
-    ("mvpu_algo_ab", "mvpu_algo.img"),
-    ("pi_img_ab", "pi_img.img"),
-    ("preloader_raw_ab", "preloader_raw.img"),
-    ("scp_ab", "scp.img"),
-    ("spmfw_ab", "spmfw.img"),
-    ("sspm_ab", "sspm.img"),
-    ("tee_ab", "tee.img"),
-    ("vbmeta_ab", "vbmeta.img"),
-    ("vbmeta_system_ab", "vbmeta_system.img"),
-    ("vbmeta_vendor_ab", "vbmeta_vendor.img"),
-    ("vcp_ab", "vcp.img"),
-    ("vendor_boot_ab", "vendor_boot.img"),
-    ("super", "super.img"),
-]
-
-# Incremental suffix → region name.  Matched against the last dot-segment of
-# ro.mi.os.version.incremental (e.g. "OS3.0.303.0.WNOCNXM" → "CNXM" → China).
 _REGION_MAP: dict[str, str] = {
     "CNXM": "China",
     "MIXM": "Global",
@@ -91,34 +79,65 @@ _REGION_MAP: dict[str, str] = {
     "IDXM": "Indonesia",
 }
 
-# Reusable separator and blank-line batch lines (use in list literals)
 _SEP = "echo %C_CYAN%============================================================%C_RST%"
 _BLK = "echo."
 
-# Flavor → human-facing edition name.  Only known editions are allowed.
-# The "deadzone_" prefix is stripped before lookup, so no explicit
-# "deadzone_*" keys are needed (and must not appear in generated BAT files).
-_FLAVOR_EDITION_MAP: dict[str, str] = {
+_EDITION_MAP: dict[str, str] = {
     "legend": "Legend",
     "gaming": "Gaming",
     "epic": "Epic",
+    "base": "DeadZone",
     "deadzone": "DeadZone",
 }
 
 
-def _resolve_edition(flavor: str) -> str:
-    norm = flavor.strip().lower().replace("-", "_")
-    if norm.startswith("deadzone_"):
-        norm = norm[len("deadzone_"):]
-    return _FLAVOR_EDITION_MAP.get(norm, "")
+def _image_to_partition(image_name: str) -> str:
+    """Derive fastboot partition name from image filename.
+
+    super.img  →  super
+    <stem>.img →  <stem>_ab
+    """
+    stem = Path(image_name).stem  # strip .img
+    if stem == "super":
+        return "super"
+    return f"{stem}_ab"
 
 
-# ── Metadata ─────────────────────────────────────────────────────────────────
+def _collect_flash_commands(images_dir: Path) -> list[tuple[str, str]]:
+    """Return (partition, image_filename) pairs from actual images present.
+
+    Order: preferred list first (filtered to present), then alphabetical
+    remainder, super.img always last.
+    """
+    images_dir = Path(images_dir)
+    present = {f.name for f in images_dir.iterdir() if f.is_file() and f.suffix == ".img"}
+
+    # Exclude unsparse intermediate files
+    present = {n for n in present if "unsparse" not in n.lower()}
+
+    ordered: list[str] = []
+    for name in _PREFERRED_ORDER:
+        if name in present:
+            ordered.append(name)
+            present.discard(name)
+
+    # Remaining images not in preferred list (but present), alphabetical
+    extras = sorted(n for n in present if n != "super.img")
+    ordered.extend(extras)
+
+    # super.img always last
+    if "super.img" in present or (images_dir / "super.img").is_file():
+        # super may already be removed from present set above
+        ordered = [n for n in ordered if n != "super.img"]
+        ordered.append("super.img")
+
+    return [(_image_to_partition(name), name) for name in ordered]
+
+
+# ── Metadata ──────────────────────────────────────────────────────────────────
 
 @dataclass
 class FlashScriptMetadata:
-    """All per-ROM metadata injected into generated BAT headers."""
-
     edition: str = ""
     device_codename: str = ""
     device_model: str = ""
@@ -157,7 +176,7 @@ class FlashScriptMetadata:
     @classmethod
     def build(
         cls,
-        flavor: str | None = None,
+        edition: str | None = None,
         device_codename: str | None = None,
         device_model: str | None = None,
         android_version: str | None = None,
@@ -165,38 +184,37 @@ class FlashScriptMetadata:
         image_count: int = 0,
     ) -> "FlashScriptMetadata":
         inc = (build_incremental or "").strip()
-        edition = _resolve_edition(flavor or "")
+        edition_key = (edition or "base").strip().lower()
+        # Strip deadzone_ prefix for lookup
+        if edition_key.startswith("deadzone_"):
+            edition_key = edition_key[len("deadzone_"):]
+        edition_label = _EDITION_MAP.get(edition_key, "")
         os_name = cls.detect_os_name(inc)
         region = cls.detect_region(inc)
         resolved_model = (device_model or device_codename or "").strip()
 
         errors: list[str] = []
-        if not edition:
-            errors.append(f"flavor {flavor!r} does not map to a known edition")
+        if not edition_label:
+            errors.append(f"edition {edition!r} does not map to a known label")
         if not device_codename or device_codename.lower() in ("unknown", ""):
             errors.append("device_codename is missing")
         if not resolved_model or resolved_model.lower() in ("unknown", ""):
             errors.append("device_model is missing")
         if not os_name:
-            errors.append(
-                f"OS name could not be determined from build_incremental={inc!r}"
-            )
+            errors.append(f"OS name could not be determined from build_incremental={inc!r}")
         if not android_version or android_version.lower() in ("unknown", ""):
             errors.append("android_version is missing")
         if not inc or inc.lower() in ("unknown", ""):
             errors.append("build_incremental is missing")
         if not region:
-            errors.append(
-                f"region could not be determined from build_incremental={inc!r}"
-            )
+            errors.append(f"region could not be determined from build_incremental={inc!r}")
         if errors:
             raise ValueError(
-                "flash script metadata validation failed — script generation aborted:\n"
+                "flash script metadata validation failed:\n"
                 + "\n".join(f"  - {e}" for e in errors)
             )
-
         return cls(
-            edition=edition,
+            edition=edition_label,
             device_codename=device_codename,
             device_model=resolved_model,
             os_name=os_name,
@@ -207,19 +225,7 @@ class FlashScriptMetadata:
         )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def validate_mtk_required_images(images_dir: Path) -> list[str]:
-    """Return names of MTK VAB required images absent from images_dir."""
-    images_dir = Path(images_dir)
-    return [name for name in MTK_VAB_REQUIRED_IMAGES if not (images_dir / name).is_file()]
-
-
-def _present_flash_commands(images_dir: Path) -> list[tuple[str, str]]:
-    return [(partition, image) for partition, image in FLASH_ORDER if (images_dir / image).is_file()]
-
-
-# ── BAT section builders ──────────────────────────────────────────────────────
+# ── BAT builders ──────────────────────────────────────────────────────────────
 
 def _ansi_setup() -> list[str]:
     return [
@@ -242,7 +248,6 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
         "cd /d \"%~dp0\"",
         "set \"fastboot=bin\\windows\\fastboot.exe\"",
         *_ansi_setup(),
-        # Runtime log setup — log is created when user runs the BAT, never pre-generated
         "md \"flash_logs\" 2>nul",
         "for /f \"delims=\" %%T in ('powershell -nologo -noprofile -command \"Get-Date -Format yyyyMMdd_HHmmss\"') do set \"_TS=%%T\"",
         f"set \"LOG_FILE=flash_logs\\deadzone_{log_mode}_%_TS%.log\"",
@@ -285,7 +290,6 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
 
 
 def _preflight_image_checks(commands: list[tuple[str, str]]) -> list[str]:
-    """Emit image-existence guards that must pass before set_active or flash."""
     lines: list[str] = [
         _SEP,
         "echo   [SECTION] Pre-flight Image Verification",
@@ -419,9 +423,11 @@ def _script_text(kind: str, commands: list[tuple[str, str]], meta: FlashScriptMe
         lines += _run_wipe_commands()
         lines += _success_footer("Format data completed.")
     else:
-        raise ValueError(f"Unknown script kind: {kind}")
+        raise ValueError(f"Unknown script kind: {kind!r}")
     return "\r\n".join(lines) + "\r\n"
 
+
+# ── Public API ────────────────────────────────────────────────────────────────
 
 def generate_windows_flash_scripts(
     staging_dir: Path,
@@ -429,18 +435,27 @@ def generate_windows_flash_scripts(
     device: str | None = None,
     soc: str | None = None,
     platform: str | None = None,
-    flavor: str | None = None,
+    edition: str | None = None,
+    flavor: str | None = None,        # alias for edition, accepted for compat
     device_model: str | None = None,
     android_version: str | None = None,
     build_incremental: str | None = None,
     execute: bool = False,
 ) -> dict:
+    """Generate three flash BAT scripts from actual images in images_dir.
+
+    edition / flavor: accepts "base", "gaming", "legend", "epic",
+    or prefixed forms like "deadzone_legend".
+    """
     staging_dir = Path(staging_dir)
     images_dir = Path(images_dir)
-    commands = _present_flash_commands(images_dir)
+
+    resolved_edition = edition or flavor or "base"
+    commands = _collect_flash_commands(images_dir) if images_dir.is_dir() else []
+
     try:
         meta = FlashScriptMetadata.build(
-            flavor=flavor,
+            edition=resolved_edition,
             device_codename=device,
             device_model=device_model,
             android_version=android_version,
@@ -455,6 +470,7 @@ def generate_windows_flash_scripts(
             "flash_commands": [],
             "flash_command_count": 0,
         }
+
     scripts = {
         "windows_install_and_format_data.bat": _script_text("clean", commands, meta),
         "windows_install_upgrade.bat": _script_text("upgrade", commands, meta),
@@ -465,8 +481,7 @@ def generate_windows_flash_scripts(
     if execute:
         staging_dir.mkdir(parents=True, exist_ok=True)
         for name, text in scripts.items():
-            path = staging_dir / name
-            path.write_text(text, encoding="ascii", newline="")
+            (staging_dir / name).write_text(text, encoding="ascii", newline="")
             generated.append(name)
     else:
         generated = list(scripts)
@@ -474,6 +489,6 @@ def generate_windows_flash_scripts(
     return {
         "status": "APPLIED" if execute else "DRY_RUN",
         "scripts_generated": generated,
-        "flash_commands": [{"partition": partition, "image": image} for partition, image in commands],
+        "flash_commands": [{"partition": p, "image": i} for p, i in commands],
         "flash_command_count": len(commands),
     }
