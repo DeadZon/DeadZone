@@ -30,9 +30,8 @@ RUN apt-get update \
 
 #  Installing project requirements and additional libraries
 COPY requirements.txt ./
-RUN python3 -m pip install --break-system-packages --upgrade pip \
-    && python3 -m pip install --break-system-packages -r requirements.txt \
-    && python3 -m pip install --break-system-packages \
+RUN python3 -m pip install --break-system-packages --no-cache-dir -r requirements.txt && \
+    python3 -m pip install --break-system-packages --no-cache-dir \
         cryptography>=42.0.0 \
         httpx>=0.27.0 \
         protobuf>=4.25.0 \
