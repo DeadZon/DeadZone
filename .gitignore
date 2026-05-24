@@ -48,6 +48,11 @@ logs/
 
 .claude/
 
+# Legend build package — large binary files, never commit
+factory/patch/legend/build/
+factory/patch/legend/*.zip
+output/work/legend_build/
+
 # Local ROM reference / comparison folders -- never commit (anchored to repo root)
 /Legend/
 /DeadZone Fastboot Script/

@@ -11,6 +11,7 @@ Pipeline order
 --------------
   1. validate single Legend home
   2. patch fstab files
+  2b. apply Legend build package (optional — SKIPPED_TEMPORARY if folder absent)
   3. patch props (if rules present)
   4. apply APK mods (Provision, SystemUI, PowerKeeper)
   5. apply JAR mods (MTCR: framework, services, miui-framework, miui-services)
@@ -35,7 +36,8 @@ _LEGEND_FLAVORS = frozenset({"legend", "deadzone_legend"})
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 # ── Vendor safety rule ────────────────────────────────────────────────────────
-# Only fstab_patcher may touch vendor/.  Everything else is blocked.
+# fstab_patcher and legend_build_patcher may touch vendor/.
+# legend_build_patcher paths are added dynamically after it runs (see runner).
 _VENDOR_ALLOWED_REL_PATHS: frozenset[str] = frozenset({
     "vendor/etc/fstab.emmc",
     "vendor/etc/fstab.mt6886",
@@ -64,11 +66,13 @@ def _vendor_snapshot(root: Path) -> dict[str, tuple[int, float]]:
 def _check_vendor_violations(
     before: dict[str, tuple[int, float]],
     after: dict[str, tuple[int, float]],
+    extra_allowed: Optional[set[str]] = None,
 ) -> list[str]:
     """Return sorted list of vendor/ paths that changed outside allowed set."""
+    allowed = _VENDOR_ALLOWED_REL_PATHS | (extra_allowed or set())
     violations: list[str] = []
     for p in sorted(set(before) | set(after)):
-        if p in _VENDOR_ALLOWED_REL_PATHS:
+        if p in allowed:
             continue
         if before.get(p) != after.get(p):
             violations.append(p)
@@ -145,6 +149,7 @@ def run_legend(
     }
 
     any_failed = False
+    _build_patcher_vendor_paths: set[str] = set()
 
     # Snapshot vendor/ before any patches so we can detect unauthorised changes.
     _vendor_before: dict[str, tuple[int, float]] = _vendor_snapshot(root) if execute else {}
@@ -184,6 +189,43 @@ def run_legend(
         if execute:
             any_failed = True
     append_section("2. Fstab Patch", step_lines)
+
+    # ── Step 2b: Legend build package patcher ────────────────────────────────
+    print("[legend_runner] Step 2b: Legend build package patcher")
+    step_lines = []
+    try:
+        from factory.patch.legend.patchers.legend_build_patcher import patch_legend_build
+        build_result = patch_legend_build(root, execute=execute, report_lines=step_lines)
+        report["steps"]["legend_build_package"] = build_result
+        build_status = build_result.get("status", "UNKNOWN")
+        if build_status == "FAILED":
+            report["errors"].append(
+                f"legend_build_patcher: FAILED — "
+                f"unknown_partitions={build_result.get('unknown_partitions', [])} "
+                f"errors={build_result.get('errors', [])}"
+            )
+            if execute:
+                any_failed = True
+        elif build_status == "SKIPPED_TEMPORARY":
+            report["warnings"].append(
+                "legend_build_package: SKIPPED_TEMPORARY — "
+                "factory/patch/legend/build/ missing and LEGEND_BUILD_URL not set"
+            )
+        # Register vendor paths touched by build patcher so vendor safety
+        # check does not flag them as violations.
+        for vp in build_result.get("vendor_copied", []):
+            _build_patcher_vendor_paths.add(vp)
+        for vp in build_result.get("vendor_replaced", []):
+            _build_patcher_vendor_paths.add(vp)
+        for vp in build_result.get("vendor_dirs_created", []):
+            _build_patcher_vendor_paths.add(vp)
+    except Exception as exc:
+        step_lines.append(f"ERROR: {exc}")
+        report["errors"].append(f"legend_build_patcher: {exc}")
+        report["steps"]["legend_build_package"] = {"errors": [str(exc)]}
+        if execute:
+            any_failed = True
+    append_section("2b. Legend Build Package", step_lines)
 
     # ── Step 3: Props patch ───────────────────────────────────────────────────
     print("[legend_runner] Step 3: props patch")
@@ -291,7 +333,10 @@ def run_legend(
     step_lines = []
     if execute:
         _vendor_after = _vendor_snapshot(root)
-        vendor_violations = _check_vendor_violations(_vendor_before, _vendor_after)
+        vendor_violations = _check_vendor_violations(
+            _vendor_before, _vendor_after,
+            extra_allowed=_build_patcher_vendor_paths,
+        )
         report["vendor_violations"] = vendor_violations
         if vendor_violations:
             any_failed = True
@@ -323,8 +368,8 @@ def run_legend(
         step_lines.append(f"Super size: {super_size} bytes ({super_size / 2**30:.2f} GiB)")
         step_lines.append("Metadata source: pipeline (device registry + ROM incremental string)")
         step_lines.append("")
-        step_lines.append("Vendor modifications allowed (fstab_patcher only):")
-        for p in sorted(_VENDOR_ALLOWED_REL_PATHS):
+        step_lines.append("Vendor modifications allowed (fstab_patcher + build_patcher):")
+        for p in sorted(_VENDOR_ALLOWED_REL_PATHS | _build_patcher_vendor_paths):
             step_lines.append(f"  + {p}")
         vendor_violations = report.get("vendor_violations", [])
         if vendor_violations:
@@ -340,7 +385,7 @@ def run_legend(
         report["steps"]["flash_map_summary"] = {
             "flash_order_count": len(FLASH_ORDER),
             "super_size": super_size,
-            "vendor_allowed": sorted(_VENDOR_ALLOWED_REL_PATHS),
+            "vendor_allowed": sorted(_VENDOR_ALLOWED_REL_PATHS | _build_patcher_vendor_paths),
             "vendor_violations": vendor_violations,
         }
     except Exception as exc:
