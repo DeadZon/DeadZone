@@ -96,15 +96,21 @@ _SEP = "echo %C_CYAN%===========================================================
 _BLK = "echo."
 
 # Flavor → human-facing edition name.  Only known editions are allowed.
+# The "deadzone_" prefix is stripped before lookup, so no explicit
+# "deadzone_*" keys are needed (and must not appear in generated BAT files).
 _FLAVOR_EDITION_MAP: dict[str, str] = {
     "legend": "Legend",
-    "deadzone_legend": "Legend",
     "gaming": "Gaming",
-    "deadzone_gaming": "Gaming",
     "epic": "Epic",
-    "deadzone_epic": "Epic",
     "deadzone": "DeadZone",
 }
+
+
+def _resolve_edition(flavor: str) -> str:
+    norm = flavor.strip().lower().replace("-", "_")
+    if norm.startswith("deadzone_"):
+        norm = norm[len("deadzone_"):]
+    return _FLAVOR_EDITION_MAP.get(norm, "")
 
 
 # ── Metadata ─────────────────────────────────────────────────────────────────
@@ -159,8 +165,7 @@ class FlashScriptMetadata:
         image_count: int = 0,
     ) -> "FlashScriptMetadata":
         inc = (build_incremental or "").strip()
-        norm_flavor = (flavor or "").strip().lower().replace("-", "_")
-        edition = _FLAVOR_EDITION_MAP.get(norm_flavor, "")
+        edition = _resolve_edition(flavor or "")
         os_name = cls.detect_os_name(inc)
         region = cls.detect_region(inc)
         resolved_model = (device_model or device_codename or "").strip()
@@ -268,9 +273,9 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
         "echo %C_YELLOW%[CHECK]%C_RST% Detecting connected device ...",
         "call :run \"%fastboot% devices\"",
         "if errorlevel 1 goto :fail",
-        "set \"detected=unknown\"",
+        "set \"detected=\"",
         "for /f \"tokens=2\" %%D in ('\"%fastboot%\" getvar product 2^>^&1 ^| findstr /l /b /c:\"product:\"') do set \"detected=%%D\"",
-        "if \"%detected%\"==\"unknown\" (",
+        "if not defined detected (",
         "    echo %C_RED%[FAILED] No device in fastboot mode detected.%C_RST%",
         "    goto :fail",
         ")",
