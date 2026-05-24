@@ -19,6 +19,13 @@ from factory.repack.super_collector import (
 )
 from factory.repack.super_config_legacy import sync_super_config_for_device_legacy
 from factory.repack.super_info_legacy import load_super_info_legacy
+from factory.repack.super_layout import (
+    ALLOWED_DYNAMIC_PARTITIONS,
+    extract_original_partition_sizes,
+    read_original_partition_sizes,
+    write_final_layout_report,
+    write_original_layout_report,
+)
 from factory.repack.super_report import write_super_build_legacy_reports
 
 _FORBIDDEN_DYNAMIC_IN_FINAL: frozenset[str] = frozenset(
@@ -115,6 +122,93 @@ def _delete_partition_staging_dir(staging_dir: Path, warnings: list[str]) -> boo
         return False
 
 
+def _write_deadzone_patch_report(
+    reports_dir: Path,
+    found_dynamic: list[str],
+    final_images_manifest: list[str],
+    original_partition_sizes: dict[str, int],
+    layout: dict,
+    build_report: dict,
+    validation_status: str,
+    final_status: str,
+    lpmake_command: list,
+) -> None:
+    """Write output/reports/deadzone_patch_report.txt."""
+    reports_dir = Path(reports_dir)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    out_path = reports_dir / "deadzone_patch_report.txt"
+
+    non_super = [
+        name for name in final_images_manifest
+        if name != "super.img" and name not in {f"{p}.img" for p in ALLOWED_DYNAMIC_PARTITIONS}
+    ]
+
+    partition_sizes_header = "Original partition allocation sizes:"
+    final_sizes_header = "Final partition allocation sizes:"
+
+    lpmake_args: list[str] = []
+    cmd = lpmake_command or []
+    i = 0
+    while i < len(cmd):
+        token = str(cmd[i])
+        if token == "--partition" and i + 1 < len(cmd):
+            lpmake_args.append(f"  --partition {cmd[i + 1]}")
+            i += 2
+        else:
+            i += 1
+
+    lines = [
+        "DeadZone Patch Report — Super Build",
+        "====================================",
+        "",
+        "Dynamic images used to build super.img:",
+    ]
+    for part in found_dynamic:
+        lines.append(f"  {part}.img")
+    if not found_dynamic:
+        lines.append("  (none)")
+
+    lines += ["", "Non-super images kept for flashing:"]
+    for name in sorted(non_super):
+        lines.append(f"  {name}")
+    if not non_super:
+        lines.append("  (none)")
+
+    lines += ["", partition_sizes_header]
+    for part in ALLOWED_DYNAMIC_PARTITIONS:
+        orig = original_partition_sizes.get(part)
+        if orig:
+            lines.append(f"  {part}: {orig} bytes")
+    if not any(original_partition_sizes.get(p) for p in ALLOWED_DYNAMIC_PARTITIONS):
+        lines.append("  (not available — source was payload manifest or registry)")
+
+    lines += ["", final_sizes_header]
+    final_part_sizes = layout.get("partition_image_sizes") or {}
+    for part in ALLOWED_DYNAMIC_PARTITIONS:
+        sz = final_part_sizes.get(part)
+        if sz is not None:
+            lines.append(f"  {part}: {sz} bytes (image file)")
+    if not final_part_sizes:
+        lines.append("  (not available)")
+
+    lines += ["", "lpmake --partition arguments:"]
+    lines.extend(lpmake_args if lpmake_args else ["  (none)"])
+
+    lines += [
+        "",
+        f"Validation result:  {validation_status}",
+        f"Final status:       {final_status}",
+        "",
+        "Excluded from final ZIP (packed inside super.img):",
+    ]
+    for part in ALLOWED_DYNAMIC_PARTITIONS:
+        lines.append(f"  {part}.img")
+
+    lines.append("")
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"[super_build] deadzone_patch_report.txt → {out_path}")
+
+
 def apply_super_build_legacy_stage(
     project_dir: Path,
     images_dir: Path,
@@ -169,11 +263,37 @@ def apply_super_build_legacy_stage(
         execute=execute,
     )
     super_info_source = super_info.get("_super_info_source", "missing")
+
+    # Write original_super_layout.json — captures LP allocation sizes from the
+    # source ROM metadata before any repacking changes the on-disk image sizes.
+    original_layout_path: Path | None = None
+    if super_info_source != "missing":
+        try:
+            original_layout_path = write_original_layout_report(super_info, reports_dir)
+        except Exception as exc:
+            print(f"[super_build] WARNING: could not write original_super_layout.json: {exc}")
+
+    # Extract per-partition original LP allocation sizes from the source metadata.
+    # These are passed to lpmake so the final super uses the exact original sizes.
+    original_partition_sizes: dict[str, int] = {}
+    if super_info_source != "missing":
+        original_partition_sizes = extract_original_partition_sizes(super_info)
+        if original_partition_sizes:
+            print(
+                f"[super_build] original_partition_sizes ({len(original_partition_sizes)}): "
+                + ", ".join(f"{k}={v}" for k, v in original_partition_sizes.items())
+            )
+        else:
+            print(
+                "[super_build] WARNING: no per-partition sizes in source metadata "
+                "(source may be payload manifest only) — image file sizes will be used"
+            )
+
     part_names = collect_part_names_legacy(partition_source, super_info)
 
     lpmake_path = resolve_lpmake_binary_legacy()
     if super_info_source != "missing":
-        layout = derive_super_layout_legacy(partition_source, super_info)
+        layout = derive_super_layout_legacy(partition_source, super_info, original_partition_sizes)
         build_report = build_super_image_legacy(
             images_dir=images_dir,
             output_super=output_super,
@@ -181,6 +301,7 @@ def apply_super_build_legacy_stage(
             partition_images_dir=partition_staging_dir,
             device=device,
             execute=execute,
+            original_partition_sizes=original_partition_sizes,
         )
     else:
         layout = {
@@ -244,6 +365,36 @@ def apply_super_build_legacy_stage(
                 validation_errors.append(msg)
                 validation_status = "FAILED"
                 print(f"[super_build] ERROR: {msg}")
+
+        if validation_status == "PASSED" and original_partition_sizes:
+            # Post-build LP metadata size comparison:
+            # read the final super.img LP metadata and verify every allowed
+            # partition has the exact same allocation size as the original.
+            try:
+                from factory.repack.super_collector import _lpunpack_get_info as _lp  # type: ignore
+                final_si: dict = {}
+                if _lp is not None:
+                    final_si = _lp(str(output_super)) or {}
+                if not final_si:
+                    validation_errors.append(
+                        "WARNING: lpunpack_get_info returned empty result for final super.img "
+                        "— skipping per-partition size comparison"
+                    )
+                else:
+                    _fl_path, _fl_ok, _fl_errors = write_final_layout_report(
+                        final_si, original_partition_sizes, reports_dir
+                    )
+                    if not _fl_ok:
+                        for e in _fl_errors:
+                            print(f"[super_build] {e}")
+                        validation_errors.extend(_fl_errors)
+                        validation_status = "FAILED"
+                    else:
+                        print("[super_build] final_super_layout comparison: PASSED")
+            except Exception as exc:
+                validation_errors.append(
+                    f"WARNING: could not write final_super_layout.json: {exc}"
+                )
 
         if validation_status == "PASSED" and partition_staging_dir is not None:
             # Mirroring MEZOBuildRom cleanup_after_repack(): once super.img is
@@ -336,6 +487,19 @@ def apply_super_build_legacy_stage(
     }
 
     write_super_build_legacy_reports(report, reports_dir)
+
+    # Write deadzone_patch_report.txt — human-readable super build summary.
+    _write_deadzone_patch_report(
+        reports_dir=reports_dir,
+        found_dynamic=found,
+        final_images_manifest=final_images_manifest,
+        original_partition_sizes=original_partition_sizes,
+        layout=layout,
+        build_report=build_report,
+        validation_status=validation_status,
+        final_status=final_status,
+        lpmake_command=build_report.get("lpmake_command", []),
+    )
 
     # Also write the canonical super_build_report.{json,txt} consumed by CI / other tools.
     _collector_report = {

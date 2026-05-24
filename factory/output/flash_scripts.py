@@ -492,3 +492,39 @@ def generate_windows_flash_scripts(
         "flash_commands": [{"partition": p, "image": i} for p, i in commands],
         "flash_command_count": len(commands),
     }
+
+
+# ── Module-level ordered flash map and MTK validation ─────────────────────────
+# Defined here (after _image_to_partition and _PREFERRED_ORDER) so the list
+# comprehension can resolve both names at module load time.
+
+# Ordered (partition_target, image_filename) pairs for the flash sequence.
+# super.img always flashes last; all others derive partition via <stem>_ab rule.
+FLASH_ORDER: list[tuple[str, str]] = [
+    (_image_to_partition(name), name)
+    for name in _PREFERRED_ORDER
+] + [("super", "super.img")]
+
+# MTK VAB firmware images required to be present before packaging.
+MTK_VAB_REQUIRED_IMAGES: list[str] = [
+    "super.img",
+    "boot.img",
+    "init_boot.img",
+    "vendor_boot.img",
+    "vbmeta.img",
+    "vbmeta_system.img",
+    "dtbo.img",
+    "lk.img",
+    "tee.img",
+    "scp.img",
+    "sspm.img",
+    "gz.img",
+    "logo.img",
+]
+
+
+def validate_mtk_required_images(images_dir: Path) -> list[str]:
+    """Return filenames from MTK_VAB_REQUIRED_IMAGES that are absent from images_dir."""
+    images_dir = Path(images_dir)
+    present = {p.name for p in images_dir.glob("*.img") if p.is_file()} if images_dir.is_dir() else set()
+    return [name for name in MTK_VAB_REQUIRED_IMAGES if name not in present]

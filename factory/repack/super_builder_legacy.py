@@ -27,9 +27,9 @@ KNOWN_PARTITIONS = [
     "product",
     "system_ext",
     "vendor",
+    "odm",
     "vendor_dlkm",
     "system_dlkm",
-    "odm",
     "odm_dlkm",
     "mi_ext",
 ]
@@ -125,8 +125,14 @@ def collect_part_names_legacy(
 def derive_super_layout_legacy(
     images_dir: Path,
     super_info: dict[str, Any],
+    original_partition_sizes: dict[str, int] | None = None,
 ) -> dict[str, Any]:
-    """Derive the legacy lpmake layout from super_info and images_dir."""
+    """Derive the legacy lpmake layout from super_info and images_dir.
+
+    original_partition_sizes — {base_name: lp_allocation_bytes} from the original
+    super.img metadata.  When provided these values are used for the lpmake
+    --partition allocation size instead of the current image file size.
+    """
     images_dir = Path(images_dir).resolve()
     block_devices = super_info.get("block_devices", []) or []
     group_table = super_info.get("group_table", []) or []
@@ -179,6 +185,9 @@ def derive_super_layout_legacy(
     if not selected_parts:
         selected_parts = part_names
 
+    # partition_image_sizes records actual on-disk file sizes for reporting.
+    # These are NOT used for lpmake --partition allocation; original_partition_sizes
+    # (from original super metadata) are used there instead.
     partition_image_sizes = {
         part: _image_for_partition(images_dir, part, "a").stat().st_size
         for part in selected_parts
@@ -204,6 +213,7 @@ def derive_super_layout_legacy(
         "output_format": super_info.get("output_format") or "sparse",
         "selected_parts": selected_parts,
         "partition_image_sizes": partition_image_sizes,
+        "original_partition_sizes": original_partition_sizes or {},
     }
 
 
@@ -231,14 +241,19 @@ def _build_lpmake_command(
     output_super: Path,
     super_info: dict[str, Any],
     lpmake_path: Path | None,
+    original_partition_sizes: dict[str, int] | None = None,
 ) -> tuple[list[str], dict[str, Any], list[str], list[str]]:
     """Build the lpmake argument list.
 
-    partition_images_dir — directory containing the EROFS-repacked *.img files
-                           (may be a separate staging dir, never the final images dir).
-    output_super         — path where lpmake must write super.img (output/images/super.img).
+    partition_images_dir    — directory containing the EROFS-repacked *.img files
+                              (may be a separate staging dir, never the final images dir).
+    output_super            — path where lpmake must write super.img.
+    original_partition_sizes — {base_name: lp_allocation_bytes} from the original
+                              super.img metadata.  Each partition's --partition
+                              allocation is set to this value, NOT the image file size.
+                              If absent, falls back to image file size with a warning.
     """
-    layout = derive_super_layout_legacy(partition_images_dir, super_info)
+    layout = derive_super_layout_legacy(partition_images_dir, super_info, original_partition_sizes)
     warnings: list[str] = []
     errors: list[str] = []
     super_size = int(layout["super_size"] or 0)
@@ -247,6 +262,13 @@ def _build_lpmake_command(
 
     lpmake_sparse_enabled = (layout.get("output_format") or "sparse") == "sparse"
     layout["lpmake_sparse_enabled"] = lpmake_sparse_enabled
+
+    orig_sizes: dict[str, int] = original_partition_sizes or {}
+    if not orig_sizes:
+        warnings.append(
+            "original_partition_sizes not provided — using image file sizes as lpmake "
+            "allocation (original super metadata had no per-partition size fields)"
+        )
 
     command = [
         str(lpmake_path) if lpmake_path else "lpmake",
@@ -261,6 +283,21 @@ def _build_lpmake_command(
     if group_size <= 0 and super_size > 0:
         group_size = max(0, super_size - _LP_METADATA_OVERHEAD)
 
+    def _alloc_size(part_name: str, img_path: Path) -> int | None:
+        """Return LP allocation size for a partition; None signals a hard error."""
+        img_size = img_path.stat().st_size
+        if part_name in orig_sizes:
+            alloc = orig_sizes[part_name]
+            if img_size > alloc:
+                errors.append(
+                    f"ERROR: {part_name}.img size {img_size} exceeds original "
+                    f"{part_name} allocation {alloc} bytes"
+                )
+                return None
+            return alloc
+        # No original size known — fall back to image file size.
+        return img_size
+
     selected_parts = list(layout["selected_parts"])
     if layout["super_type"] == 1:
         command += [
@@ -272,8 +309,11 @@ def _build_lpmake_command(
             if not img_path.exists():
                 errors.append(f"Required image not found for super pack: {img_path}")
                 continue
+            alloc = _alloc_size(part_name, img_path)
+            if alloc is None:
+                continue
             command += [
-                "--partition", f"{part_name}:readonly:{img_path.stat().st_size}:{layout['group_a_name']}",
+                "--partition", f"{part_name}:readonly:{alloc}:{layout['group_a_name']}",
                 "--image", f"{part_name}={img_path}",
             ]
     else:
@@ -286,16 +326,23 @@ def _build_lpmake_command(
             if not img_path.exists():
                 errors.append(f"Required _a image not found for super pack: {img_path}")
                 continue
+            alloc = _alloc_size(part_name, img_path)
+            if alloc is None:
+                continue
             command += [
-                "--partition", f"{part_name}_a:readonly:{img_path.stat().st_size}:{layout['group_a_name']}",
+                "--partition", f"{part_name}_a:readonly:{alloc}:{layout['group_a_name']}",
                 "--image", f"{part_name}_a={img_path}",
             ]
         command += ["--group", f"{layout['group_b_name']}:{group_size}"]
         for part_name in selected_parts:
             img_path = partition_images_dir / f"{part_name}_b.img"
             if can_use_slot_image_legacy(part_name, img_path, layout["slot_mode"]):
+                alloc = _alloc_size(part_name, img_path)
+                if alloc is None:
+                    command += ["--partition", f"{part_name}_b:readonly:0:{layout['group_b_name']}"]
+                    continue
                 command += [
-                    "--partition", f"{part_name}_b:readonly:{img_path.stat().st_size}:{layout['group_b_name']}",
+                    "--partition", f"{part_name}_b:readonly:{alloc}:{layout['group_b_name']}",
                     "--image", f"{part_name}_b={img_path}",
                 ]
             else:
@@ -315,18 +362,17 @@ def build_super_image_legacy(
     partition_images_dir: Path | None = None,
     device: str | None = None,
     execute: bool = False,
+    original_partition_sizes: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Plan or execute the legacy lpmake super.img build.
 
-    partition_images_dir — directory that holds the EROFS-repacked dynamic
-                           partition images (system.img, vendor.img, …).
-                           When provided this is the MEZOBuildRom-style
-                           temporary staging directory, separate from the
-                           final output/images/ directory.  When omitted,
-                           images_dir is used as a backward-compatible default.
-    images_dir           — the final fastboot images directory (output/images/).
-                           super.img is written to output_super, which is
-                           normally output/images/super.img.
+    partition_images_dir    — directory that holds the EROFS-repacked dynamic
+                              partition images (system.img, vendor.img, …).
+    images_dir              — the final fastboot images directory (output/images/).
+    original_partition_sizes — {base_name: lp_allocation_bytes} from the original
+                              super.img metadata.  These are used for the lpmake
+                              --partition size argument so the final LP metadata
+                              preserves the exact original allocation sizes.
     """
     partition_images_dir = Path(partition_images_dir).resolve() if partition_images_dir else Path(images_dir).resolve()
     images_dir = Path(images_dir).resolve()
@@ -334,7 +380,8 @@ def build_super_image_legacy(
     device = device
     lpmake_path = resolve_lpmake_binary_legacy()
     command, layout, warnings, errors = _build_lpmake_command(
-        partition_images_dir, output_super, super_info, lpmake_path
+        partition_images_dir, output_super, super_info, lpmake_path,
+        original_partition_sizes=original_partition_sizes,
     )
     skipped_items: list[dict[str, str]] = []
     lpmake_executed = False

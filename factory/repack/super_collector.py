@@ -318,13 +318,18 @@ def build_lpmake_command(
     profile: dict[str, Any],
     dynamic_parts: dict[str, Path],
     lpmake_path: Path | None,
+    original_partition_sizes: dict[str, int] | None = None,
 ) -> tuple[list[str], list[str], list[str]]:
     """Build the lpmake VAB command for super.img.
 
     VAB layout:
       For each dynamic partition ``p``:
-        - ``p_a`` → real image from dynamic_parts[p]
+        - ``p_a`` → real image from dynamic_parts[p], allocation from original metadata
         - ``p_b`` → zero-size metadata slot
+
+    original_partition_sizes — {base_name: lp_allocation_bytes} from original super
+    metadata.  Each _a partition's --partition allocation is set to this value, NOT
+    the image file size, so the final LP metadata preserves original allocation exactly.
 
     Returns (command, warnings, errors).
     """
@@ -346,6 +351,13 @@ def build_lpmake_command(
         errors.append("lpmake binary not found — cannot build super.img")
         return [], warnings, errors
 
+    orig_sizes: dict[str, int] = original_partition_sizes or {}
+    if not orig_sizes:
+        warnings.append(
+            "original_partition_sizes not provided — using image file sizes as lpmake "
+            "allocation (original super metadata had no per-partition size fields)"
+        )
+
     cmd: list[str] = [
         str(lpmake_path),
         "--metadata-size", str(metadata_max_size),
@@ -356,7 +368,7 @@ def build_lpmake_command(
         "--group", f"{group_a}:{group_size}",
     ]
 
-    # _a slot: real dynamic partition images
+    # _a slot: real dynamic partition images with original LP allocation sizes
     selected_parts = [p for p in profile["partition_names"] if p in dynamic_parts]
     missing_parts = [p for p in profile["partition_names"] if p not in dynamic_parts]
     if missing_parts:
@@ -367,12 +379,22 @@ def build_lpmake_command(
         if not img.is_file():
             errors.append(f"Dynamic partition image not found: {img}")
             continue
-        size = img.stat().st_size
-        if size <= 0:
+        img_size = img.stat().st_size
+        if img_size <= 0:
             errors.append(f"Dynamic partition image is empty (0 bytes): {img}")
             continue
+        if part in orig_sizes:
+            alloc = orig_sizes[part]
+            if img_size > alloc:
+                errors.append(
+                    f"ERROR: {part}.img size {img_size} exceeds original "
+                    f"{part} allocation {alloc} bytes"
+                )
+                continue
+        else:
+            alloc = img_size
         cmd += [
-            "--partition", f"{part}_a:readonly:{size}:{group_a}",
+            "--partition", f"{part}_a:readonly:{alloc}:{group_a}",
             "--image", f"{part}_a={img}",
         ]
 
@@ -534,6 +556,7 @@ def collect_and_build_super(
     profile: dict[str, Any],
     execute: bool = False,
     debug_mode: bool = False,
+    original_partition_sizes: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the full super.img collection and build.
 
@@ -589,7 +612,7 @@ def collect_and_build_super(
             f"Dynamic partitions absent from payload images dir: {', '.join(missing_dynamic)}"
         )
 
-    # Build lpmake command
+    # Build lpmake command using original LP allocation sizes where available
     lpmake_path = resolve_lpmake_binary()
     command, cmd_warnings, cmd_errors = build_lpmake_command(
         payload_images_dir=payload_images_dir,
@@ -597,6 +620,7 @@ def collect_and_build_super(
         profile=profile,
         dynamic_parts=dynamic_parts,
         lpmake_path=lpmake_path,
+        original_partition_sizes=original_partition_sizes,
     )
     result["lpmake_command"] = command
     result["warnings"].extend(cmd_warnings)

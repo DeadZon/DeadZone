@@ -26,6 +26,7 @@ REQUIRED_PUBLIC_FILES = [
 ]
 
 # Images packed inside super.img — excluded from the public ZIP when super.img is present.
+# Exactly the 9 allowed dynamic partitions; no other images go into super.
 DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
     "system.img",
     "system_ext.img",
@@ -36,11 +37,6 @@ DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
     "odm.img",
     "odm_dlkm.img",
     "mi_ext.img",
-    "my_product.img",
-    "my_engineering.img",
-    "my_stock.img",
-    "my_heytap.img",
-    "my_region.img",
 })
 
 REQUIRED_FINAL_IMAGES = [
@@ -141,7 +137,7 @@ def _iter_staging_files(staging_dir: Path) -> list[Path]:
 
 
 def _is_dynamic_partition(name: str) -> bool:
-    return name in DYNAMIC_PARTITION_IMAGES or name.endswith("_dlkm.img")
+    return name in DYNAMIC_PARTITION_IMAGES
 
 
 def _is_excluded_super_artifact(name: str) -> bool:
