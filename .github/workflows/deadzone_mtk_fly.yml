@@ -94,6 +94,18 @@ jobs:
             --vm-cpus ${{ inputs.VM_CPUS }} \
             --vm-memory ${{ inputs.VM_MEMORY }} \
             --volume dz_data_mtk:/mnt/dz_data \
+            --env SOC="mtk" \
+            --env ROM_URL="${{ inputs.rom_url }}" \
+            --env DEVICE_CODENAME="${{ inputs.device }}" \
+            --env CUSTOM_DEVICE="${{ inputs.custom_device }}" \
+            --env FINAL_NAME="${{ inputs.final_name }}" \
+            --env PLATFORM="${{ inputs.platform }}" \
+            --env FLAVOR="${{ inputs.flavor }}" \
+            --env ANDROID_VERSION="${{ inputs.android_version }}" \
+            --env MI_VERSION="${{ inputs.mi_version }}" \
+            --env VBMETA_MODE="${{ inputs.vbmeta_mode }}" \
+            --env MODE="${{ inputs.mode }}" \
+            --env NOTIFY_TELEGRAM="${{ inputs.notify_telegram }}" \
             --env IN_ROM_URL="${{ inputs.rom_url }}" \
             --env IN_DEVICE="${{ inputs.device }}" \
             --env IN_CUSTOM_DEVICE="${{ inputs.custom_device }}" \
