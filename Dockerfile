@@ -6,6 +6,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 WORKDIR /app
 
+# Install the system's core packages
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         brotli \
@@ -27,11 +28,22 @@ RUN apt-get update \
         zstd \
     && rm -rf /var/lib/apt/lists/*
 
+#  Installing project requirements and additional libraries
 COPY requirements.txt ./
-RUN python3 -m pip install --break-system-packages -r requirements.txt
+RUN python3 -m pip install --break-system-packages --upgrade pip \
+    && python3 -m pip install --break-system-packages -r requirements.txt \
+    && python3 -m pip install --break-system-packages \
+        cryptography>=42.0.0 \
+        httpx>=0.27.0 \
+        protobuf>=4.25.0 \
+        pycryptodome>=3.19.0 \
+        requests>=2.31.0 \
+        toml>=0.10.2 \
+        zstandard>=0.22.0
 
 COPY . .
 
+# Setting permissions and installing mezo_core requirements
 RUN if [ -f third_party/mezo_core/requirements.txt ]; then \
         python3 -m pip install --break-system-packages -r third_party/mezo_core/requirements.txt; \
     fi \
