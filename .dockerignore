@@ -1,58 +1,134 @@
-.git
-.github
-.claude
-.vscode
-.idea
+﻿# DeadZone Fly builder Docker context
+# Keep source code/config only. Never send ROMs, images, outputs, caches, logs, or local secrets.
 
+# Git / CI / editor
+.git
+.git/
+.github
+.github/
+.vscode
+.vscode/
+.idea
+.idea/
+.claude
+.claude/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Python caches
+__pycache__
 __pycache__/
 **/__pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+*.pyd
+.pytest_cache
+.pytest_cache/
+.mypy_cache
+.mypy_cache/
+.ruff_cache
+.ruff_cache/
+.coverage
+htmlcov
+htmlcov/
 
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
+
+# Build outputs / ROM work dirs
+output
 output/
-_output/
-_input_roms/
-**/*_unpacked/
-*_unpacked/
-logs/
-*.log
-
-DeadZone Fastboot Script/
-Legend/
-MEZO_APP/
-_reference/
-backup/
-_backups/
+work
+work/
+tmp
 tmp/
+temp
 temp/
+logs
+logs/
+rom
+rom/
+downloads
+downloads/
+payload_extracted
+payload_extracted/
+_input_roms
+_input_roms/
+*_unpacked
+*_unpacked/
+**/*_unpacked/
+_asset_downloads
+_asset_downloads/
+assets/cache
+assets/cache/
 
+# External / generated MEZO assets
+third_party/mezo_core/MEZO_APP
+third_party/mezo_core/MEZO_APP/
+third_party/mezo_core/_asset_downloads
+third_party/mezo_core/_asset_downloads/
+third_party/mezo_core/output
+third_party/mezo_core/output/
+third_party/mezo_core/work
+third_party/mezo_core/work/
+third_party/mezo_core/tmp
+third_party/mezo_core/tmp/
+third_party/mezo_core/logs
+third_party/mezo_core/logs/
+third_party/mezo_core/downloads
+third_party/mezo_core/downloads/
+third_party/mezo_core/payload_extracted
+third_party/mezo_core/payload_extracted/
+
+# ROM / firmware / archive payloads
+*.img
+*.img.*
+*.new.dat
+*.new.dat.br
+*.new.dat.xz
+*.br
+*.lz4
+*.zst
 *.zip
-*.tgz
-*.tar
-*.tar.gz
 *.7z
 *.rar
-*.img
-*.br
-*.dat
-*.new.dat
-*.sparse
-*.unsparse.img
+*.tar
+*.tgz
+*.tar.gz
+*.tar.xz
 *.bin
+*.payload
+payload.bin
+super_empty.img
+super.img
 *.apk
-*.jar
-*.dex
-*.vdex
-*.odex
-*.art
-*.prof
-*.dm
+*.apks
+*.aab
+*.jar.bak
+*.bak
 
-factory/patch/mods/*/build/
-factory/patch/mods/**/build/
-factory/patch/mods/**/assets/
-factory/patch/mods/**/mods/
+# Build reports / noisy generated files
+*.log
+*.tmp
+*.sha256
+sha256sums.txt
+build_info.txt
+upload_links.txt
 
-docs/
-tests/
-*.md
+# OS / package-manager junk
+node_modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
