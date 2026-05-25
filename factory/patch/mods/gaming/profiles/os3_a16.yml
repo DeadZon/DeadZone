@@ -1,0 +1,15 @@
+﻿platform: os3_a16
+android: 16
+
+props:
+  enabled: true
+
+debloat:
+  enabled: true
+
+build_package:
+  enabled: true
+
+vendor:
+  allowed: true
+  report_required: false

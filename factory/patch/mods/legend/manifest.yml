@@ -1,0 +1,41 @@
+id: legend
+display_name: Legend
+enabled: true
+
+supported_platforms:
+  - os3_a16
+  - os3_a15
+  - os2_a15
+  - os2_a14
+  - os1_a14
+
+stages:
+  - build_package
+  - fstab
+  - props
+  - debloat
+  - permissions
+  - apk
+  - jar
+  - smali
+  - overlays
+  - systemui
+
+build_package:
+  path: build/
+  required: false
+  env: LEGEND_BUILD_URL
+  allowed_partitions:
+    - system
+    - product
+    - system_ext
+    - vendor
+    - odm
+    - mi_ext
+
+profiles:
+  os1_a14: profiles/os1_a14.yml
+  os2_a14: profiles/os2_a14.yml
+  os2_a15: profiles/os2_a15.yml
+  os3_a15: profiles/os3_a15.yml
+  os3_a16: profiles/os3_a16.yml

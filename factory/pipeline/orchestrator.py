@@ -3,24 +3,23 @@
 Flow
 ----
 1.  Resolve device by codename (registry/device_groups + registry/devices)
-2.  Resolve edition (registry/editions)
-3.  Create BuildContext
-4.  Download / unpack ROM
-5.  Detect ROM metadata (build props)
-6.  Apply base common layer
-7.  Apply selected edition layer
-8.  Repack changed partitions
-9.  Build super from final patched state
-10. Collect actual final images
-11. Generate flash script from actual images
-12. Build final ZIP
-13. Validate final ZIP
-14. Upload PixelDrain (if enabled)
-15. Notify Telegram (if secrets exist)
-16. Cleanup workspace
+2.  Create BuildContext
+3.  Download / unpack ROM
+4.  Detect ROM metadata (build props)
+5.  Apply factory/patch/base/runner.py (base common layer)
+6.  Apply factory/patch/mods/<mod>/runner.py (selected mod layer)
+7.  Repack changed partitions
+8.  Build super from final patched state
+9.  Collect actual final images
+10. Generate flash script from actual images
+11. Build final ZIP
+12. Validate final ZIP
+13. Upload PixelDrain (if enabled)
+14. Notify Telegram (if secrets exist)
+15. Cleanup workspace
 
-Editions only apply patches/assets.
-Unpack / repack / super / output logic is never duplicated per edition.
+Only the selected mod runs. Mods own patches/assets only.
+Unpack / repack / super / output logic never lives in a mod.
 """
 from __future__ import annotations
 
@@ -31,7 +30,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from factory.pipeline.context import BuildContext
-from factory.pipeline.resolver import resolve_device, resolve_edition, resolve_super_size
+from factory.pipeline.resolver import resolve_device, resolve_super_size
 from factory.pipeline.report import write_pipeline_report
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -95,7 +94,6 @@ def run_factory(
 
     # ── Step 1-3: Resolve and create context ─────────────────────────────────
     device_profile = resolve_device(codename, soc_hint=soc)
-    edition_profile = resolve_edition(edition)
     resolved_soc = device_profile.get("soc") or soc or "unknown"
     super_size = resolve_super_size(device_profile, resolved_soc)
 
@@ -121,8 +119,6 @@ def run_factory(
 
     if device_profile.get("_warning"):
         ctx.warnings.append(device_profile["_warning"])
-    if edition_profile.get("_warning"):
-        ctx.warnings.append(edition_profile["_warning"])
 
     ok = True
 
@@ -160,29 +156,27 @@ def run_factory(
     if ok:
         ctx.project_dir = Path(ctx.project_dir).resolve()
 
-    # ── Step 6: Base common layer ─────────────────────────────────────────────
+    # ── Step 6: Base patch layer ──────────────────────────────────────────────
     if ok:
-        def _common():
-            from factory.patch.common_rom.project_legacy import (
-                _write_reports, apply_common_project_legacy_patches,
+        def _base():
+            from factory.patch.base.runner import run_base
+            return run_base(
+                root=ctx.project_dir,
+                output_dir=ctx.output_dir,
+                context={
+                    "flavor": f"deadzone_{edition}" if edition != "base" else "deadzone",
+                    "execute": ctx.execute,
+                },
             )
-            r = apply_common_project_legacy_patches(
-                project_dir=ctx.project_dir,
-                root_dir=_REPO_ROOT,
-                flavor=f"deadzone_{edition}" if edition != "base" else "deadzone",
-                execute=ctx.execute,
-            )
-            _write_reports(r)
-            return r
-        ok = _run(ctx, "common_layer", _common)
+        ok = _run(ctx, "base_layer", _base)
 
-    # ── Step 7: Edition layer ─────────────────────────────────────────────────
+    # ── Step 7: Mod layer ─────────────────────────────────────────────────────
     if ok:
-        runner_module = edition_profile.get("runner", f"factory.patch.editions.{edition}.runner")
-        edition_mod = _import(runner_module)
-        if edition_mod and hasattr(edition_mod, "run_edition"):
-            def _edition():
-                return edition_mod.run_edition(
+        mod_module = f"factory.patch.mods.{edition}.runner"
+        mod = _import(mod_module)
+        if mod and hasattr(mod, "run_mod"):
+            def _mod():
+                return mod.run_mod(
                     root=ctx.project_dir,
                     output_dir=ctx.output_dir,
                     context={
@@ -192,9 +186,11 @@ def run_factory(
                         "os_family": _os_family(ctx.mi_incremental),
                     },
                 )
-            ok = _run(ctx, f"edition_{edition}", _edition)
+            ok = _run(ctx, f"mod_{edition}", _mod)
         else:
-            ctx.warnings.append(f"Edition runner not found: {runner_module} — skipped")
+            ctx.warnings.append(
+                f"Mod runner not found: {mod_module} — SKIPPED_TEMPORARY"
+            )
 
     # ── Steps 8-9: Repack + super ─────────────────────────────────────────────
     if ok and ctx.execute:

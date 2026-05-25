@@ -1,0 +1,30 @@
+﻿platform: os2_a15
+android: 15
+
+props:
+  enabled: true
+
+debloat:
+  enabled: true
+
+apk:
+  enabled: true
+  targets:
+    - system_ext/priv-app/Provision/Provision.apk
+    - system_ext/priv-app/MiuiSystemUI/MiuiSystemUI.apk
+    - system_ext/app/PowerKeeper/PowerKeeper.apk
+
+jar:
+  enabled: true
+  targets:
+    - system/framework/framework.jar
+    - system/framework/services.jar
+    - system_ext/framework/miui-framework.jar
+    - system_ext/framework/miui-services.jar
+
+vendor:
+  allowed: true
+  report_required: true
+
+fstab:
+  enabled: true

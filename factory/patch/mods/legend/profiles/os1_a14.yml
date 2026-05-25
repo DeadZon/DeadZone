@@ -1,0 +1,21 @@
+﻿platform: os1_a14
+android: 14
+
+props:
+  enabled: true
+
+debloat:
+  enabled: false
+
+apk:
+  enabled: false
+
+jar:
+  enabled: false
+
+vendor:
+  allowed: false
+  report_required: false
+
+fstab:
+  enabled: false

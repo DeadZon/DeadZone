@@ -1,0 +1,15 @@
+﻿platform: os1_a14
+android: 14
+
+props:
+  enabled: true
+
+debloat:
+  enabled: true
+
+build_package:
+  enabled: true
+
+vendor:
+  allowed: true
+  report_required: false
