@@ -252,6 +252,7 @@ jobs:
           echo "[FLY] ROM URL  : $ROM_URL"
 
           HTTP_CODE=$(curl -k -sS -w "%{http_code}" \
+            --http1.1 \
             -o response.json \
             -X POST "$BUILDER_URL/build" \
             -H "Authorization: Bearer $BUILDER_TOKEN" \
