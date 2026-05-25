@@ -1,4 +1,4 @@
-name: Deploy Fly Builder
+name: Deploy DeadZone Fly Builder
 
 on:
   workflow_dispatch:

@@ -1,129 +1,161 @@
-name: DeadZone MTK Factory
+name: DeadZone MTK Fly Build
 
 on:
   workflow_dispatch:
     inputs:
+      codename:
+        description: "MTK device codename (e.g. zircon)"
+        required: true
+        type: choice
+        default: select_device_codename
+        options:
+          - select_device_codename
+          - agate
+          - aristotle
+          - daumier
+          - plato
+          - zircon
+
+      custom_codename:
+        description: "Optional custom codename (overrides selection)"
+        required: false
+        type: string
+
+      edition:
+        description: "ROM edition / mod"
+        required: true
+        type: choice
+        default: base
+        options:
+          - base
+          - gaming
+          - legend
+          - epic
+
       rom_url:
         description: "ROM download URL"
         required: true
         type: string
-      device:
-        description: "MediaTek device codename"
-        required: true
-        type: string
-        default: select_device_codename
-      custom_device:
-        description: "Optional custom codename."
-        required: false
-        type: string
-      final_name:
-        description: "Final build name"
-        required: true
-        type: string
-      platform:
-        description: "ROM platform"
-        required: true
-        type: string
-        default: os3_a16
-      flavor:
-        description: "DeadZone flavor"
-        required: true
-        type: string
-        default: legend
-      android_version:
-        description: "Android version number"
-        required: true
-        type: string
-        default: "16"
-      mi_version:
-        description: "MI/OS incremental version string"
-        required: true
-        type: string
-        default: OS3.0.303.0.WNOCNXM
-      vbmeta_mode:
-        description: "vbmeta patch mode"
-        required: true
-        type: string
-        default: "3"
+
       mode:
-        description: "dry_run or execute"
+        description: "dry_run = plan only | execute = real build"
         required: true
-        type: string
+        type: choice
         default: dry_run
+        options:
+          - dry_run
+          - execute
+
+      upload_pixeldrain:
+        description: "Upload to PixelDrain after build"
+        required: true
+        type: boolean
+        default: true
+
       notify_telegram:
         description: "Send Telegram notifications"
         required: true
         type: boolean
         default: true
-      runner_label:
-        description: "GitHub runner label"
-        required: true
-        type: string
-        default: ubuntu-latest
-      VM_CPUS:
-        description: 'Fly.io VM CPUs'
-        required: true
-        default: '16'
-      VM_MEMORY:
-        description: 'Fly.io VM Memory in MB'
-        required: true
-        default: '131072'
 
 jobs:
-  launch_mtk_builder:
+  trigger-fly:
+    name: "MTK Fly | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 10
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Guard — Fly secrets must be present
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Run Build on Fly.io Cloud (400GB SSD)
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          BUILDER_URL: ${{ secrets.FLY_BUILDER_URL }}
+          BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
         run: |
-          flyctl machine run . \
-            --app dz-builder-mtk \
-            --region fra \
-            --vm-cpu-kind performance \
-            --vm-cpus ${{ inputs.VM_CPUS }} \
-            --vm-memory ${{ inputs.VM_MEMORY }} \
-            --volume dz_data_mtk:/mnt/dz_data \
-            --env SOC="mtk" \
-            --env ROM_URL="${{ inputs.rom_url }}" \
-            --env DEVICE_CODENAME="${{ inputs.device }}" \
-            --env CUSTOM_DEVICE="${{ inputs.custom_device }}" \
-            --env FINAL_NAME="${{ inputs.final_name }}" \
-            --env PLATFORM="${{ inputs.platform }}" \
-            --env FLAVOR="${{ inputs.flavor }}" \
-            --env ANDROID_VERSION="${{ inputs.android_version }}" \
-            --env MI_VERSION="${{ inputs.mi_version }}" \
-            --env VBMETA_MODE="${{ inputs.vbmeta_mode }}" \
-            --env MODE="${{ inputs.mode }}" \
-            --env NOTIFY_TELEGRAM="${{ inputs.notify_telegram }}" \
-            --env IN_ROM_URL="${{ inputs.rom_url }}" \
-            --env IN_DEVICE="${{ inputs.device }}" \
-            --env IN_CUSTOM_DEVICE="${{ inputs.custom_device }}" \
-            --env IN_FINAL_NAME="${{ inputs.final_name }}" \
-            --env IN_PLATFORM="${{ inputs.platform }}" \
-            --env IN_FLAVOR="${{ inputs.flavor }}" \
-            --env IN_ANDROID_VERSION="${{ inputs.android_version }}" \
-            --env IN_MI_VERSION="${{ inputs.mi_version }}" \
-            --env IN_VBMETA_MODE="${{ inputs.vbmeta_mode }}" \
-            --env IN_MODE="${{ inputs.mode }}" \
-            --env IN_NOTIFY="${{ inputs.notify_telegram }}" \
-            --env PIXELDRAIN_API_KEY="${{ secrets.PIXELDRAIN_API_KEY }}" \
-            --env TELEGRAM_MTK_BOT_TOKEN="${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}" \
-            --env TELEGRAM_MTK_CHAT_ID="${{ secrets.TELEGRAM_MTK_CHAT_ID }}" \
-            --env TELEGRAM_THREAD_ID="${{ secrets.TELEGRAM_THREAD_ID }}" \
-            --env GITHUB_TOKEN="${{ secrets.G_TOKEN }}" \
-            --env GITHUB_RUN_NUMBER="${{ github.run_number }}" \
-            --env GITHUB_RUN_ID="${{ github.run_id }}" \
-            --env GITHUB_SERVER_URL="${{ github.server_url }}" \
-            --env GITHUB_REPOSITORY="${{ github.repository }}" \
-            --rm
+          MISSING=""
+          if [ -z "$BUILDER_URL" ]; then
+            MISSING="$MISSING FLY_BUILDER_URL"
+          fi
+          if [ -z "$BUILDER_TOKEN" ]; then
+            MISSING="$MISSING BUILDER_TOKEN"
+          fi
+          if [ -n "$MISSING" ]; then
+            echo "[ERROR] Required secrets not set:$MISSING"
+            echo "[ERROR] Add them in Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          echo "[OK] Fly secrets verified."
+
+      - name: Resolve codename
+        id: resolve
+        run: |
+          CUSTOM="${{ inputs.custom_codename }}"
+          SELECTED="${{ inputs.codename }}"
+          if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "select_device_codename" ]; then
+            CODENAME="$CUSTOM"
+          else
+            CODENAME="$SELECTED"
+          fi
+          if [ -z "$CODENAME" ] || [ "$CODENAME" = "select_device_codename" ]; then
+            echo "[ERROR] Select a device codename or provide custom_codename"
+            exit 1
+          fi
+          echo "codename=$CODENAME" >> "$GITHUB_OUTPUT"
+
+      - name: POST build job to Fly MTK builder
+        id: post
+        env:
+          BUILDER_URL: ${{ secrets.FLY_BUILDER_URL }}
+          BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
+        run: |
+          CODENAME="${{ steps.resolve.outputs.codename }}"
+          PAYLOAD=$(printf '{
+            "source": "GitHub",
+            "soc": "mtk",
+            "codename": "%s",
+            "edition": "%s",
+            "mod": "%s",
+            "rom_url": "%s",
+            "mode": "%s",
+            "upload_pixeldrain": %s,
+            "notify_telegram": %s
+          }' \
+            "$CODENAME" \
+            "${{ inputs.edition }}" \
+            "${{ inputs.edition }}" \
+            "${{ inputs.rom_url }}" \
+            "${{ inputs.mode }}" \
+            "${{ inputs.upload_pixeldrain }}" \
+            "${{ inputs.notify_telegram }}")
+
+          echo "[FLY] Posting build to $BUILDER_URL/build"
+          echo "[FLY] Codename : $CODENAME"
+          echo "[FLY] Edition  : ${{ inputs.edition }}"
+          echo "[FLY] Mode     : ${{ inputs.mode }}"
+
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST "$BUILDER_URL/build" \
+            -H "Authorization: Bearer $BUILDER_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD")
+
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+
+          echo "[FLY] HTTP status : $HTTP_STATUS"
+          echo "[FLY] Response    : $BODY"
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "[ERROR] Fly builder returned HTTP $HTTP_STATUS — build not accepted."
+            exit 1
+          fi
+
+          BUILD_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('build_id',''))" 2>/dev/null || echo "")
+          JOB_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('job_id',''))" 2>/dev/null || echo "")
+          TG_MSG_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('telegram_message_id',''))" 2>/dev/null || echo "")
+
+          echo "[FLY] build_id           : $BUILD_ID"
+          echo "[FLY] job_id             : $JOB_ID"
+          echo "[FLY] telegram_message_id: $TG_MSG_ID"
+
+          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          echo "telegram_message_id=$TG_MSG_ID" >> "$GITHUB_OUTPUT"
