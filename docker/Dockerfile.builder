@@ -31,4 +31,6 @@ RUN mkdir -p /data/cache /data/work /data/logs
 
 EXPOSE 8080
 
-CMD ["python", "server/builder_api.py"]
+ENV PYTHONPATH=/factory
+
+CMD ["python", "-m", "server.builder_api"]
