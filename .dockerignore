@@ -1,25 +1,58 @@
 .git
-__pycache__
-**/__pycache__
-**/*.pyc
-**/*.pyo
+.github
+.claude
+.vscode
+.idea
+
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
 
 output/
+_output/
 _input_roms/
+**/*_unpacked/
 *_unpacked/
 logs/
+*.log
+
+DeadZone Fastboot Script/
+Legend/
+MEZO_APP/
+_reference/
+backup/
+_backups/
+tmp/
+temp/
 
 *.zip
 *.tgz
+*.tar
 *.tar.gz
+*.7z
+*.rar
 *.img
-*.img.zst
+*.br
+*.dat
+*.new.dat
+*.sparse
+*.unsparse.img
+*.bin
+*.apk
+*.jar
+*.dex
+*.vdex
+*.odex
+*.art
+*.prof
+*.dm
 
 factory/patch/mods/*/build/
+factory/patch/mods/**/build/
+factory/patch/mods/**/assets/
+factory/patch/mods/**/mods/
 
-.vscode/
 docs/
-
 tests/
-test_*/
-*_test.py
+*.md
