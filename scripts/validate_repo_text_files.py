@@ -19,20 +19,40 @@ def ok(msg: str) -> None:
     print(f"  [ OK ] {msg}")
 
 
-def check_min_lines(rel_path: str, min_lines: int) -> list[str]:
+def check_lf_bytes(rel_path: str, min_lf: int) -> bytes:
+    """Read raw bytes, fail if CR exists or LF count is below threshold."""
     path = REPO_ROOT / rel_path
     if not path.exists():
         fail(f"{rel_path}: file not found")
-        return []
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    if len(lines) < min_lines:
-        fail(f"{rel_path}: only {len(lines)} lines (minimum {min_lines} required — file may be corrupted/minified)")
+        return b""
+
+    raw = path.read_bytes()
+
+    # Fail on any CR byte (catches both CR-only and CRLF)
+    if b"\r" in raw:
+        cr_only = raw.count(b"\r") - raw.count(b"\r\n")
+        crlf = raw.count(b"\r\n")
+        fail(
+            f"{rel_path}: contains CR bytes (CRLF={crlf}, CR-only={cr_only}) — "
+            f"file must be LF-only. Run: python scripts/fix_lf.py"
+        )
     else:
-        ok(f"{rel_path}: {len(lines)} lines (>= {min_lines})")
-    return lines
+        ok(f"{rel_path}: no CR bytes (LF-only)")
+
+    lf_count = raw.count(b"\n")
+    if lf_count < min_lf:
+        fail(
+            f"{rel_path}: only {lf_count} LF bytes (minimum {min_lf} required) — "
+            f"file may be minified/corrupted"
+        )
+    else:
+        ok(f"{rel_path}: {lf_count} LF lines (>= {min_lf})")
+
+    return raw
 
 
-def check_contains(rel_path: str, text: str, required_patterns: list[str]) -> None:
+def check_contains(rel_path: str, raw: bytes, required_patterns: list[str]) -> None:
+    text = raw.decode("utf-8", errors="replace")
     for pat in required_patterns:
         if pat not in text:
             fail(f"{rel_path}: missing required pattern: {pat!r}")
@@ -40,10 +60,10 @@ def check_contains(rel_path: str, text: str, required_patterns: list[str]) -> No
             ok(f"{rel_path}: contains {pat!r}")
 
 
-def check_forbidden_inputs(rel_path: str, text: str, forbidden_terms: list[str]) -> None:
+def check_forbidden_inputs(rel_path: str, raw: bytes, forbidden_terms: list[str]) -> None:
     """Check that forbidden terms do not appear as YAML workflow input keys."""
+    text = raw.decode("utf-8", errors="replace")
     for term in forbidden_terms:
-        # Match the term as a YAML key in the inputs section (indented, colon-terminated)
         pattern = rf"^\s{{4,10}}{re.escape(term)}\s*:"
         if re.search(pattern, text, re.MULTILINE):
             fail(f"{rel_path}: forbidden term {term!r} appears as a workflow input key")
@@ -55,9 +75,9 @@ print("\n=== Validate repo text files ===\n")
 
 # ── .dockerignore ─────────────────────────────────────────────────────────────
 print("-- .dockerignore --")
-di_lines = check_min_lines(".dockerignore", 30)
-if di_lines:
-    check_contains(".dockerignore", "\n".join(di_lines), [
+di_raw = check_lf_bytes(".dockerignore", min_lf=30)
+if di_raw:
+    check_contains(".dockerignore", di_raw, [
         "*",
         "!server/**",
         "!factory/**",
@@ -72,19 +92,18 @@ if di_lines:
 
 # ── fly.toml ─────────────────────────────────────────────────────────────────
 print("\n-- fly.toml --")
-check_min_lines("fly.toml", 10)
+check_lf_bytes("fly.toml", min_lf=10)
 
 # ── docker/Dockerfile.builder ─────────────────────────────────────────────────
 print("\n-- docker/Dockerfile.builder --")
-check_min_lines("docker/Dockerfile.builder", 10)
+check_lf_bytes("docker/Dockerfile.builder", min_lf=10)
 
 # ── deadzone_mtk_fly.yml ─────────────────────────────────────────────────────
 print("\n-- .github/workflows/deadzone_mtk_fly.yml --")
 mtk_fly_path = ".github/workflows/deadzone_mtk_fly.yml"
-mtk_lines = check_min_lines(mtk_fly_path, 50)
-if mtk_lines:
-    mtk_text = "\n".join(mtk_lines)
-    check_forbidden_inputs(mtk_fly_path, mtk_text, [
+mtk_raw = check_lf_bytes(mtk_fly_path, min_lf=50)
+if mtk_raw:
+    check_forbidden_inputs(mtk_fly_path, mtk_raw, [
         "select_device_codename",
         "select_device",
         "custom_device",
@@ -92,6 +111,10 @@ if mtk_lines:
         "flavor",
         "runner_label",
     ])
+
+# ── validate_repo_text_files.py itself ───────────────────────────────────────
+print("\n-- scripts/validate_repo_text_files.py --")
+check_lf_bytes("scripts/validate_repo_text_files.py", min_lf=50)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 print(f"\n  Errors: {len(ERRORS)}")
