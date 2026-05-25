@@ -88,11 +88,20 @@ def run_factory(
     upload_pixeldrain: bool = False,
     notify_telegram: bool = False,
     template_zip: Optional[Path] = None,
+    notifier: Optional[Any] = None,
 ) -> dict:
     """Run the full DeadZone factory pipeline."""
     output_dir = (Path(output_dir) if output_dir else _REPO_ROOT / "output").resolve()
 
+    def _notify(stage: str, action: str, error: str | None = None) -> None:
+        if notifier is not None:
+            try:
+                notifier.update_stage(stage, action, error=error)
+            except Exception:
+                pass
+
     # ── Step 1-3: Resolve and create context ─────────────────────────────────
+    _notify("RESOLVING_DEVICE", "Resolving device metadata")
     device_profile = resolve_device(codename, soc_hint=soc)
     resolved_soc = device_profile.get("soc") or soc or "unknown"
     super_size = resolve_super_size(device_profile, resolved_soc)
@@ -124,8 +133,10 @@ def run_factory(
 
     # ── Step 4: Download / unpack ROM ─────────────────────────────────────────
     if ctx.execute and ctx.rom_path and ctx.project_dir is None:
+        _notify("DOWNLOADING_ROM", "Downloading source ROM")
         unpack_mod = _import("factory.unpack.pipeline")
         if unpack_mod and hasattr(unpack_mod, "UnpackPipeline"):
+            _notify("UNPACKING_ROM", "Extracting payload and partitions")
             def _unpack():
                 nonlocal ctx
                 pipe = unpack_mod.UnpackPipeline(
@@ -158,6 +169,8 @@ def run_factory(
 
     # ── Step 6: Base patch layer ──────────────────────────────────────────────
     if ok:
+        _notify("DETECTING_METADATA", "Detecting ROM metadata from build props")
+        _notify("APPLYING_BASE_PATCHES", "Applying base DeadZone patches")
         def _base():
             from factory.patch.base.runner import run_base
             return run_base(
@@ -172,6 +185,7 @@ def run_factory(
 
     # ── Step 7: Mod layer ─────────────────────────────────────────────────────
     if ok:
+        _notify("APPLYING_MOD_PATCHES", f"Applying {edition} mod patches")
         mod_module = f"factory.patch.mods.{edition}.runner"
         mod = _import(mod_module)
         if mod and hasattr(mod, "run_mod"):
@@ -194,6 +208,7 @@ def run_factory(
 
     # ── Steps 8-9: Repack + super ─────────────────────────────────────────────
     if ok and ctx.execute:
+        _notify("REPACKING_PARTITIONS", "Repacking changed partitions with erofs")
         erofs_mod = _import("factory.repack.pipeline_erofs_legacy")
         if erofs_mod and hasattr(erofs_mod, "apply_erofs_repack_legacy_stage"):
             staging = ctx.output_dir / "work" / "super_partitions"
@@ -208,6 +223,8 @@ def run_factory(
             ok = _run(ctx, "erofs_repack", _erofs, critical=True)
 
         if ok:
+            _notify("CAPTURING_ORIGINAL_SUPER_LAYOUT", "Reading original super partition byte sizes")
+            _notify("BUILDING_SUPER", "Building super.img with preserved byte layout")
             super_mod = _import("factory.repack.pipeline_super_legacy")
             if super_mod and hasattr(super_mod, "apply_super_build_legacy_stage"):
                 def _super():
@@ -226,6 +243,7 @@ def run_factory(
 
     # ── Step 10: Collect images ───────────────────────────────────────────────
     if ok and ctx.execute and ctx.soc == "mtk":
+        _notify("COLLECTING_IMAGES", "Collecting MTK firmware images")
         mtk_mod = _import("factory.images.mtk_firmware_collector_legacy")
         if mtk_mod and hasattr(mtk_mod, "collect_mtk_firmware_images_legacy"):
             def _mtk():
@@ -241,6 +259,8 @@ def run_factory(
 
     # ── Steps 11-12: Flash scripts + final ZIP ────────────────────────────────
     if ok:
+        _notify("GENERATING_FLASH_SCRIPT", "Generating image-driven AB flash script")
+        _notify("PACKAGING_ZIP", "Building final fastboot ZIP")
         zip_mod = _import("factory.output.final_zip_legacy")
         if zip_mod and hasattr(zip_mod, "build_final_fastboot_zip"):
             def _zip():
@@ -271,8 +291,13 @@ def run_factory(
             ctx.final_zip = fz.get("final_zip")
             ok = r_ok
 
+    # ── Step 13: Validate final ZIP ───────────────────────────────────────────
+    if ok:
+        _notify("VALIDATING_FINAL_ZIP", "Validating final ZIP structure")
+
     # ── Step 14: Upload PixelDrain ────────────────────────────────────────────
     if ok and ctx.execute and ctx.upload_pixeldrain and ctx.final_zip:
+        _notify("UPLOADING_PIXELDRAIN", "Uploading final ZIP to PixelDrain")
         pd_mod = _import("factory.upload.pixeldrain")
         if pd_mod and hasattr(pd_mod, "upload"):
             def _pd():
@@ -280,14 +305,9 @@ def run_factory(
             _run(ctx, "pixeldrain_upload", _pd)
             ctx.pixeldrain_link = ctx.stage_reports.get("pixeldrain_upload", {}).get("link")
 
-    # ── Step 15: Telegram ─────────────────────────────────────────────────────
-    if ctx.notify_telegram:
-        tg_mod = _import("factory.notify.telegram_live")
-        if tg_mod:
-            pass  # TelegramLiveStatus is wired in the orchestrating workflow
-
-    # ── Step 16: Cleanup ─────────────────────────────────────────────────────
+    # ── Step 15: Cleanup ─────────────────────────────────────────────────────
     if ctx.execute:
+        _notify("CLEANUP", "Cleaning workspace")
         cleanup_mod = _import("factory.cleanup.cleanup_workspace")
         if cleanup_mod and hasattr(cleanup_mod, "cleanup"):
             def _cleanup():
@@ -298,19 +318,23 @@ def run_factory(
             _run(ctx, "cleanup", _cleanup)
 
     # ── Write reports ─────────────────────────────────────────────────────────
-    report_files = write_pipeline_report(ctx, ctx.output_dir)
+    build_id = notifier.build_id if notifier is not None else None
+    telegram_section = notifier.report_section() if notifier is not None else None
+    report_files = write_pipeline_report(ctx, ctx.output_dir, telegram=telegram_section, build_id=build_id)
 
     final_status = "FAILED" if (ctx.errors and ctx.execute) else ("APPLIED" if ctx.execute else "DRY_RUN")
     print(f"[orchestrator] final_status={final_status}")
 
     return {
         "final_status": final_status,
+        "build_id": build_id,
         "build_name": ctx.build_name,
         "codename": ctx.codename,
         "edition": ctx.edition,
         "soc": ctx.soc,
         "final_zip": ctx.final_zip,
         "pixeldrain_link": ctx.pixeldrain_link,
+        "telegram_message_id": notifier.message_id if notifier is not None else None,
         "warnings": ctx.warnings,
         "errors": ctx.errors,
         "stage_reports": ctx.stage_reports,
