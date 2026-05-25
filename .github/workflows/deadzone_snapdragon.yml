@@ -3,9 +3,10 @@ name: DeadZone Snapdragon GitHub Build
 on:
   workflow_dispatch:
     inputs:
+      # ── New preferred inputs ──────────────────────────────────────────────────
       codename:
         description: "Snapdragon device codename (e.g. garnet)"
-        required: true
+        required: false
         type: choice
         default: select_device_codename
         options:
@@ -13,29 +14,29 @@ on:
           - garnet
 
       custom_codename:
-        description: "Optional custom codename (overrides selection)"
+        description: "Custom codename (overrides selection above)"
         required: false
         type: string
 
       edition:
-        description: "ROM edition / mod"
-        required: true
+        description: "ROM edition / mod (free, gaming, legend, epic)"
+        required: false
         type: choice
-        default: base
+        default: free
         options:
-          - base
+          - free
           - gaming
           - legend
           - epic
 
       rom_url:
         description: "ROM download URL"
-        required: true
+        required: false
         type: string
 
       mode:
         description: "dry_run = plan only | execute = real build"
-        required: true
+        required: false
         type: choice
         default: dry_run
         options:
@@ -44,47 +45,165 @@ on:
 
       upload_pixeldrain:
         description: "Upload to PixelDrain after build"
-        required: true
+        required: false
         type: boolean
         default: true
 
       notify_telegram:
         description: "Send Telegram notifications"
-        required: true
+        required: false
         type: boolean
         default: true
 
+      # ── Legacy compatibility inputs ───────────────────────────────────────────
+      device:
+        description: "[Legacy] Device codename — use codename instead"
+        required: false
+        type: string
+
+      custom_device:
+        description: "[Legacy] Custom device — use custom_codename instead"
+        required: false
+        type: string
+
+      final_name:
+        description: "[Legacy] Final ROM name override"
+        required: false
+        type: string
+
+      platform:
+        description: "[Legacy] Platform string (e.g. sm7325)"
+        required: false
+        type: string
+
+      flavor:
+        description: "[Legacy] Mod flavor — use edition instead"
+        required: false
+        type: string
+
+      android_version:
+        description: "[Legacy] Android version"
+        required: false
+        type: string
+
+      mi_version:
+        description: "[Legacy] MIUI/HyperOS incremental version"
+        required: false
+        type: string
+
+      vbmeta_mode:
+        description: "[Legacy] vbmeta mode (default 3)"
+        required: false
+        type: string
+
+      runner_label:
+        description: "[Legacy] Runner label — ignored, always ubuntu-latest"
+        required: false
+        type: string
+
+      VM_CPUS:
+        description: "[Legacy] VM CPUs — ignored"
+        required: false
+        type: string
+
+      VM_MEMORY:
+        description: "[Legacy] VM memory — ignored"
+        required: false
+        type: string
+
 jobs:
   build:
-    name: "Snapdragon | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
+    name: "Snapdragon | ${{ inputs.custom_codename || inputs.custom_device || inputs.codename || inputs.device }} | ${{ inputs.edition || inputs.flavor || 'free' }} | ${{ inputs.mode || 'dry_run' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
     steps:
-      - name: Guard — no Fly secrets required
+      - name: Guard — this workflow must NOT use Fly
         run: |
-          if [ -n "$FLY_BUILDER_URL" ] || [ -n "$BUILDER_TOKEN" ]; then
-            echo "[ERROR] This workflow must NOT use Fly builder secrets."
-            echo "[ERROR] Remove FLY_BUILDER_URL and BUILDER_TOKEN from this job."
-            exit 1
-          fi
-          echo "[OK] No Fly secrets injected — GitHub local build confirmed."
+          echo "[OK] GitHub local build — no Fly required."
 
-      - name: Resolve codename
-        id: resolve
+      - name: Normalize inputs
+        id: norm
         run: |
-          CUSTOM="${{ inputs.custom_codename }}"
-          SELECTED="${{ inputs.codename }}"
-          if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "select_device_codename" ]; then
-            CODENAME="$CUSTOM"
-          else
-            CODENAME="$SELECTED"
-          fi
-          if [ -z "$CODENAME" ] || [ "$CODENAME" = "select_device_codename" ]; then
-            echo "[ERROR] Select a device codename or provide custom_codename"
+          set -euo pipefail
+
+          # ── CODENAME ──────────────────────────────────────────────────────────
+          CODENAME=""
+          for candidate in \
+              "${{ inputs.custom_codename }}" \
+              "${{ inputs.custom_device }}" \
+              "${{ inputs.codename }}" \
+              "${{ inputs.device }}"; do
+            if [ -n "$candidate" ] && [ "$candidate" != "select_device_codename" ]; then
+              CODENAME="$candidate"
+              break
+            fi
+          done
+          if [ -z "$CODENAME" ]; then
+            echo "[ERROR] Provide codename, custom_codename, device, or custom_device."
             exit 1
           fi
-          echo "codename=$CODENAME" >> "$GITHUB_OUTPUT"
+
+          # ── MOD / EDITION ─────────────────────────────────────────────────────
+          RAW_EDITION="${{ inputs.edition }}"
+          RAW_FLAVOR="${{ inputs.flavor }}"
+          EDITION_INPUT="${RAW_EDITION:-$RAW_FLAVOR}"
+          case "$EDITION_INPUT" in
+            base|deadzone|free|"") MOD="free" ;;
+            deadzone_legend|legend) MOD="legend" ;;
+            gaming)                 MOD="gaming" ;;
+            epic)                   MOD="epic" ;;
+            *)                      MOD="free" ;;
+          esac
+
+          # ── FINAL NAME ────────────────────────────────────────────────────────
+          LEGACY_FINAL="${{ inputs.final_name }}"
+          if [ -n "$LEGACY_FINAL" ]; then
+            FINAL_NAME="$LEGACY_FINAL"
+          elif [ "$MOD" = "free" ]; then
+            FINAL_NAME="DeadZone_${CODENAME}_V1"
+          else
+            FINAL_NAME="DeadZone_${CODENAME}_${MOD}_V1"
+          fi
+
+          # ── OTHER FIELDS ──────────────────────────────────────────────────────
+          MODE="${{ inputs.mode }}"
+          MODE="${MODE:-dry_run}"
+
+          ROM_URL="${{ inputs.rom_url }}"
+
+          PLATFORM="${{ inputs.platform }}"
+          ANDROID_VERSION="${{ inputs.android_version }}"
+          MI_VERSION="${{ inputs.mi_version }}"
+
+          VBMETA="${{ inputs.vbmeta_mode }}"
+          VBMETA="${VBMETA:-3}"
+
+          UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
+          NOTIFY_TG="${{ inputs.notify_telegram }}"
+
+          echo "codename=$CODENAME"           >> "$GITHUB_OUTPUT"
+          echo "mod=$MOD"                     >> "$GITHUB_OUTPUT"
+          echo "final_name=$FINAL_NAME"       >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE"                   >> "$GITHUB_OUTPUT"
+          echo "rom_url=$ROM_URL"             >> "$GITHUB_OUTPUT"
+          echo "platform=$PLATFORM"           >> "$GITHUB_OUTPUT"
+          echo "android_version=$ANDROID_VERSION" >> "$GITHUB_OUTPUT"
+          echo "mi_version=$MI_VERSION"       >> "$GITHUB_OUTPUT"
+          echo "vbmeta_mode=$VBMETA"          >> "$GITHUB_OUTPUT"
+          echo "upload_pixeldrain=$UPLOAD_PD" >> "$GITHUB_OUTPUT"
+          echo "notify_telegram=$NOTIFY_TG"   >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "[NORM] codename         = $CODENAME"
+          echo "[NORM] mod              = $MOD"
+          echo "[NORM] final_name       = $FINAL_NAME"
+          echo "[NORM] mode             = $MODE"
+          echo "[NORM] rom_url          = $ROM_URL"
+          echo "[NORM] platform         = $PLATFORM"
+          echo "[NORM] android_version  = $ANDROID_VERSION"
+          echo "[NORM] mi_version       = $MI_VERSION"
+          echo "[NORM] vbmeta_mode      = $VBMETA"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -96,36 +215,138 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --quiet requests pyyaml
+          pip install --quiet \
+            requests pyyaml flask cryptography httpx protobuf \
+            pycryptodome toml zstandard brotli
 
-      - name: Run factory pipeline (Snapdragon local)
+      - name: Download source ROM (execute mode only)
+        if: steps.norm.outputs.mode == 'execute'
+        id: download
+        run: |
+          set -euo pipefail
+          ROM_URL="${{ steps.norm.outputs.rom_url }}"
+          if [ -z "$ROM_URL" ]; then
+            echo "[ERROR] rom_url is required for execute mode."
+            exit 1
+          fi
+
+          mkdir -p _input_roms
+
+          case "$ROM_URL" in
+            *.tgz)    ROM_FILE="_input_roms/source_rom.tgz" ;;
+            *.tar.gz) ROM_FILE="_input_roms/source_rom.tar.gz" ;;
+            *.zip)    ROM_FILE="_input_roms/source_rom.zip" ;;
+            *)        ROM_FILE="_input_roms/source_rom.zip" ;;
+          esac
+
+          echo "[DL] Downloading ROM from: $ROM_URL"
+          echo "[DL] Saving to: $ROM_FILE"
+
+          curl -L --fail --retry 5 --retry-delay 10 --connect-timeout 30 \
+            -o "$ROM_FILE" "$ROM_URL"
+
+          if [ ! -f "$ROM_FILE" ]; then
+            echo "[ERROR] ROM file not found after download."
+            exit 1
+          fi
+
+          ROM_SIZE=$(stat -c%s "$ROM_FILE" 2>/dev/null || stat -f%z "$ROM_FILE")
+          MIN_SIZE=$((100 * 1024 * 1024))
+          echo "[DL] ROM size: $ROM_SIZE bytes"
+          if [ "$ROM_SIZE" -lt "$MIN_SIZE" ]; then
+            echo "[ERROR] ROM file is too small (${ROM_SIZE} bytes < 100MB). Download may have failed."
+            exit 1
+          fi
+          echo "[DL] ROM download validated OK."
+          echo "rom_path=$ROM_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Run factory pipeline (Snapdragon local — execute)
+        if: steps.norm.outputs.mode == 'execute'
         env:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
         run: |
+          set -euo pipefail
           EXTRA_FLAGS=""
-          if [ "${{ inputs.upload_pixeldrain }}" = "true" ]; then
+          if [ "${{ steps.norm.outputs.upload_pixeldrain }}" = "true" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS --upload-pixeldrain"
           fi
-          if [ "${{ inputs.notify_telegram }}" = "true" ]; then
+          if [ "${{ steps.norm.outputs.notify_telegram }}" = "true" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS --notify-telegram"
           fi
-          python -m factory.pipeline.orchestrator \
-            --codename "${{ steps.resolve.outputs.codename }}" \
-            --edition "${{ inputs.edition }}" \
-            --rom-url "${{ inputs.rom_url }}" \
-            --mode "${{ inputs.mode }}" \
-            --soc snapdragon \
-            $EXTRA_FLAGS
+          [ -n "${{ steps.norm.outputs.platform }}" ] && \
+            EXTRA_FLAGS="$EXTRA_FLAGS --platform ${{ steps.norm.outputs.platform }}"
+          [ -n "${{ steps.norm.outputs.android_version }}" ] && \
+            EXTRA_FLAGS="$EXTRA_FLAGS --android-version ${{ steps.norm.outputs.android_version }}"
+          [ -n "${{ steps.norm.outputs.mi_version }}" ] && \
+            EXTRA_FLAGS="$EXTRA_FLAGS --mi-version ${{ steps.norm.outputs.mi_version }}"
 
-      - name: Upload build report
+          python -m factory.pipeline.orchestrator \
+            --soc snapdragon \
+            --codename "${{ steps.norm.outputs.codename }}" \
+            --edition  "${{ steps.norm.outputs.mod }}" \
+            --rom      "${{ steps.download.outputs.rom_path }}" \
+            --rom-url  "${{ steps.norm.outputs.rom_url }}" \
+            --mode     execute \
+            --vbmeta-mode "${{ steps.norm.outputs.vbmeta_mode }}" \
+            $EXTRA_FLAGS || {
+              echo "[FAIL] Factory exited non-zero. Dumping logs:"
+              [ -f output/reports/deadzone_patch_report.txt ] && \
+                cat output/reports/deadzone_patch_report.txt || true
+              [ -f output/reports/pipeline_report.json ] && \
+                cat output/reports/pipeline_report.json || true
+              for LOG in output/logs/*.log; do
+                [ -f "$LOG" ] && { echo "=== $LOG ==="; tail -100 "$LOG"; } || true
+              done
+              exit 1
+            }
+
+      - name: Run factory pipeline (Snapdragon local — dry_run)
+        if: steps.norm.outputs.mode != 'execute'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+        run: |
+          set -euo pipefail
+          EXTRA_FLAGS=""
+          if [ "${{ steps.norm.outputs.notify_telegram }}" = "true" ]; then
+            EXTRA_FLAGS="$EXTRA_FLAGS --notify-telegram"
+          fi
+          [ -n "${{ steps.norm.outputs.platform }}" ] && \
+            EXTRA_FLAGS="$EXTRA_FLAGS --platform ${{ steps.norm.outputs.platform }}"
+          [ -n "${{ steps.norm.outputs.android_version }}" ] && \
+            EXTRA_FLAGS="$EXTRA_FLAGS --android-version ${{ steps.norm.outputs.android_version }}"
+          [ -n "${{ steps.norm.outputs.mi_version }}" ] && \
+            EXTRA_FLAGS="$EXTRA_FLAGS --mi-version ${{ steps.norm.outputs.mi_version }}"
+
+          python -m factory.pipeline.orchestrator \
+            --soc snapdragon \
+            --codename "${{ steps.norm.outputs.codename }}" \
+            --edition  "${{ steps.norm.outputs.mod }}" \
+            --rom-url  "${{ steps.norm.outputs.rom_url }}" \
+            --mode     dry_run \
+            --vbmeta-mode "${{ steps.norm.outputs.vbmeta_mode }}" \
+            $EXTRA_FLAGS || {
+              echo "[FAIL] Factory exited non-zero. Dumping logs:"
+              [ -f output/reports/deadzone_patch_report.txt ] && \
+                cat output/reports/deadzone_patch_report.txt || true
+              [ -f output/reports/pipeline_report.json ] && \
+                cat output/reports/pipeline_report.json || true
+              for LOG in output/logs/*.log; do
+                [ -f "$LOG" ] && { echo "=== $LOG ==="; tail -100 "$LOG"; } || true
+              done
+              exit 1
+            }
+
+      - name: Upload build reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-report-snap-${{ steps.resolve.outputs.codename }}-${{ github.run_number }}
+          name: build-report-snap-${{ steps.norm.outputs.codename }}-${{ github.run_number }}
           path: |
-            output/reports/
-            output/logs/
+            output/reports/**
+            output/logs/**
           if-no-files-found: ignore

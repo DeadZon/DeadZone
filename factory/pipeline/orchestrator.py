@@ -160,8 +160,15 @@ def run_factory(
             ctx.errors.append("unpack pipeline module missing")
             ok = False
 
-    if ok and ctx.project_dir is None:
-        ctx.errors.append("project_dir is required (no execute-mode unpack result)")
+    if ok and ctx.execute and ctx.project_dir is None:
+        if rom_url and not rom_path:
+            ctx.errors.append(
+                "execute mode requires a downloaded rom_path; "
+                "workflow/job_runner must download the ROM before calling the orchestrator "
+                f"(rom_url={rom_url!r} was provided but no local file was given)"
+            )
+        else:
+            ctx.errors.append("project_dir is required (execute mode — unpack produced no project_dir)")
         ok = False
 
     if ok:
@@ -324,6 +331,14 @@ def run_factory(
 
     final_status = "FAILED" if (ctx.errors and ctx.execute) else ("APPLIED" if ctx.execute else "DRY_RUN")
     print(f"[orchestrator] final_status={final_status}")
+    if ctx.errors:
+        print(f"[orchestrator] ERRORS ({len(ctx.errors)}):")
+        for i, e in enumerate(ctx.errors, 1):
+            print(f"  [{i}] {e}")
+    if ctx.warnings:
+        print(f"[orchestrator] WARNINGS ({len(ctx.warnings)}):")
+        for i, w in enumerate(ctx.warnings, 1):
+            print(f"  [{i}] {w}")
 
     return {
         "final_status": final_status,
@@ -404,7 +419,15 @@ def main(argv=None) -> int:
         notify_telegram=args.notify_telegram,
         template_zip=args.template_zip,
     )
-    return 0 if result.get("final_status") in {"DRY_RUN", "APPLIED"} else 1
+    status = result.get("final_status")
+    if status not in {"DRY_RUN", "APPLIED"}:
+        errors = result.get("errors") or []
+        if errors:
+            print(f"[orchestrator] Build FAILED with {len(errors)} error(s):", file=sys.stderr)
+            for e in errors:
+                print(f"  - {e}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

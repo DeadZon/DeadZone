@@ -5,16 +5,57 @@ Runs in a daemon thread started by builder_api.py on startup.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
 import traceback
+from pathlib import Path
 
 from server.queue import claim_next, complete_job, fail_job, update_job_stage
+
+_WORK_ROOT = Path(os.environ.get("DZ_WORK_DIR", "/mnt/dz_data/work"))
+_MIN_ROM_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+def _download_rom(rom_url: str, build_id: str) -> Path:
+    """Download ROM to local work directory; return path."""
+    import urllib.request
+
+    work_dir = _WORK_ROOT / build_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = ".zip"
+    lower = rom_url.lower().split("?")[0]
+    if lower.endswith(".tgz"):
+        ext = ".tgz"
+    elif lower.endswith(".tar.gz"):
+        ext = ".tar.gz"
+
+    dest = work_dir / f"source_rom{ext}"
+
+    # Use requests if available for better reliability; fall back to urllib
+    try:
+        import requests
+        with requests.get(rom_url, stream=True, timeout=600) as r:
+            r.raise_for_status()
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8 * 1024 * 1024):
+                    f.write(chunk)
+    except ImportError:
+        urllib.request.urlretrieve(rom_url, dest)
+
+    size = dest.stat().st_size
+    if size < _MIN_ROM_BYTES:
+        raise RuntimeError(
+            f"Downloaded ROM is too small ({size} bytes < 100MB). "
+            f"URL may be invalid: {rom_url}"
+        )
+    return dest
 
 
 def _run_job(job) -> None:
     payload  = job.payload
-    notifier = job.notifier    # TelegramLiveStatus or None
+    notifier = job.notifier
 
     def _stage(stage: str, action: str) -> None:
         update_job_stage(job.job_id, stage)
@@ -29,21 +70,47 @@ def _run_job(job) -> None:
 
         from factory.pipeline.orchestrator import run_factory
 
+        codename = payload["codename"]
+        edition  = payload.get("edition") or payload.get("mod") or "free"
+        rom_url  = payload.get("rom_url", "")
+        mode     = payload.get("mode", "execute")
+        soc      = payload.get("soc", "")
+        build_id = job.build_id
+
         _stage("RESOLVING_DEVICE", "Resolving device metadata")
 
+        rom_path: Path | None = None
+
+        if mode == "execute":
+            if not rom_url:
+                raise ValueError("rom_url is required for execute mode but was not provided")
+
+            _stage("DOWNLOADING_ROM", "Downloading source ROM to Fly worker")
+            rom_path = _download_rom(rom_url, build_id)
+            _stage("ROM_DOWNLOADED", f"ROM downloaded ({rom_path.stat().st_size // (1024*1024)} MB)")
+
         result = run_factory(
-            codename=payload["codename"],
-            edition=payload.get("edition", "base"),
-            rom_url=payload.get("rom_url"),
-            mode=payload.get("mode", "execute"),
-            soc=payload.get("soc"),
+            codename=codename,
+            edition=edition,
+            rom_url=rom_url or None,
+            rom_path=rom_path,
+            mode=mode,
+            soc=soc,
+            platform=payload.get("platform") or None,
+            android_version=payload.get("android_version") or None,
+            mi_incremental=payload.get("mi_version") or None,
+            vbmeta_mode=payload.get("vbmeta_mode") or None,
             upload_pixeldrain=bool(payload.get("upload_pixeldrain", True)),
-            notify_telegram=False,   # notifier is passed directly below
+            notify_telegram=False,
             notifier=notifier,
         )
 
         final_status = result.get("final_status", "APPLIED")
         success = final_status in {"DRY_RUN", "APPLIED"}
+
+        if not success:
+            errors = result.get("errors") or []
+            print(f"[job_runner] FAILED — errors: {errors}")
 
         if notifier is not None:
             try:
@@ -61,6 +128,8 @@ def _run_job(job) -> None:
     except Exception as exc:
         tb = traceback.format_exc()
         short_err = f"{type(exc).__name__}: {exc}"
+        print(f"[job_runner] Exception: {short_err}")
+        print(tb)
         update_job_stage(job.job_id, "FAILED")
 
         if notifier is not None:

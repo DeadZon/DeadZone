@@ -3,9 +3,10 @@ name: DeadZone MTK Fly Build
 on:
   workflow_dispatch:
     inputs:
+      # ── New preferred inputs ──────────────────────────────────────────────────
       codename:
         description: "MTK device codename (e.g. zircon)"
-        required: true
+        required: false
         type: choice
         default: select_device_codename
         options:
@@ -17,29 +18,29 @@ on:
           - zircon
 
       custom_codename:
-        description: "Optional custom codename (overrides selection)"
+        description: "Custom codename (overrides selection above)"
         required: false
         type: string
 
       edition:
-        description: "ROM edition / mod"
-        required: true
+        description: "ROM edition / mod (free, gaming, legend, epic)"
+        required: false
         type: choice
-        default: base
+        default: free
         options:
-          - base
+          - free
           - gaming
           - legend
           - epic
 
       rom_url:
         description: "ROM download URL"
-        required: true
+        required: false
         type: string
 
       mode:
         description: "dry_run = plan only | execute = real build"
-        required: true
+        required: false
         type: choice
         default: dry_run
         options:
@@ -48,114 +49,264 @@ on:
 
       upload_pixeldrain:
         description: "Upload to PixelDrain after build"
-        required: true
+        required: false
         type: boolean
         default: true
 
       notify_telegram:
         description: "Send Telegram notifications"
-        required: true
+        required: false
         type: boolean
         default: true
 
+      # ── Legacy compatibility inputs ───────────────────────────────────────────
+      device:
+        description: "[Legacy] Device codename — use codename instead"
+        required: false
+        type: string
+
+      custom_device:
+        description: "[Legacy] Custom device — use custom_codename instead"
+        required: false
+        type: string
+
+      final_name:
+        description: "[Legacy] Final ROM name override"
+        required: false
+        type: string
+
+      platform:
+        description: "[Legacy] Platform string (e.g. mt6893)"
+        required: false
+        type: string
+
+      flavor:
+        description: "[Legacy] Mod flavor — use edition instead"
+        required: false
+        type: string
+
+      android_version:
+        description: "[Legacy] Android version"
+        required: false
+        type: string
+
+      mi_version:
+        description: "[Legacy] MIUI/HyperOS incremental version"
+        required: false
+        type: string
+
+      vbmeta_mode:
+        description: "[Legacy] vbmeta mode (default 3)"
+        required: false
+        type: string
+
+      runner_label:
+        description: "[Legacy] Runner label — ignored"
+        required: false
+        type: string
+
+      VM_CPUS:
+        description: "[Legacy] VM CPUs — ignored"
+        required: false
+        type: string
+
+      VM_MEMORY:
+        description: "[Legacy] VM memory — ignored"
+        required: false
+        type: string
+
 jobs:
   trigger-fly:
-    name: "MTK Fly | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
+    name: "MTK Fly | ${{ inputs.custom_codename || inputs.custom_device || inputs.codename || inputs.device }} | ${{ inputs.edition || inputs.flavor || 'free' }} | ${{ inputs.mode || 'dry_run' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    outputs:
+      build_id: ${{ steps.post.outputs.build_id }}
+      job_id: ${{ steps.post.outputs.job_id }}
+      telegram_message_id: ${{ steps.post.outputs.telegram_message_id }}
+
     steps:
-      - name: Guard — Fly secrets must be present
+      - name: Normalize inputs
+        id: norm
+        run: |
+          set -euo pipefail
+
+          # ── CODENAME ──────────────────────────────────────────────────────────
+          CODENAME=""
+          for candidate in \
+              "${{ inputs.custom_codename }}" \
+              "${{ inputs.custom_device }}" \
+              "${{ inputs.codename }}" \
+              "${{ inputs.device }}"; do
+            if [ -n "$candidate" ] && [ "$candidate" != "select_device_codename" ]; then
+              CODENAME="$candidate"
+              break
+            fi
+          done
+          if [ -z "$CODENAME" ]; then
+            echo "[ERROR] Provide codename, custom_codename, device, or custom_device."
+            exit 1
+          fi
+
+          # ── MOD / EDITION ─────────────────────────────────────────────────────
+          RAW_EDITION="${{ inputs.edition }}"
+          RAW_FLAVOR="${{ inputs.flavor }}"
+          EDITION_INPUT="${RAW_EDITION:-$RAW_FLAVOR}"
+          case "$EDITION_INPUT" in
+            base|deadzone|free|"") MOD="free" ;;
+            deadzone_legend|legend) MOD="legend" ;;
+            gaming)                 MOD="gaming" ;;
+            epic)                   MOD="epic" ;;
+            *)                      MOD="free" ;;
+          esac
+
+          # ── FINAL NAME ────────────────────────────────────────────────────────
+          LEGACY_FINAL="${{ inputs.final_name }}"
+          if [ -n "$LEGACY_FINAL" ]; then
+            FINAL_NAME="$LEGACY_FINAL"
+          elif [ "$MOD" = "free" ]; then
+            FINAL_NAME="DeadZone_${CODENAME}_V1"
+          else
+            FINAL_NAME="DeadZone_${CODENAME}_${MOD}_V1"
+          fi
+
+          # ── OTHER FIELDS ──────────────────────────────────────────────────────
+          MODE="${{ inputs.mode }}"
+          MODE="${MODE:-dry_run}"
+          ROM_URL="${{ inputs.rom_url }}"
+          PLATFORM="${{ inputs.platform }}"
+          ANDROID_VERSION="${{ inputs.android_version }}"
+          MI_VERSION="${{ inputs.mi_version }}"
+          VBMETA="${{ inputs.vbmeta_mode }}"
+          VBMETA="${VBMETA:-3}"
+
+          UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
+          NOTIFY_TG="${{ inputs.notify_telegram }}"
+          [ -z "$UPLOAD_PD" ] && UPLOAD_PD="true"
+          [ -z "$NOTIFY_TG" ] && NOTIFY_TG="true"
+
+          echo "codename=$CODENAME"               >> "$GITHUB_OUTPUT"
+          echo "mod=$MOD"                         >> "$GITHUB_OUTPUT"
+          echo "final_name=$FINAL_NAME"           >> "$GITHUB_OUTPUT"
+          echo "mode=$MODE"                       >> "$GITHUB_OUTPUT"
+          echo "rom_url=$ROM_URL"                 >> "$GITHUB_OUTPUT"
+          echo "platform=$PLATFORM"               >> "$GITHUB_OUTPUT"
+          echo "android_version=$ANDROID_VERSION" >> "$GITHUB_OUTPUT"
+          echo "mi_version=$MI_VERSION"           >> "$GITHUB_OUTPUT"
+          echo "vbmeta_mode=$VBMETA"              >> "$GITHUB_OUTPUT"
+          echo "upload_pixeldrain=$UPLOAD_PD"     >> "$GITHUB_OUTPUT"
+          echo "notify_telegram=$NOTIFY_TG"       >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "[NORM] codename         = $CODENAME"
+          echo "[NORM] mod              = $MOD"
+          echo "[NORM] final_name       = $FINAL_NAME"
+          echo "[NORM] mode             = $MODE"
+          echo "[NORM] rom_url          = $ROM_URL"
+          echo "[NORM] platform         = $PLATFORM"
+          echo "[NORM] android_version  = $ANDROID_VERSION"
+          echo "[NORM] mi_version       = $MI_VERSION"
+          echo "[NORM] vbmeta_mode      = $VBMETA"
+
+      - name: Validate Fly secrets
         env:
-          BUILDER_URL: ${{ secrets.FLY_BUILDER_URL }}
+          MTK_URL: ${{ secrets.MTK_FLY_BUILDER_URL }}
+          FALLBACK_URL: ${{ secrets.FLY_BUILDER_URL }}
           BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
         run: |
+          set -euo pipefail
+          BUILDER_URL="${MTK_URL:-$FALLBACK_URL}"
           MISSING=""
-          if [ -z "$BUILDER_URL" ]; then
-            MISSING="$MISSING FLY_BUILDER_URL"
-          fi
-          if [ -z "$BUILDER_TOKEN" ]; then
-            MISSING="$MISSING BUILDER_TOKEN"
-          fi
+          [ -z "$BUILDER_URL" ]   && MISSING="$MISSING MTK_FLY_BUILDER_URL(or FLY_BUILDER_URL)"
+          [ -z "$BUILDER_TOKEN" ] && MISSING="$MISSING BUILDER_TOKEN"
           if [ -n "$MISSING" ]; then
             echo "[ERROR] Required secrets not set:$MISSING"
-            echo "[ERROR] Add them in Settings → Secrets and variables → Actions"
             exit 1
           fi
-          echo "[OK] Fly secrets verified."
-
-      - name: Resolve codename
-        id: resolve
-        run: |
-          CUSTOM="${{ inputs.custom_codename }}"
-          SELECTED="${{ inputs.codename }}"
-          if [ -n "$CUSTOM" ] && [ "$CUSTOM" != "select_device_codename" ]; then
-            CODENAME="$CUSTOM"
-          else
-            CODENAME="$SELECTED"
-          fi
-          if [ -z "$CODENAME" ] || [ "$CODENAME" = "select_device_codename" ]; then
-            echo "[ERROR] Select a device codename or provide custom_codename"
-            exit 1
-          fi
-          echo "codename=$CODENAME" >> "$GITHUB_OUTPUT"
+          echo "[OK] Fly secrets verified. URL: $BUILDER_URL"
 
       - name: POST build job to Fly MTK builder
         id: post
         env:
-          BUILDER_URL: ${{ secrets.FLY_BUILDER_URL }}
+          MTK_URL: ${{ secrets.MTK_FLY_BUILDER_URL }}
+          FALLBACK_URL: ${{ secrets.FLY_BUILDER_URL }}
           BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
         run: |
-          CODENAME="${{ steps.resolve.outputs.codename }}"
-          PAYLOAD=$(printf '{
-            "source": "GitHub",
-            "soc": "mtk",
-            "codename": "%s",
-            "edition": "%s",
-            "mod": "%s",
-            "rom_url": "%s",
-            "mode": "%s",
-            "upload_pixeldrain": %s,
-            "notify_telegram": %s
-          }' \
-            "$CODENAME" \
-            "${{ inputs.edition }}" \
-            "${{ inputs.edition }}" \
-            "${{ inputs.rom_url }}" \
-            "${{ inputs.mode }}" \
-            "${{ inputs.upload_pixeldrain }}" \
-            "${{ inputs.notify_telegram }}")
+          set -euo pipefail
+          BUILDER_URL="${MTK_URL:-$FALLBACK_URL}"
+          CODENAME="${{ steps.norm.outputs.codename }}"
+          MOD="${{ steps.norm.outputs.mod }}"
+          MODE="${{ steps.norm.outputs.mode }}"
+          ROM_URL="${{ steps.norm.outputs.rom_url }}"
+          PLATFORM="${{ steps.norm.outputs.platform }}"
+          ANDROID_VERSION="${{ steps.norm.outputs.android_version }}"
+          MI_VERSION="${{ steps.norm.outputs.mi_version }}"
+          VBMETA="${{ steps.norm.outputs.vbmeta_mode }}"
+          FINAL_NAME="${{ steps.norm.outputs.final_name }}"
+          UPLOAD_PD="${{ steps.norm.outputs.upload_pixeldrain }}"
+          NOTIFY_TG="${{ steps.norm.outputs.notify_telegram }}"
 
-          echo "[FLY] Posting build to $BUILDER_URL/build"
-          echo "[FLY] Codename : $CODENAME"
-          echo "[FLY] Edition  : ${{ inputs.edition }}"
-          echo "[FLY] Mode     : ${{ inputs.mode }}"
+          # Build JSON payload using Python to avoid shell escaping issues
+          PAYLOAD=$(python3 - <<PYEOF
+          import json
+          d = {
+              "source":           "GitHub",
+              "soc":              "mtk",
+              "codename":         "$CODENAME",
+              "edition":          "$MOD",
+              "mod":              "$MOD",
+              "rom_url":          "$ROM_URL",
+              "mode":             "$MODE",
+              "platform":         "$PLATFORM",
+              "android_version":  "$ANDROID_VERSION",
+              "mi_version":       "$MI_VERSION",
+              "vbmeta_mode":      "$VBMETA",
+              "final_name":       "$FINAL_NAME",
+              "upload_pixeldrain": "$UPLOAD_PD" == "true",
+              "notify_telegram":   "$NOTIFY_TG" == "true",
+          }
+          print(json.dumps(d))
+          PYEOF
+          )
 
-          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+          echo "[FLY] Posting to $BUILDER_URL/build"
+          echo "[FLY] Codename  : $CODENAME"
+          echo "[FLY] Edition   : $MOD"
+          echo "[FLY] Mode      : $MODE"
+          echo "[FLY] ROM URL   : $ROM_URL"
+
+          HTTP_CODE=$(curl -sS -w "%{http_code}" \
+            -o response.json \
             -X POST "$BUILDER_URL/build" \
             -H "Authorization: Bearer $BUILDER_TOKEN" \
             -H "Content-Type: application/json" \
             -d "$PAYLOAD")
 
-          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
-          BODY=$(echo "$RESPONSE" | grep -v "HTTP_STATUS:")
+          echo "[FLY] HTTP status: $HTTP_CODE"
+          echo "[FLY] Response body:"
+          cat response.json
+          echo ""
 
-          echo "[FLY] HTTP status : $HTTP_STATUS"
-          echo "[FLY] Response    : $BODY"
-
-          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
-            echo "[ERROR] Fly builder returned HTTP $HTTP_STATUS — build not accepted."
-            exit 1
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "[ERROR] Fly builder returned HTTP $HTTP_CODE — build not accepted."
+            exit 3
           fi
 
-          BUILD_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('build_id',''))" 2>/dev/null || echo "")
-          JOB_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('job_id',''))" 2>/dev/null || echo "")
-          TG_MSG_ID=$(echo "$BODY" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('telegram_message_id',''))" 2>/dev/null || echo "")
+          BUILD_ID=$(python3 -c \
+            "import json,sys; d=json.load(open('response.json')); print(d.get('build_id',''))" \
+            2>/dev/null || echo "")
+          JOB_ID=$(python3 -c \
+            "import json,sys; d=json.load(open('response.json')); print(d.get('job_id',''))" \
+            2>/dev/null || echo "")
+          TG_MSG_ID=$(python3 -c \
+            "import json,sys; d=json.load(open('response.json')); print(d.get('telegram_message_id',''))" \
+            2>/dev/null || echo "")
 
-          echo "[FLY] build_id           : $BUILD_ID"
-          echo "[FLY] job_id             : $JOB_ID"
-          echo "[FLY] telegram_message_id: $TG_MSG_ID"
+          echo "[FLY] build_id            : $BUILD_ID"
+          echo "[FLY] job_id              : $JOB_ID"
+          echo "[FLY] telegram_message_id : $TG_MSG_ID"
 
-          echo "build_id=$BUILD_ID" >> "$GITHUB_OUTPUT"
-          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
-          echo "telegram_message_id=$TG_MSG_ID" >> "$GITHUB_OUTPUT"
+          echo "build_id=$BUILD_ID"                 >> "$GITHUB_OUTPUT"
+          echo "job_id=$JOB_ID"                     >> "$GITHUB_OUTPUT"
+          echo "telegram_message_id=$TG_MSG_ID"     >> "$GITHUB_OUTPUT"
