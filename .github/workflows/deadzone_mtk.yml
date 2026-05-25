@@ -206,8 +206,8 @@ jobs:
         if: steps.norm.outputs.mode == 'execute'
         env:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
+          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
+          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
         run: |
           set -euo pipefail
@@ -241,8 +241,8 @@ jobs:
       - name: Run factory pipeline (MTK local — dry_run)
         if: steps.norm.outputs.mode != 'execute'
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
+          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
+          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
         run: |
           set -euo pipefail

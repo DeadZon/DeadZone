@@ -42,6 +42,11 @@ def build_unpack_report(ctx: "BuildContext") -> dict:
         # Empty when no payload was processed or manifest parsing failed.
         # Do NOT use extracted image file sizes — use these values instead.
         "partition_sizes_from_manifest": dict(ctx.partition_sizes_from_manifest),
+        # Partition extraction details
+        "payload_extract_log":           ctx.payload_extract_log,
+        "partition_extract_log":         ctx.partition_extract_log,
+        "partition_image_files_found":   list(ctx.partition_image_files_found),
+        "partition_extract_results":     dict(ctx.partition_extract_results),
         # Path references for downstream stages
         "paths": {
             "root_dir": str(ctx.root_dir),

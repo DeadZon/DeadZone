@@ -161,6 +161,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate repo text files
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_repo_text_files.py
+
       - name: Validate Fly secrets and notify on failure
         env:
           SNAP_URL: ${{ secrets.SNAPDRAGON_FLY_BUILDER_URL }}
@@ -210,6 +215,25 @@ jobs:
 
           echo "[OK] Fly secrets verified. URL: $BUILDER_URL"
 
+      - name: Health check Fly builder
+        env:
+          SNAP_URL: ${{ secrets.SNAPDRAGON_FLY_BUILDER_URL }}
+          FALLBACK_URL: ${{ secrets.FLY_BUILDER_URL }}
+        run: |
+          set -euo pipefail
+          BUILDER_URL="${SNAP_URL:-$FALLBACK_URL}"
+          echo "[FLY] Health check: $BUILDER_URL/health"
+          if ! curl -fsS \
+               --retry 5 --retry-delay 5 \
+               --connect-timeout 10 --max-time 30 \
+               "$BUILDER_URL/health"; then
+            echo ""
+            echo "[ERROR] Fly builder health check failed. Deploy or start dz-builder-snap before dispatch."
+            exit 1
+          fi
+          echo ""
+          echo "[OK] Fly builder is healthy."
+
       - name: POST build job to Fly Snapdragon builder
         id: post
         env:
@@ -230,7 +254,7 @@ jobs:
           PAYLOAD=$(python3 - <<PYEOF
           import json
           d = {
-              "source":            "GitHub",
+              "source":            "Fly",
               "soc":               "snapdragon",
               "codename":          "$CODENAME",
               "edition":           "$MOD",
@@ -252,6 +276,8 @@ jobs:
           echo "[FLY] ROM URL  : $ROM_URL"
 
           HTTP_CODE=$(curl -sS -w "%{http_code}" \
+            --retry 5 --retry-all-errors --retry-delay 10 \
+            --connect-timeout 20 --max-time 120 \
             -o response.json \
             -X POST "$BUILDER_URL/build" \
             -H "Authorization: Bearer $BUILDER_TOKEN" \

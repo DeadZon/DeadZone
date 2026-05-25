@@ -2,14 +2,17 @@
 
 Fails (exit 1) when any of these invariants are violated:
   1. payload_found=true  AND  partitions_extracted=[]
+     — must reference partition_extract.log
   2. Any stage final_status=APPLIED but errors list is not empty
   3. apk_mods sub-report contains import errors
   4. erofs_repack partitions_found=[] in execute mode after a successful unpack
   5. super_build ran lpmake without original partition sizes
+  6. notify_telegram requested but telegram_status.json not produced
 
 Usage:
     python scripts/validate_build_report.py <pipeline_report.json>
     python scripts/validate_build_report.py <01_unpack_report.json> [<13_erofs_report.json> ...]
+    python scripts/validate_build_report.py --help
 """
 from __future__ import annotations
 
@@ -51,11 +54,14 @@ def check_unpack_report(report: dict, label: str = "unpack") -> None:
     payload_found = report.get("payload_found", False)
     partitions = report.get("partitions_extracted") or []
     super_found = report.get("super_found", False)
+    imgs_found  = report.get("partition_image_files_found") or []
+    part_log    = report.get("partition_extract_log") or "output/logs/partition_extract.log"
 
     if payload_found and not super_found and not partitions:
+        hint = f" See {part_log}" if imgs_found else ""
         fail(
             f"{label}: payload_found=true but partitions_extracted=[] — "
-            "payload extraction produced nothing; pipeline must not have continued."
+            f"payload extraction produced nothing; pipeline must not have continued.{hint}"
         )
     elif payload_found and partitions:
         ok(f"{label}: payload_found=true, partitions_extracted={partitions}")
@@ -147,9 +153,36 @@ def check_super_report(super_report: dict, label: str = "super_build") -> None:
         ok(f"{label}: correct — super refused lpmake due to missing metadata")
 
 
+# ── Check 6: telegram_status.json existence when notify_telegram was true ─────
+
+def check_telegram_status(report: dict, report_path: Path, label: str = "telegram") -> None:
+    print(f"\n=== {label}: telegram_status.json presence ===")
+    notify = report.get("notify_telegram") or report.get(
+        "telegram", {}
+    ).get("notify_telegram") if isinstance(report.get("telegram"), dict) else False
+
+    if not notify:
+        ok(f"{label}: notify_telegram=false — telegram_status.json not required")
+        return
+
+    # Look for telegram_status.json relative to the report file
+    candidates = [
+        report_path.parent / "telegram_status.json",
+        report_path.parent.parent / "reports" / "telegram_status.json",
+    ]
+    found = next((c for c in candidates if c.exists()), None)
+    if found:
+        ok(f"{label}: telegram_status.json found at {found}")
+    else:
+        fail(
+            f"{label}: notify_telegram=true but telegram_status.json not produced — "
+            "orchestrator must write output/reports/telegram_status.json on every build"
+        )
+
+
 # ── Main dispatcher ───────────────────────────────────────────────────────────
 
-def _validate_pipeline_report(report: dict) -> None:
+def _validate_pipeline_report(report: dict, report_path: Path) -> None:
     """Validate a full pipeline_report JSON (from legacy_build_orchestrator)."""
 
     # 1. Unpack
@@ -188,6 +221,9 @@ def _validate_pipeline_report(report: dict) -> None:
     if super_rep:
         check_super_report(super_rep, "stage_reports/super_build")
 
+    # 6. Telegram status file
+    check_telegram_status(report, report_path, "pipeline/telegram")
+
 
 def _validate_standalone_report(path: Path, report: dict) -> None:
     """Validate a standalone stage report by name."""
@@ -209,10 +245,18 @@ def _validate_standalone_report(path: Path, report: dict) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    paths = [Path(a) for a in (argv if argv is not None else sys.argv[1:])]
-    if not paths:
-        print("Usage: validate_build_report.py <report.json> [<report2.json> ...]", file=sys.stderr)
-        return 2
+    args = argv if argv is not None else sys.argv[1:]
+    if not args or "--help" in args or "-h" in args:
+        print(
+            "Usage: validate_build_report.py <report.json> [<report2.json> ...]\n"
+            "\n"
+            "Validates one or more DeadZone build report JSON files for consistency.\n"
+            "Accepts pipeline_report.json (full) or individual stage reports.\n",
+            file=sys.stderr,
+        )
+        return 0 if ("--help" in args or "-h" in args) else 2
+
+    paths = [Path(a) for a in args]
 
     for path in paths:
         if not path.exists():
@@ -225,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
         if stage_key == "legacy_build_pipeline" or "stages" in report:
             print(f"\n{'=' * 60}")
             print(f"Validating full pipeline report: {path}")
-            _validate_pipeline_report(report)
+            _validate_pipeline_report(report, path)
         else:
             print(f"\n{'=' * 60}")
             print(f"Validating standalone report: {path}")

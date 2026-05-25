@@ -2,6 +2,16 @@ name: Deploy DeadZone Fly Builder
 
 on:
   workflow_dispatch:
+    inputs:
+      target_app:
+        description: "Fly app to deploy"
+        required: true
+        type: choice
+        default: dz-builder-mtk
+        options:
+          - dz-builder-mtk
+          - dz-builder-snap
+
   push:
     branches:
       - main
@@ -14,7 +24,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to Fly.io
+    name: "Deploy ${{ inputs.target_app || 'dz-builder-mtk' }} to Fly.io"
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -26,6 +36,10 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly
-        run: flyctl deploy --remote-only
+        run: |
+          set -euo pipefail
+          APP="${{ inputs.target_app || 'dz-builder-mtk' }}"
+          echo "[DEPLOY] Deploying app: $APP"
+          flyctl deploy --app "$APP" --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

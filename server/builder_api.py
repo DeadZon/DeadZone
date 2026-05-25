@@ -54,11 +54,33 @@ def _handle_auth(exc):
     return jsonify({"error": exc.message}), 401
 
 
+_REJECTED_CODENAMES = frozenset({
+    "select_device_codename",
+    "select_device",
+    "device",
+    "default",
+    "none",
+    "null",
+    "",
+})
+
+_LEGACY_FIELD_NAMES = frozenset({
+    "device", "custom_device", "flavor", "platform",
+    "android_version", "mi_version", "vbmeta_mode",
+})
+
+
 def _normalize_payload(payload: dict) -> tuple[dict, str | None]:
     """Normalize legacy + new fields into canonical form.
 
     Returns (normalized_dict, error_string_or_None).
+    Legacy fields are accepted internally but logged as warnings.
     """
+    # ── Legacy field detection ────────────────────────────────────────────────
+    used_legacy = [f for f in _LEGACY_FIELD_NAMES if payload.get(f)]
+    if used_legacy:
+        app.logger.warning("Legacy fields in request payload: %s — update caller to use canonical fields", used_legacy)
+
     # ── CODENAME ──────────────────────────────────────────────────────────────
     codename = (
         payload.get("custom_codename")
@@ -66,9 +88,16 @@ def _normalize_payload(payload: dict) -> tuple[dict, str | None]:
         or payload.get("codename")
         or payload.get("device")
         or ""
+    ).strip().lower()
+    if codename in _REJECTED_CODENAMES:
+        return {}, f"codename is required (got: {codename!r})"
+    codename = (
+        payload.get("custom_codename")
+        or payload.get("custom_device")
+        or payload.get("codename")
+        or payload.get("device")
+        or ""
     ).strip()
-    if not codename or codename == "select_device_codename":
-        return {}, "codename is required"
 
     # ── MOD / EDITION ─────────────────────────────────────────────────────────
     raw = (

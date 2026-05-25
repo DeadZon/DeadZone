@@ -70,6 +70,64 @@ def _run(ctx: BuildContext, stage_id: str, fn, *, critical: bool = False) -> boo
     return True
 
 
+# ── Telegram status helper ────────────────────────────────────────────────────
+
+def _write_telegram_status(
+    notifier: Optional[Any],
+    enabled: bool,
+    soc: str,
+    source: str,
+    output_dir: Path,
+) -> None:
+    """Write output/reports/telegram_status.json for diagnostics and validation."""
+    import json as _json
+    import os
+
+    soc_norm = (soc or "").lower()
+    if soc_norm == "mtk":
+        token_present   = bool(os.environ.get("TELEGRAM_MTK_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN"))
+        chat_id_present = bool(os.environ.get("TELEGRAM_MTK_CHAT_ID") or os.environ.get("TELEGRAM_CHAT_ID"))
+    elif soc_norm == "snapdragon":
+        token_present   = bool(os.environ.get("TELEGRAM_SNAPDRAGON_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN"))
+        chat_id_present = bool(os.environ.get("TELEGRAM_SNAPDRAGON_CHAT_ID") or os.environ.get("TELEGRAM_CHAT_ID"))
+    else:
+        token_present   = bool(os.environ.get("TELEGRAM_BOT_TOKEN"))
+        chat_id_present = bool(os.environ.get("TELEGRAM_CHAT_ID"))
+
+    status: dict = {
+        "enabled":           enabled,
+        "soc":               soc_norm or "unknown",
+        "source":            source,
+        "token_present":     token_present,
+        "chat_id_present":   chat_id_present,
+        "message_id":        None,
+        "first_update_time": None,
+        "last_update_time":  None,
+        "final_status":      None,
+        "last_error":        None,
+    }
+
+    if notifier is not None:
+        try:
+            status["message_id"]        = notifier.message_id
+            status["first_update_time"] = notifier.first_update_time
+            status["last_update_time"]  = notifier.last_update_time
+            status["final_status"]      = notifier.final_status
+            last_err = getattr(notifier, "last_error", None)
+            status["last_error"] = str(last_err)[:500] if last_err else None
+        except Exception:
+            pass
+
+    try:
+        reports_dir = output_dir / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        out_path = reports_dir / "telegram_status.json"
+        out_path.write_text(_json.dumps(status, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"[orchestrator] telegram_status.json → {out_path}")
+    except Exception as exc:
+        print(f"[orchestrator] Warning: could not write telegram_status.json: {exc}")
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def run_factory(
@@ -89,9 +147,59 @@ def run_factory(
     notify_telegram: bool = False,
     template_zip: Optional[Path] = None,
     notifier: Optional[Any] = None,
+    source: str = "GitHub",
 ) -> dict:
     """Run the full DeadZone factory pipeline."""
+    import os
+
     output_dir = (Path(output_dir) if output_dir else _REPO_ROOT / "output").resolve()
+
+    # ── Telegram early-fail / notifier creation for GitHub local builds ───────
+    if notify_telegram and notifier is None:
+        soc_norm = (soc or "").lower()
+        _token = _chat = ""
+        if soc_norm == "mtk":
+            _token = os.environ.get("TELEGRAM_MTK_BOT_TOKEN", "")
+            _chat  = os.environ.get("TELEGRAM_MTK_CHAT_ID", "")
+        elif soc_norm == "snapdragon":
+            _token = os.environ.get("TELEGRAM_SNAPDRAGON_BOT_TOKEN", "")
+            _chat  = os.environ.get("TELEGRAM_SNAPDRAGON_CHAT_ID", "")
+        # Allow fallback only when SoC-specific vars are absent
+        if not _token:
+            _token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+        if not _chat:
+            _chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+        if not _token or not _chat:
+            soc_label = soc_norm.upper() if soc_norm else "unknown SoC"
+            return {
+                "final_status": "FAILED",
+                "errors": [
+                    f"Telegram requested but {soc_label} Telegram secrets are missing. "
+                    f"Set TELEGRAM_MTK_BOT_TOKEN + TELEGRAM_MTK_CHAT_ID for MTK, or "
+                    f"TELEGRAM_SNAPDRAGON_BOT_TOKEN + TELEGRAM_SNAPDRAGON_CHAT_ID for Snapdragon."
+                ],
+                "warnings": [],
+            }
+
+        try:
+            from factory.notify.telegram_live import TelegramLiveStatus, generate_build_id
+            _build_id = generate_build_id(soc_norm or "unk", codename)
+            notifier = TelegramLiveStatus(
+                build_id=_build_id,
+                soc=soc_norm or "unknown",
+                codename=codename,
+                mod=edition,
+                mode=mode,
+                rom_url=rom_url,
+                upload_pixeldrain=upload_pixeldrain,
+                source=source,
+                enabled=True,
+                output_dir=output_dir,
+            )
+            notifier.start()
+        except Exception as exc:
+            print(f"[orchestrator] Telegram notifier setup failed: {exc}")
 
     def _notify(stage: str, action: str, error: str | None = None) -> None:
         if notifier is not None:
@@ -328,6 +436,9 @@ def run_factory(
     build_id = notifier.build_id if notifier is not None else None
     telegram_section = notifier.report_section() if notifier is not None else None
     report_files = write_pipeline_report(ctx, ctx.output_dir, telegram=telegram_section, build_id=build_id)
+
+    # Write telegram_status.json for diagnostics and validation
+    _write_telegram_status(notifier, notify_telegram, soc or "", source, output_dir)
 
     final_status = "FAILED" if (ctx.errors and ctx.execute) else ("APPLIED" if ctx.execute else "DRY_RUN")
     print(f"[orchestrator] final_status={final_status}")

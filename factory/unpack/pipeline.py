@@ -176,6 +176,7 @@ class UnpackPipeline:
 
                 payload_out_dir = work_dir / "payload_extracted"
                 log_path = self.output_root / "logs" / "payload_extract.log"
+                ctx.payload_extract_log = str(log_path)
 
                 extract_ok, manifest_sizes = extract_from_payload(
                     payload_bin=payload_bin,
@@ -201,10 +202,21 @@ class UnpackPipeline:
                             f"[unpack] No super.img from payload; "
                             f"extracting dynamic partition images …"
                         )
-                        parts_info = extract_dynamic_partitions_from_payload_dir(
+                        partition_log_path = self.output_root / "logs" / "partition_extract.log"
+                        ctx.partition_extract_log = str(partition_log_path)
+
+                        parts_info, partition_extract_results = extract_dynamic_partitions_from_payload_dir(
                             payload_out_dir=payload_out_dir,
                             project_dir=project_dir,
+                            log_path=partition_log_path,
                         )
+                        ctx.partition_extract_results = partition_extract_results
+                        ctx.partition_image_files_found = [
+                            f for f in [
+                                p.name for p in payload_out_dir.glob("*.img")
+                            ]
+                        ]
+
                         if parts_info:
                             print(
                                 f"[unpack] Dynamic partitions extracted from payload: "
@@ -213,7 +225,8 @@ class UnpackPipeline:
                         else:
                             ctx.warn(
                                 "Payload extraction produced .img files but none could be "
-                                "extracted into partition directories."
+                                "extracted into partition directories. "
+                                f"See {partition_log_path}"
                             )
                 else:
                     ctx.warn(

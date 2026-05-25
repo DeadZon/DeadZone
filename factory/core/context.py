@@ -49,6 +49,16 @@ class BuildContext:
     # Empty when no payload was processed or manifest parsing failed.
     partition_sizes_from_manifest: dict[str, int] = field(default_factory=dict)
 
+    # Dynamic .img files found in payload_extracted dir (names only)
+    partition_image_files_found: list[str] = field(default_factory=list)
+
+    # Per-partition extraction results: {name: {image_found, image_size, detected_type, status, error, native}}
+    partition_extract_results: dict = field(default_factory=dict)
+
+    # Log file paths for artifact upload
+    payload_extract_log: Optional[str] = None
+    partition_extract_log: Optional[str] = None
+
     # ── Diagnostics ───────────────────────────────────────────────────────────
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

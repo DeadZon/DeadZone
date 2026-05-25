@@ -262,6 +262,73 @@ for name in ALL_BUILD_WORKFLOWS:
         warn(f"{name}: could not read codename input definition")
 
 
+# ── Check 9: Telegram secret cross-wiring ─────────────────────────────────────
+# MTK workflows must not set TELEGRAM_SNAPDRAGON_* env keys.
+# Snapdragon workflows must not set TELEGRAM_MTK_* env keys.
+# GitHub workflows must set SoC-specific env keys (not only generic BOT_TOKEN).
+print("\n=== Check 9: Telegram bot secret separation ===")
+
+_MTK_FORBIDDEN_SNAP  = ["TELEGRAM_SNAPDRAGON_BOT_TOKEN", "TELEGRAM_SNAPDRAGON_CHAT_ID"]
+_SNAP_FORBIDDEN_MTK  = ["TELEGRAM_MTK_BOT_TOKEN", "TELEGRAM_MTK_CHAT_ID"]
+
+
+def _strip_yaml_comments(text: str) -> str:
+    lines = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if not stripped.startswith("#"):
+            lines.append(line)
+    return "\n".join(lines)
+
+
+for name in ["deadzone_mtk.yml", "deadzone_mtk_fly.yml"]:
+    if name not in texts:
+        continue
+    body = _strip_yaml_comments(texts[name])
+    clean = True
+    for bad in _MTK_FORBIDDEN_SNAP:
+        if bad in body:
+            fail(f"{name}: must not reference Snapdragon secret '{bad}'")
+            clean = False
+    if clean:
+        ok(f"{name}: no Snapdragon Telegram secret cross-wiring")
+
+for name in ["deadzone_snapdragon.yml", "deadzone_snapdragon_fly.yml"]:
+    if name not in texts:
+        continue
+    body = _strip_yaml_comments(texts[name])
+    clean = True
+    for bad in _SNAP_FORBIDDEN_MTK:
+        if bad in body:
+            fail(f"{name}: must not reference MTK secret '{bad}'")
+            clean = False
+    if clean:
+        ok(f"{name}: no MTK Telegram secret cross-wiring")
+
+# GitHub local workflows must use SoC-specific env key names (not only generic remapping)
+if "deadzone_mtk.yml" in texts:
+    import re as _re
+    body = _strip_yaml_comments(texts["deadzone_mtk.yml"])
+    if _re.search(r"TELEGRAM_MTK_BOT_TOKEN\s*:", body):
+        ok("deadzone_mtk.yml: TELEGRAM_MTK_BOT_TOKEN env key set correctly")
+    else:
+        fail(
+            "deadzone_mtk.yml: must set env key 'TELEGRAM_MTK_BOT_TOKEN:' "
+            "(not remap it to TELEGRAM_BOT_TOKEN) so SoC-specific resolver works"
+        )
+
+if "deadzone_snapdragon.yml" in texts:
+    import re as _re
+    body = _strip_yaml_comments(texts["deadzone_snapdragon.yml"])
+    if _re.search(r"TELEGRAM_SNAPDRAGON_BOT_TOKEN\s*:", body):
+        ok("deadzone_snapdragon.yml: TELEGRAM_SNAPDRAGON_BOT_TOKEN env key set correctly")
+    else:
+        fail(
+            "deadzone_snapdragon.yml: must set env key 'TELEGRAM_SNAPDRAGON_BOT_TOKEN:' "
+            "(not remap it to TELEGRAM_BOT_TOKEN) so SoC-specific resolver works"
+        )
+
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 print("\n=== Summary ===")
 print(f"  Errors  : {len(errors)}")

@@ -254,7 +254,7 @@ jobs:
           PAYLOAD=$(python3 - <<PYEOF
           import json
           d = {
-              "source":            "GitHub",
+              "source":            "Fly",
               "soc":               "mtk",
               "codename":          "$CODENAME",
               "edition":           "$MOD",
