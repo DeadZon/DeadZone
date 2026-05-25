@@ -251,7 +251,7 @@ jobs:
           echo "[FLY] Mode     : $MODE"
           echo "[FLY] ROM URL  : $ROM_URL"
 
-          HTTP_CODE=$(curl -sS -w "%{http_code}" \
+          HTTP_CODE=$(curl -k -sS -w "%{http_code}" \
             -o response.json \
             -X POST "$BUILDER_URL/build" \
             -H "Authorization: Bearer $BUILDER_TOKEN" \
