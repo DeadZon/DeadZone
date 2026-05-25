@@ -97,7 +97,11 @@ class UnpackPipeline:
         from factory.core.context import BuildContext
         from factory.unpack.archive import detect_archive_type, extract_rom
         from factory.unpack.build_prop import read_build_props, resolve_effective_device
-        from factory.unpack.partitions import collect_boot_images, collect_extracted_partitions
+        from factory.unpack.partitions import (
+            collect_boot_images,
+            collect_extracted_partitions,
+            extract_dynamic_partitions_from_payload_dir,
+        )
         from factory.unpack.payload import extract_from_payload, find_payload_bin
         from factory.unpack.report import write_reports
         from factory.unpack.super_image import extract_partitions, find_super_img, unpack_super_img
@@ -166,24 +170,56 @@ class UnpackPipeline:
             ctx.payload_found = bool(payload_paths)
 
             if payload_paths:
-                print(f"[unpack] payload.bin found: {payload_paths[0]}")
-                print(f"[unpack] Attempting partition extraction from payload.bin …")
-                success = extract_from_payload(
-                    extracted_dir=extracted_dir or work_dir,
-                    project_dir=project_dir,
-                    search_roots=search_roots,
+                payload_bin = payload_paths[0]
+                print(f"[unpack] payload.bin found: {payload_bin}")
+                print(f"[unpack] Extracting partitions from payload.bin …")
+
+                payload_out_dir = work_dir / "payload_extracted"
+                log_path = self.output_root / "logs" / "payload_extract.log"
+
+                extract_ok, manifest_sizes = extract_from_payload(
+                    payload_bin=payload_bin,
+                    out_dir=payload_out_dir,
+                    log_path=log_path,
                 )
-                if success:
-                    # payload extraction may have produced super.img — check again
-                    re_found = find_super_img(extracted_dir or work_dir) if extracted_dir else None
+                ctx.partition_sizes_from_manifest = manifest_sizes
+                if manifest_sizes:
+                    print(
+                        f"[unpack] Manifest partition sizes recorded "
+                        f"({len(manifest_sizes)} entries) — use for super rebuild."
+                    )
+
+                if extract_ok:
+                    # Check if extraction produced super.img directly.
+                    re_found = find_super_img(payload_out_dir)
                     if re_found:
                         super_img_path = re_found
                         ctx.super_found = True
                         print(f"[unpack] super.img materialised from payload: {super_img_path}")
                     else:
-                        print(f"[unpack] Payload extracted direct partition images (no super.img).")
+                        print(
+                            f"[unpack] No super.img from payload; "
+                            f"extracting dynamic partition images …"
+                        )
+                        parts_info = extract_dynamic_partitions_from_payload_dir(
+                            payload_out_dir=payload_out_dir,
+                            project_dir=project_dir,
+                        )
+                        if parts_info:
+                            print(
+                                f"[unpack] Dynamic partitions extracted from payload: "
+                                f"{', '.join(sorted(parts_info))}"
+                            )
+                        else:
+                            ctx.warn(
+                                "Payload extraction produced .img files but none could be "
+                                "extracted into partition directories."
+                            )
                 else:
-                    ctx.warn("payload.bin extraction failed or produced no usable output.")
+                    ctx.warn(
+                        "payload.bin extraction failed (both internal extractor and "
+                        "payload-dumper-go). See logs/payload_extract.log for details."
+                    )
             else:
                 ctx.payload_found = False
                 print(f"[unpack] payload.bin not found.")

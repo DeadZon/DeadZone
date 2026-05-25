@@ -44,6 +44,11 @@ class BuildContext:
     partitions: list[str] = field(default_factory=list)
     images: list[str] = field(default_factory=list)       # standalone boot-class images
 
+    # Original partition sizes from payload manifest metadata.
+    # Use for super rebuild — NOT extracted image file sizes.
+    # Empty when no payload was processed or manifest parsing failed.
+    partition_sizes_from_manifest: dict[str, int] = field(default_factory=dict)
+
     # ── Diagnostics ───────────────────────────────────────────────────────────
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)

@@ -38,6 +38,10 @@ def build_unpack_report(ctx: "BuildContext") -> dict:
         "mi_version": ctx.mi_version,
         "warnings": ctx.warnings,
         "errors": ctx.errors,
+        # Original partition sizes from payload manifest (for super rebuild).
+        # Empty when no payload was processed or manifest parsing failed.
+        # Do NOT use extracted image file sizes — use these values instead.
+        "partition_sizes_from_manifest": dict(ctx.partition_sizes_from_manifest),
         # Path references for downstream stages
         "paths": {
             "root_dir": str(ctx.root_dir),
