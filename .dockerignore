@@ -1,16 +1,13 @@
-﻿# DeadZone Fly builder context allowlist
+# DeadZone Fly builder context allowlist
 # Default: send nothing, then allow only runtime source.
 *
 
 !.dockerignore
+!.gitattributes
 !requirements.txt
-!Dockerfile
 !docker/
 !docker/**
 !fly.toml
-!build_script_mtk.sh
-!build_script_snap.sh
-
 !server/
 !server/**
 !factory/
@@ -23,7 +20,6 @@
 !scripts/**
 !assets/
 !assets/**
-
 !third_party/
 !third_party/mezo_core/
 !third_party/mezo_core/**
@@ -44,6 +40,26 @@ third_party/mezo_core/downloads
 third_party/mezo_core/downloads/**
 third_party/mezo_core/payload_extracted
 third_party/mezo_core/payload_extracted/**
+
+# Windows-only tools — not needed on Linux builder
+third_party/mezo_core/bin/Windows
+third_party/mezo_core/bin/Windows/**
+third_party/mezo_core/bin/openssl
+third_party/mezo_core/bin/openssl/**
+third_party/mezo_core/bin/extra_flash
+third_party/mezo_core/bin/extra_flash/**
+# Flash package — for device flashing, not building
+third_party/mezo_core/flash
+third_party/mezo_core/flash/**
+# Template Windows executables
+third_party/mezo_core/templates
+third_party/mezo_core/templates/**
+# MEZO_LEGEND pre-built compare data — not needed at builder runtime
+third_party/mezo_core/MEZO_LEGEND
+third_party/mezo_core/MEZO_LEGEND/**
+# Windows executables and DLLs anywhere in context
+**/*.exe
+**/*.dll
 
 output
 output/**

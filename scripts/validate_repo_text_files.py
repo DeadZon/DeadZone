@@ -19,8 +19,8 @@ def ok(msg: str) -> None:
     print(f"  [ OK ] {msg}")
 
 
-def check_lf_bytes(rel_path: str, min_lf: int) -> bytes:
-    """Read raw bytes, fail if CR exists or LF count is below threshold."""
+def check_lf_bytes(rel_path: str, min_lf: int, min_lines: int = 0) -> bytes:
+    """Read raw bytes; fail if CR, BOM, or counts below threshold."""
     path = REPO_ROOT / rel_path
     if not path.exists():
         fail(f"{rel_path}: file not found")
@@ -28,17 +28,24 @@ def check_lf_bytes(rel_path: str, min_lf: int) -> bytes:
 
     raw = path.read_bytes()
 
-    # Fail on any CR byte (catches both CR-only and CRLF)
+    # BOM check
+    if raw.startswith(b"\xef\xbb\xbf"):
+        fail(f"{rel_path}: starts with UTF-8 BOM — must be BOM-free")
+    else:
+        ok(f"{rel_path}: no BOM")
+
+    # CR check
     if b"\r" in raw:
         cr_only = raw.count(b"\r") - raw.count(b"\r\n")
         crlf = raw.count(b"\r\n")
         fail(
             f"{rel_path}: contains CR bytes (CRLF={crlf}, CR-only={cr_only}) — "
-            f"file must be LF-only. Run: python scripts/fix_lf.py"
+            f"file must be LF-only. Run: python scripts/rewrite_critical_text_files.py"
         )
     else:
         ok(f"{rel_path}: no CR bytes (LF-only)")
 
+    # LF count
     lf_count = raw.count(b"\n")
     if lf_count < min_lf:
         fail(
@@ -48,7 +55,28 @@ def check_lf_bytes(rel_path: str, min_lf: int) -> bytes:
     else:
         ok(f"{rel_path}: {lf_count} LF lines (>= {min_lf})")
 
+    # Line count via raw split
+    if min_lines > 0:
+        line_count = len(raw.split(b"\n"))
+        if line_count < min_lines:
+            fail(
+                f"{rel_path}: only {line_count} split-lines (minimum {min_lines} required) — "
+                f"file may be corrupted"
+            )
+        else:
+            ok(f"{rel_path}: {line_count} split-lines (>= {min_lines})")
+
     return raw
+
+
+def check_exact_lines(rel_path: str, raw: bytes, required_lines: list[str]) -> None:
+    """Fail if any required string is not present as an exact line (not just substring)."""
+    actual_lines = {line.decode("utf-8", errors="replace") for line in raw.split(b"\n")}
+    for pat in required_lines:
+        if pat in actual_lines:
+            ok(f"{rel_path}: exact line present: {pat!r}")
+        else:
+            fail(f"{rel_path}: missing exact line: {pat!r}")
 
 
 def check_contains(rel_path: str, raw: bytes, required_patterns: list[str]) -> None:
@@ -75,9 +103,9 @@ print("\n=== Validate repo text files ===\n")
 
 # ── .dockerignore ─────────────────────────────────────────────────────────────
 print("-- .dockerignore --")
-di_raw = check_lf_bytes(".dockerignore", min_lf=30)
+di_raw = check_lf_bytes(".dockerignore", min_lf=100, min_lines=100)
 if di_raw:
-    check_contains(".dockerignore", di_raw, [
+    check_exact_lines(".dockerignore", di_raw, [
         "*",
         "!server/**",
         "!factory/**",
@@ -90,18 +118,22 @@ if di_raw:
         "*.apk",
     ])
 
+# ── .gitattributes ────────────────────────────────────────────────────────────
+print("\n-- .gitattributes --")
+check_lf_bytes(".gitattributes", min_lf=15, min_lines=15)
+
 # ── fly.toml ─────────────────────────────────────────────────────────────────
 print("\n-- fly.toml --")
-check_lf_bytes("fly.toml", min_lf=10)
+check_lf_bytes("fly.toml", min_lf=20, min_lines=20)
 
 # ── docker/Dockerfile.builder ─────────────────────────────────────────────────
 print("\n-- docker/Dockerfile.builder --")
-check_lf_bytes("docker/Dockerfile.builder", min_lf=10)
+check_lf_bytes("docker/Dockerfile.builder", min_lf=20, min_lines=20)
 
 # ── deadzone_mtk_fly.yml ─────────────────────────────────────────────────────
 print("\n-- .github/workflows/deadzone_mtk_fly.yml --")
 mtk_fly_path = ".github/workflows/deadzone_mtk_fly.yml"
-mtk_raw = check_lf_bytes(mtk_fly_path, min_lf=50)
+mtk_raw = check_lf_bytes(mtk_fly_path, min_lf=50, min_lines=50)
 if mtk_raw:
     check_forbidden_inputs(mtk_fly_path, mtk_raw, [
         "select_device_codename",
@@ -114,7 +146,7 @@ if mtk_raw:
 
 # ── validate_repo_text_files.py itself ───────────────────────────────────────
 print("\n-- scripts/validate_repo_text_files.py --")
-check_lf_bytes("scripts/validate_repo_text_files.py", min_lf=50)
+check_lf_bytes("scripts/validate_repo_text_files.py", min_lf=80, min_lines=80)
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 print(f"\n  Errors: {len(ERRORS)}")
