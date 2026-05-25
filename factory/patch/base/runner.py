@@ -43,6 +43,7 @@ def run_base(
     report = apply_common_project_legacy_patches(
         project_dir=root,
         root_dir=_REPO_ROOT,
+        mi_incremental=None,
         flavor=flavor,
         execute=execute,
     )

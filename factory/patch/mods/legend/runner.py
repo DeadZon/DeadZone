@@ -149,6 +149,7 @@ def run_legend(
     }
 
     any_failed = False
+    any_partial_failed = False
     _build_patcher_vendor_paths: set[str] = set()
 
     # Snapshot vendor/ before any patches so we can detect unauthorised changes.
@@ -181,7 +182,8 @@ def run_legend(
         fstab_result = patch_fstab(root, execute=execute, report_lines=step_lines)
         report["steps"]["fstab"] = fstab_result
         if fstab_result["errors"]:
-            report["warnings"].extend(fstab_result["errors"])
+            report["errors"].extend(fstab_result["errors"])
+            any_partial_failed = True
     except Exception as exc:
         step_lines.append(f"ERROR: {exc}")
         report["errors"].append(f"fstab_patcher: {exc}")
@@ -269,7 +271,9 @@ def run_legend(
         apk_result = patch_apks(root, flavor, execute=execute, report_lines=step_lines)
         report["steps"]["apk_mods"] = apk_result
         if apk_result.get("errors"):
-            report["warnings"].extend(apk_result["errors"])
+            report["errors"].extend(apk_result["errors"])
+            if execute:
+                any_failed = True
     except Exception as exc:
         step_lines.append(f"ERROR: {exc}")
         report["errors"].append(f"apk_patcher: {exc}")
@@ -395,7 +399,12 @@ def run_legend(
 
     # ── Final status ──────────────────────────────────────────────────────────
     if execute:
-        report["final_status"] = "FAILED" if any_failed else "APPLIED"
+        if any_failed:
+            report["final_status"] = "FAILED"
+        elif any_partial_failed:
+            report["final_status"] = "PARTIAL_FAILED"
+        else:
+            report["final_status"] = "APPLIED"
     else:
         report["final_status"] = "DRY_RUN"
 

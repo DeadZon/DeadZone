@@ -5,7 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from factory.patch.legend.mods.apk.powerkeeper import runner as powerkeeper_runner
+from factory.patch.mods.legend.mods.apk.powerkeeper import runner as powerkeeper_runner
 
 _LEGEND_FLAVORS = frozenset({"legend", "deadzone_legend"})
 

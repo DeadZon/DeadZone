@@ -71,7 +71,7 @@ def _stage_status(report: dict, execute: bool) -> str:
         return "SKIP"
     if status in {"APPLIED", "DRY_RUN", "PASSED", "OK", "SUCCESS", "PATCHED", "WOULD_PATCH"}:
         return "OK"
-    if status == "FAILED" or _errors(report):
+    if status in {"FAILED", "PARTIAL_FAILED"} or _errors(report):
         return "FAIL"
     return "OK" if not execute else "FAIL"
 
@@ -377,7 +377,7 @@ def apply_legacy_build_pipeline(
             # run_legend covers: fstab, props, OS3 debloat, APK mods
             # (Provision/SystemUI/PowerKeeper), JAR mods (MTCR), permissions.
             jar_stage["name"] = "Legend Runner"
-            runner_mod = _import_optional("factory.patch.legend.runner")
+            runner_mod = _import_optional("factory.patch.mods.legend.runner")
             if runner_mod is not None and hasattr(runner_mod, "run_legend"):
                 def legend_runner_call() -> dict:
                     return runner_mod.run_legend(
@@ -398,10 +398,10 @@ def apply_legacy_build_pipeline(
             else:
                 stage_reports[jar_stage["id"]] = {
                     "status": "FAILED",
-                    "errors": ["factory.patch.legend.runner module missing"],
+                    "errors": ["factory.patch.mods.legend.runner module missing"],
                 }
                 jar_stage["status"] = "FAIL"
-                jar_stage["errors"] = ["factory.patch.legend.runner module missing"]
+                jar_stage["errors"] = ["factory.patch.mods.legend.runner module missing"]
                 live.update(stages, current=jar_stage["name"], final_status="FAILED")
                 stopped = execute
 

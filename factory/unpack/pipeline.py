@@ -210,6 +210,16 @@ class UnpackPipeline:
         ctx.partitions = collect_extracted_partitions(project_dir)
         print(f"[unpack] Extracted partitions: {ctx.partitions or '(none yet)'}")
 
+        # ── 7a. Fail-fast: payload found but no dynamic partitions extracted ──
+        if ctx.payload_found and not ctx.super_found and not ctx.partitions:
+            _fail_msg = (
+                "Payload extraction produced no dynamic partitions; refusing to continue "
+                "patch/repack/super stages."
+            )
+            ctx.error(_fail_msg)
+            write_reports(ctx)
+            raise RuntimeError(_fail_msg)
+
         # ── 8. Read build.prop — pure, no patching ────────────────────────────
         print(f"[unpack] Reading build.prop …")
         props = read_build_props(project_dir)

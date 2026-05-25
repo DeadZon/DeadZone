@@ -1,7 +1,7 @@
 """Compatibility entrypoint for Provision.apk patching.
 
 Legend flavors are handled by the clean static rule system in
-``factory.patch.legend.mods.apk.provision``. This module remains only so older
+``factory.patch.mods.legend.mods.apk.provision``. This module remains only so older
 factory call sites and CLI invocations keep working.
 """
 from __future__ import annotations
@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-from factory.patch.legend.mods.apk.provision.runner import apply_legend_provision_patch
+from factory.patch.mods.legend.mods.apk.provision.runner import apply_legend_provision_patch
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _REPORTS_DIR = _REPO_ROOT / "output" / "reports"

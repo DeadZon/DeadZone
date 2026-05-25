@@ -20,7 +20,7 @@ _REQUIRED_MODULES = [
     "factory.pipeline.legacy_build_orchestrator",
     "factory.notify.telegram_live",
     "factory.patch.common_rom.project_legacy",
-    "factory.patch.legend.jar_patch",
+    "factory.patch.mods.legend.jar_patch",
     "factory.patch.apk.provision_legacy",
     "factory.images.pipeline_legacy",
     "factory.repack.pipeline_erofs_legacy",

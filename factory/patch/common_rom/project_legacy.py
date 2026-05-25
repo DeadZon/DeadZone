@@ -295,9 +295,10 @@ def apply_language_overlay(project_dir: Path, mi_incremental: str) -> None:
 def apply_common_project_legacy_patches(
     project_dir: Path,
     root_dir: Path,
-    mi_incremental: str | None,
     flavor: str,
     execute: bool = False,
+    *,
+    mi_incremental: str | None = None,
 ) -> dict:
     """
     Run (or dry-run) all common project-level legacy patches in order.

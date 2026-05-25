@@ -1,7 +1,7 @@
 """
 Compatibility wrapper for the Legend MiuiSystemUI patch stage.
 
-The runtime implementation lives in factory.patch.legend.mods.apk.systemui.runner.
+The runtime implementation lives in factory.patch.mods.legend.mods.apk.systemui.runner.
 This module preserves the old public entry point for pipeline callers.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from factory.patch.legend.mods.apk.systemui import runner as systemui_runner
+from factory.patch.mods.legend.mods.apk.systemui import runner as systemui_runner
 
 
 def apply_legend_systemui_patch(
