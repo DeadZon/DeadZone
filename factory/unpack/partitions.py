@@ -58,6 +58,13 @@ _DYNAMIC_PARTITION_IMGS = [
     "vendor_dlkm.img",
 ]
 
+# Typical top-level entries inside a partition filesystem root.
+# Used to detect whether extract.erofs nested the content under a subdir.
+_PARTITION_ROOT_MARKERS = frozenset({
+    "etc", "app", "priv-app", "framework", "build.prop",
+    "lib", "lib64", "usr", "bin", "overlay", "media",
+})
+
 # Standalone flash images that sit alongside the ROM ZIP (never inside super).
 _BOOT_IMAGE_NAMES = frozenset({
     "boot.img",
@@ -392,6 +399,86 @@ def _extract_with_legacy_fallback(
             _remove_force(dst_img)
 
 
+# ── EROFS post-extract helpers ────────────────────────────────────────────────
+
+def _normalize_erofs_root(
+    tmp_out: Path,
+    partition_name: str,
+    log_path: Path,
+) -> tuple[Path, bool]:
+    """
+    Detect whether extract.erofs nested content under tmp_out/<partition_name>/
+    instead of placing it directly in tmp_out/.
+
+    Returns (real_root, nested_detected).
+
+    extract.erofs with -o <dir> sometimes produces:
+        <dir>/<partition_name>/etc, app, ...   (nested)
+    instead of:
+        <dir>/etc, app, ...                    (flat)
+
+    If the nested subdirectory exists and contains any files, it is the real
+    root.  Config sidecar files (fs_config, file_contexts, fs_options) are
+    typically written alongside it at the tmp_out level and are NOT moved here.
+    """
+    nested = tmp_out / partition_name
+    if nested.is_dir():
+        try:
+            children = {p.name for p in nested.iterdir()}
+        except Exception:
+            children = set()
+        if children:
+            _logprint(log_path, f"[normalize] nested root detected: {nested}")
+            _logprint(log_path, f"[normalize] using real root: {nested}")
+            return nested, True
+    _logprint(log_path, f"[normalize] no nesting detected, using: {tmp_out}")
+    return tmp_out, False
+
+
+def _collect_and_install_config_files(
+    tmp_out: Path,
+    partition_name: str,
+    config_dir: Path,
+    log_path: Path,
+) -> tuple[dict, dict]:
+    """
+    Search tmp_out recursively for fs_config, file_contexts, fs_options and
+    copy them to config_dir/<partition_name>_<name>.
+
+    Returns (found_dict, installed_dict) where each key is one of the three
+    config file names and values are bool / str-path-or-None respectively.
+
+    Missing fs_options is a warning only; missing fs_config or file_contexts
+    means EROFS repack will fail.
+    """
+    target_names = ("fs_config", "file_contexts", "fs_options")
+    found: dict[str, bool] = {n: False for n in target_names}
+    installed: dict[str, str | None] = {n: None for n in target_names}
+
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    for name in target_names:
+        candidates = list(tmp_out.rglob(name))
+        if not candidates:
+            severity = "warn" if name == "fs_options" else "MISSING"
+            _logprint(log_path, f"[config] {name} not found under {tmp_out} ({severity})")
+            continue
+
+        found[name] = True
+        src = candidates[0]
+        _logprint(log_path, f"[config] found {name}: {src}")
+
+        dst = config_dir / f"{partition_name}_{name}"
+        try:
+            shutil.copy2(str(src), str(dst))
+            installed[name] = str(dst)
+            _logprint(log_path, f"[config] installed: {dst}")
+        except Exception as exc:
+            _logprint(log_path, f"[config] install failed {src} → {dst}: {exc}")
+
+    return found, installed
+
+
 # ── Safe temp helpers ─────────────────────────────────────────────────────────
 
 def _remove_force(path: Path) -> None:
@@ -445,6 +532,19 @@ def extract_partition_image(
         "fallback": False,
         "output_folder_exists": False,
         "build_prop_exists": False,
+        # Part D fields — populated on successful native extraction
+        "normalized_root": None,
+        "nested_root_detected": False,
+        "config_files_found": {
+            "fs_config": False,
+            "file_contexts": False,
+            "fs_options": False,
+        },
+        "config_files_installed": {
+            "fs_config": None,
+            "file_contexts": None,
+            "fs_options": None,
+        },
     }
 
     tmp_raw_dir  = project_dir / ".tmp_raw"
@@ -523,21 +623,46 @@ def extract_partition_image(
             extraction_ok = False
 
     if extraction_ok:
-        # Move temp dir to final location atomically
+        config_dir = project_dir / "config"
+
+        # Part B: collect config sidecar files before moving anything
+        cfg_found, cfg_installed = _collect_and_install_config_files(
+            tmp_out, partition_name, config_dir, log_path
+        )
+        if not cfg_found["fs_config"]:
+            _logprint(
+                log_path,
+                f"[config] WARNING: fs_config missing for {partition_name} — EROFS repack will fail",
+            )
+        if not cfg_found["file_contexts"]:
+            _logprint(
+                log_path,
+                f"[config] WARNING: file_contexts missing for {partition_name} — EROFS repack will fail",
+            )
+
+        # Part A: detect and flatten nested partition root
+        real_root, nested = _normalize_erofs_root(tmp_out, partition_name, log_path)
+
+        # Move real root to final location
         final_out = project_dir / partition_name
         if final_out.exists():
             _remove_force(final_out)
-        shutil.move(str(tmp_out), str(final_out))
+        shutil.move(str(real_root), str(final_out))
+
+        # Clean temp dirs (tmp_out may still exist if real_root was a subdir)
+        _cleanup_dir(tmp_raw_dir, log_path)
+        _cleanup_dir(tmp_out, log_path)
 
         build_prop_paths = [
             final_out / "build.prop",
             final_out / "system" / "build.prop",
         ]
         bp_exists = any(p.exists() for p in build_prop_paths)
-        _logprint(log_path, f"[partition] output folder : {final_out}")
-        _logprint(log_path, f"[partition] build.prop    : {bp_exists}")
-        _logprint(log_path, f"[partition] method        : {method_used}")
-        _logprint(log_path, f"[partition] STATUS        : SUCCESS (native)")
+        _logprint(log_path, f"[partition] output folder      : {final_out}")
+        _logprint(log_path, f"[partition] nested root fixed  : {nested}")
+        _logprint(log_path, f"[partition] build.prop         : {bp_exists}")
+        _logprint(log_path, f"[partition] method             : {method_used}")
+        _logprint(log_path, f"[partition] STATUS             : SUCCESS (native)")
 
         parts_info[partition_name] = work_type
         result.update({
@@ -546,12 +671,11 @@ def extract_partition_image(
             "fallback": False,
             "output_folder_exists": final_out.is_dir(),
             "build_prop_exists": bp_exists,
+            "normalized_root": str(final_out),
+            "nested_root_detected": nested,
+            "config_files_found": cfg_found,
+            "config_files_installed": cfg_installed,
         })
-
-        # Clean temp files only after success
-        _cleanup_dir(tmp_raw_dir, log_path)
-        if tmp_out.exists():
-            _remove_force(tmp_out)
 
         return result
 
@@ -680,6 +804,19 @@ def extract_dynamic_partitions_from_payload_dir(
     # Persist parts_info for downstream stages
     if parts_info:
         _write_parts_info(config_dir, parts_info)
+
+    # Part E: fstab sanity
+    vendor_etc = project_dir / "vendor" / "etc"
+    vendor_etc_exists = vendor_etc.is_dir()
+    _logprint(log_path, f"[fstab sanity] project/vendor/etc exists: {vendor_etc_exists}")
+    if vendor_etc_exists:
+        fstab_candidates = sorted(vendor_etc.glob("fstab*"))
+        _logprint(
+            log_path,
+            f"[fstab sanity] fstab candidates: {[f.name for f in fstab_candidates]}",
+        )
+    else:
+        _logprint(log_path, "[fstab sanity] vendor/etc not found — cannot locate fstab")
 
     _logprint(log_path, f"\n[partitions] ══════════════════════════════════════════")
     _logprint(log_path, f"[partitions] Summary: {len(parts_info)}/{len(imgs_found)} partitions extracted")

@@ -39,10 +39,23 @@ _ALLOWED_PREFIXES: tuple[Path, ...] = (
 _ALLOWED_SUFFIXES = (".md", ".txt", ".rst")
 _SKIP_DIRS = {".git", "__pycache__", ".mypy_cache", "node_modules", "output"}
 
+# Specific repo-relative file paths exempt from the single-home rule.
+# These reference MEZO_LEGEND in comments/config context, not as runtime patches.
+_ALLOWED_REL_PATHS: frozenset[str] = frozenset({
+    ".dockerignore",
+    "scripts/rewrite_critical_text_files.py",
+})
+
 
 def _is_exempt(path: Path) -> bool:
     if path.suffix in _ALLOWED_SUFFIXES:
         return True
+    try:
+        rel = path.relative_to(_REPO_ROOT).as_posix()
+        if rel in _ALLOWED_REL_PATHS:
+            return True
+    except ValueError:
+        pass
     for prefix in _ALLOWED_PREFIXES:
         try:
             path.relative_to(prefix)
