@@ -81,7 +81,8 @@ _BOOT_IMAGE_NAMES = frozenset({
 _SPARSE_MAGIC        = 0x3AFF26ED
 _EROFS_MAGIC         = 0xE2E1F5E0
 _EXT4_MAGIC          = 0xEF53
-_EXT4_MAGIC_OFFSET   = 1080   # byte offset of ext4 superblock magic
+_EROFS_MAGIC_OFFSET  = 1024   # EROFS superblock starts at byte 1024
+_EXT4_MAGIC_OFFSET   = 1080   # ext4 superblock magic at 1024+56
 
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -124,26 +125,68 @@ def _find_tool(name: str) -> Optional[str]:
     return shutil.which(name)
 
 
+def ensure_tool_executable(path: str, log_path: Path) -> bool:
+    """chmod +x a bundled tool; no-op on Windows. Logs result."""
+    if sys.platform == "win32":
+        return True
+    try:
+        p = Path(path)
+        if p.is_file():
+            p.chmod(p.stat().st_mode | 0o111)
+            _logprint(log_path, f"[tools] chmod +x OK: {path}")
+            return True
+        _logprint(log_path, f"[tools] chmod skipped (not a file): {path}")
+        return False
+    except Exception as exc:
+        _logprint(log_path, f"[tools] chmod failed: {path}: {exc}")
+        return False
+
+
+def _ensure_all_bin_tools_executable(log_path: Path) -> None:
+    """Pre-chmod all bundled tools in bin/ so fallbacks never hit Permission denied."""
+    if sys.platform == "win32":
+        return
+    for name in ("extract.erofs", "simg2img", "lpunpack", "lpmake"):
+        p = _BIN_DIR / name
+        if p.is_file():
+            ensure_tool_executable(str(p), log_path)
+
+
 # ── Image type detection ──────────────────────────────────────────────────────
 
 def detect_image_type(img_path: Path) -> str:
     """
-    Returns 'sparse', 'erofs', 'ext4', or 'unknown' based on file header magic.
-    Reads only the first ~1082 bytes; does not modify the file.
+    Returns 'sparse', 'erofs', 'ext4', or 'unknown'.
+
+    Checks in order:
+      offset 0    — Android sparse magic (0x3AFF26ED LE)
+      offset 1024 — EROFS superblock magic (0xE2E1F5E0 LE or BE)
+      offset 1080 — ext4 superblock magic (0xEF53 LE, at 1024+56)
+
+    First 16 bytes being zero does NOT mean the image is invalid;
+    EROFS and ext4 embed their magic far into the header.
     """
+    read_size = max(_EXT4_MAGIC_OFFSET + 2, _EROFS_MAGIC_OFFSET + 4)
     try:
         with img_path.open("rb") as fh:
-            header = fh.read(_EXT4_MAGIC_OFFSET + 2)
+            header = fh.read(read_size)
     except Exception:
         return "unknown"
 
+    # Android sparse — magic is at offset 0
     if len(header) >= 4:
         magic4 = struct.unpack_from("<I", header, 0)[0]
         if magic4 == _SPARSE_MAGIC:
             return "sparse"
-        if magic4 == _EROFS_MAGIC:
+
+    # EROFS — superblock starts at byte 1024, magic is first 4 bytes
+    if len(header) >= _EROFS_MAGIC_OFFSET + 4:
+        magic_le = struct.unpack_from("<I", header, _EROFS_MAGIC_OFFSET)[0]
+        magic_be = struct.unpack_from(">I", header, _EROFS_MAGIC_OFFSET)[0]
+        if magic_le == _EROFS_MAGIC or magic_be == _EROFS_MAGIC:
             return "erofs"
 
+    # ext4 — superblock at byte 1024, magic field at superblock+56 = byte 1080
     if len(header) >= _EXT4_MAGIC_OFFSET + 2:
         magic2 = struct.unpack_from("<H", header, _EXT4_MAGIC_OFFSET)[0]
         if magic2 == _EXT4_MAGIC:
@@ -157,6 +200,17 @@ def _header_hex(img_path: Path, n: int = 16) -> str:
         with img_path.open("rb") as fh:
             raw = fh.read(n)
         return raw.hex(" ")
+    except Exception:
+        return "(unreadable)"
+
+
+def _offset_hex(img_path: Path, offset: int, n: int = 8) -> str:
+    """Read n bytes at offset and return as hex string."""
+    try:
+        with img_path.open("rb") as fh:
+            fh.seek(offset)
+            raw = fh.read(n)
+        return raw.hex(" ") if raw else "(empty)"
     except Exception:
         return "(unreadable)"
 
@@ -388,6 +442,9 @@ def extract_partition_image(
         "status": "SKIPPED",
         "error": None,
         "native": False,
+        "fallback": False,
+        "output_folder_exists": False,
+        "build_prop_exists": False,
     }
 
     tmp_raw_dir  = project_dir / ".tmp_raw"
@@ -403,16 +460,22 @@ def extract_partition_image(
         return result
 
     size = _img_size(img_path)
-    magic_hex = _header_hex(img_path)
-    raw_type  = detect_image_type(img_path)
+    magic_hex  = _header_hex(img_path)
+    offset1024 = _offset_hex(img_path, _EROFS_MAGIC_OFFSET, 8)
+    erofs_hex  = _offset_hex(img_path, _EROFS_MAGIC_OFFSET, 4)
+    ext4_hex   = _offset_hex(img_path, _EXT4_MAGIC_OFFSET, 2)
+    raw_type   = detect_image_type(img_path)
 
     result["image_found"]  = True
     result["image_size"]   = size
     result["detected_type"] = raw_type
 
-    _logprint(log_path, f"[partition] size        : {size} bytes ({size // 1024 // 1024} MiB)")
-    _logprint(log_path, f"[partition] header hex  : {magic_hex}")
-    _logprint(log_path, f"[partition] detected    : {raw_type}")
+    _logprint(log_path, f"[partition] size            : {size} bytes ({size // 1024 // 1024} MiB)")
+    _logprint(log_path, f"[partition] header hex (0)  : {magic_hex}")
+    _logprint(log_path, f"[partition] bytes @1024     : {offset1024}")
+    _logprint(log_path, f"[partition] erofs magic @1024: {erofs_hex}  (expect e0 f5 e1 e2 LE)")
+    _logprint(log_path, f"[partition] ext4 magic @1080 : {ext4_hex}   (expect 53 ef LE)")
+    _logprint(log_path, f"[partition] detected_type   : {raw_type}")
 
     work_img    = img_path
     work_type   = raw_type
@@ -437,7 +500,10 @@ def extract_partition_image(
     extraction_ok = False
     method_used   = "none"
 
-    # Step 2: attempt native extraction
+    # Step 2: chmod bundled tools before any extraction attempt
+    _ensure_all_bin_tools_executable(log_path)
+
+    # Step 3: attempt native extraction
     if work_type == "erofs":
         _logprint(log_path, f"[partition] extracting EROFS …")
         extraction_ok = extract_erofs_image(work_img, tmp_out, log_path)
@@ -474,7 +540,13 @@ def extract_partition_image(
         _logprint(log_path, f"[partition] STATUS        : SUCCESS (native)")
 
         parts_info[partition_name] = work_type
-        result.update({"status": "SUCCESS", "native": True})
+        result.update({
+            "status": "SUCCESS",
+            "native": True,
+            "fallback": False,
+            "output_folder_exists": final_out.is_dir(),
+            "build_prop_exists": bp_exists,
+        })
 
         # Clean temp files only after success
         _cleanup_dir(tmp_raw_dir, log_path)
@@ -483,10 +555,11 @@ def extract_partition_image(
 
         return result
 
-    # Step 3: fallback
+    # Fallback: chmod again explicitly before delegating to MEZOBuildRom
     if tmp_out.exists():
         _remove_force(tmp_out)
     _logprint(log_path, f"[partition] native extraction failed — trying MEZOBuildRom fallback")
+    _ensure_all_bin_tools_executable(log_path)
 
     fallback_ok = _extract_with_legacy_fallback(
         img_path, partition_name, project_dir, log_path, parts_info
@@ -494,13 +567,30 @@ def extract_partition_image(
     _cleanup_dir(tmp_raw_dir, log_path)
 
     if fallback_ok:
+        final_out = project_dir / partition_name
+        build_prop_paths = [
+            final_out / "build.prop",
+            final_out / "system" / "build.prop",
+        ]
+        bp_exists = any(p.exists() for p in build_prop_paths)
         _logprint(log_path, f"[partition] STATUS        : SUCCESS (fallback)")
-        result.update({"status": "SUCCESS", "native": False})
+        result.update({
+            "status": "SUCCESS",
+            "native": False,
+            "fallback": True,
+            "output_folder_exists": final_out.is_dir(),
+            "build_prop_exists": bp_exists,
+        })
     else:
         _logprint(log_path, f"[partition] STATUS        : FAILED")
         result.update({
             "status": "FAILED",
-            "error": f"Both native ({work_type}) and MEZOBuildRom fallback failed",
+            "native": False,
+            "fallback": True,
+            "error": (
+                f"Both native ({work_type}) and MEZOBuildRom fallback failed. "
+                f"See output/logs/partition_extract.log"
+            ),
         })
 
     return result
@@ -561,6 +651,9 @@ def extract_dynamic_partitions_from_payload_dir(
     _logprint(log_path, f"[partitions] payload_out_dir : {payload_out_dir}")
     _logprint(log_path, f"[partitions] project_dir     : {project_dir}")
     _logprint(log_path, f"[partitions] ══════════════════════════════════════════")
+
+    # Pre-chmod all bundled tools so Permission denied never blocks extraction or fallback
+    _ensure_all_bin_tools_executable(log_path)
 
     imgs_found = list_payload_dynamic_images(payload_out_dir)
     _logprint(log_path, f"[partitions] Dynamic images found: {imgs_found or '(none)'}")

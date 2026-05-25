@@ -78,6 +78,7 @@ def _env(*names: str) -> str:
 
 
 def _resolve_credentials(soc: Optional[str]) -> tuple[str, str, str]:
+    # MTK chat migrated to supergroup: update TELEGRAM_MTK_CHAT_ID=-1003908135274
     soc = (soc or "").lower()
     if soc == "mtk":
         token   = _env("TELEGRAM_MTK_BOT_TOKEN",       "TELEGRAM_BOT_TOKEN")
@@ -234,10 +235,12 @@ class TelegramLiveStatus:
             self._log("start new", f"message_id={self.message_id}")
             return self._result("STARTED")
 
-        err = str(response.get("error", ""))
+        err = str(response.get("error", "")) or "sendMessage returned not-ok without error detail"
         self.warnings.append("Telegram initial send failed")
-        if err:
-            self.errors.append(err)
+        self.errors.append(err)
+        with self._state_lock:
+            self.last_error = err
+            self.final_status = "SEND_FAILED"
         self._log("start FAILED", err)
         return self._result("SEND_FAILED")
 
@@ -392,7 +395,7 @@ class TelegramLiveStatus:
             self._logger.error("build_id=%s edit failed: %s", self.build_id, err)
         return self._result("EDIT_FAILED")
 
-    def _post(self, method: str, payload: dict[str, Any]) -> dict:
+    def _post(self, method: str, payload: dict[str, Any], _migration_retry: bool = False) -> dict:
         url  = f"https://api.telegram.org/bot{self.token}/{method}"
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         req  = urllib.request.Request(
@@ -415,6 +418,24 @@ class TelegramLiveStatus:
             body = exc.read().decode("utf-8", errors="replace")
             if "message is not modified" in body.lower():
                 return {"ok": True, "result": {"not_modified": True}}
+            # Handle supergroup migration: retry once with the new chat_id
+            if not _migration_retry and exc.code == 400:
+                try:
+                    err_json = json.loads(body)
+                    migrate_id = (err_json.get("parameters") or {}).get("migrate_to_chat_id")
+                    if migrate_id:
+                        new_id = str(migrate_id)
+                        self._logger.info(
+                            "build_id=%s Telegram chat migrated to supergroup: %s",
+                            self.build_id, new_id,
+                        )
+                        with self._state_lock:
+                            self.chat_id = new_id
+                        payload = dict(payload)
+                        payload["chat_id"] = new_id
+                        return self._post(method, payload, _migration_retry=True)
+                except Exception:
+                    pass
             return {"ok": False, "error": f"HTTP {exc.code}: {body[:300]}"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
