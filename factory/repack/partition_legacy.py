@@ -30,15 +30,65 @@ KNOWN_PARTITIONS = [
 ]
 
 
+_FS_ROOT_MARKERS = frozenset({
+    "build.prop", "etc", "app", "priv-app", "framework", "lib", "lib64",
+})
+
+
+def _candidate_has_fs_root_content(candidate: Path) -> tuple[bool, bool]:
+    """Return (has_buildprop, has_fs_markers) for a directory candidate."""
+    if not candidate.is_dir():
+        return False, False
+    try:
+        children = {p.name for p in candidate.iterdir()}
+    except Exception:
+        return False, False
+    return (candidate / "build.prop").is_file(), bool(children & _FS_ROOT_MARKERS)
+
+
 def resolve_partition_root_legacy(project_dir: Path, partition_name: str) -> Path | None:
+    """
+    Resolve the real filesystem root for a partition directory.
+
+    After extraction + normalization, content lands at project/<partition>/.
+    A project/<partition>/<partition>/ subdirectory may exist either as a
+    legitimate Android filesystem subdir (system-as-root style) or as a stale
+    artifact.  We use build.prop and common filesystem markers to prefer
+    whichever candidate is the actual partition root.
+
+    Priority:
+      1. Candidate with build.prop (definitive partition-root marker)
+      2. Candidate with any recognised filesystem markers
+      3. When both or neither have markers, prefer direct (post-norm invariant)
+      4. Bare existence fallback
+    """
     direct_root = project_dir / partition_name
     nested_root = direct_root / partition_name
 
-    if nested_root.is_dir():
-        return nested_root
-    if direct_root.is_dir():
-        return direct_root
-    return None
+    d_bp, d_markers = _candidate_has_fs_root_content(direct_root)
+    n_bp, n_markers = _candidate_has_fs_root_content(nested_root)
+
+    selected: Path | None = None
+    reason = ""
+
+    if d_bp and not n_bp:
+        selected, reason = direct_root, "build.prop at direct root"
+    elif n_bp and not d_bp:
+        selected, reason = nested_root, "build.prop at nested root"
+    elif d_markers and not n_markers:
+        selected, reason = direct_root, "fs markers at direct root"
+    elif n_markers and not d_markers:
+        selected, reason = nested_root, "fs markers at nested root"
+    elif d_markers and n_markers:
+        selected, reason = direct_root, "both have markers — preferring direct (post-normalization invariant)"
+    elif direct_root.is_dir():
+        selected, reason = direct_root, "fallback: direct root exists"
+    elif nested_root.is_dir():
+        selected, reason = nested_root, "fallback: nested root exists"
+
+    if selected is not None:
+        print(f"[repack] {partition_name}: partition_root={selected} ({reason})")
+    return selected
 
 
 def _config_paths(project_dir: Path, partition_name: str) -> tuple[Path, Path]:

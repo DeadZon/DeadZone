@@ -40,10 +40,15 @@ _ALLOWED_SUFFIXES = (".md", ".txt", ".rst")
 _SKIP_DIRS = {".git", "__pycache__", ".mypy_cache", "node_modules", "output"}
 
 # Specific repo-relative file paths exempt from the single-home rule.
-# These reference MEZO_LEGEND in comments/config context, not as runtime patches.
+# These reference MEZO_LEGEND or legend paths in validator/config context only,
+# not as runtime patch logic.
 _ALLOWED_REL_PATHS: frozenset[str] = frozenset({
     ".dockerignore",
     "scripts/rewrite_critical_text_files.py",
+    # This file defines the patterns it scans for — must exempt itself.
+    "factory/patch/mods/legend/actions/validate_legend_home.py",
+    # References forbidden legend paths as strings inside validator definitions.
+    "factory/validators/mod_structure_validator.py",
 })
 
 

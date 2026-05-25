@@ -280,6 +280,11 @@ def extract_erofs_image(
     """
     Extract an EROFS image using extract.erofs from bundled bin/.
     Returns True when files are produced in out_dir.
+
+    extract.erofs writes fs_config/file_contexts/fs_options to its CWD,
+    not into the -o output directory.  We create a dedicated .erofs_meta
+    subdirectory inside out_dir and use it as the subprocess CWD so that
+    the sidecar files end up inside out_dir and are discovered by rglob.
     """
     tool = _find_tool("extract.erofs")
     if not tool:
@@ -287,11 +292,19 @@ def extract_erofs_image(
         return False
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [tool, "-i", str(img_path), "-x", "-o", str(out_dir)]
+
+    # Metadata CWD: extract.erofs writes config sidecars to its working dir.
+    # Placing it inside out_dir ensures _collect_and_install_config_files finds
+    # them via rglob without any extra search paths.
+    metadata_dir = out_dir / ".erofs_meta"
+    metadata_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [tool, "-i", str(img_path.resolve()), "-x", "-o", str(out_dir.resolve())]
+    _logprint(log_path, f"[erofs] cwd: {metadata_dir}")
     _logprint(log_path, f"[erofs] cmd: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(metadata_dir))
         if result.stdout.strip():
             _log(log_path, result.stdout)
         if result.stderr.strip():
@@ -301,9 +314,13 @@ def extract_erofs_image(
             _logprint(log_path, f"[erofs] extract.erofs exited {result.returncode}")
             return False
 
-        any_files = any(p.is_file() for p in out_dir.rglob("*"))
+        # Check for real extracted content, ignoring the metadata dir itself.
+        any_files = any(
+            p.is_file() and ".erofs_meta" not in p.parts
+            for p in out_dir.rglob("*")
+        )
         if not any_files:
-            _logprint(log_path, "[erofs] extract.erofs returned 0 but output dir is empty")
+            _logprint(log_path, "[erofs] extract.erofs returned 0 but output dir has no content")
             return False
 
         _logprint(log_path, f"[erofs] extraction succeeded → {out_dir}")
@@ -450,12 +467,25 @@ def _collect_and_install_config_files(
 
     Missing fs_options is a warning only; missing fs_config or file_contexts
     means EROFS repack will fail.
+
+    extract.erofs writes sidecar files to its CWD.  With cwd=.erofs_meta
+    (inside tmp_out) the rglob below finds them automatically.  The explicit
+    search_roots list is logged so failures are easy to diagnose.
     """
     target_names = ("fs_config", "file_contexts", "fs_options")
     found: dict[str, bool] = {n: False for n in target_names}
     installed: dict[str, str | None] = {n: None for n in target_names}
 
     config_dir.mkdir(parents=True, exist_ok=True)
+
+    search_roots = [
+        tmp_out,
+        tmp_out / ".erofs_meta",
+        tmp_out / partition_name,
+        tmp_out / "config",
+    ]
+    existing_roots = [str(r) for r in search_roots if r.exists()]
+    _logprint(log_path, f"[config] search roots: {existing_roots}")
 
     for name in target_names:
         candidates = list(tmp_out.rglob(name))
@@ -639,6 +669,29 @@ def extract_partition_image(
                 log_path,
                 f"[config] WARNING: file_contexts missing for {partition_name} — EROFS repack will fail",
             )
+
+        # Part B diagnostic: if critical files are still missing, do a broad
+        # filesystem search to expose where extract.erofs actually wrote them.
+        _missing_critical = [n for n in ("fs_config", "file_contexts") if not cfg_found[n]]
+        if _missing_critical:
+            meta_dir = tmp_out / ".erofs_meta"
+            _logprint(log_path, f"[config][DIAG] missing after search: {_missing_critical}")
+            _logprint(log_path, f"[config][DIAG] metadata_cwd: {meta_dir}")
+            if tmp_out.exists():
+                try:
+                    top_items = sorted(p.name for p in tmp_out.iterdir())
+                    _logprint(log_path, f"[config][DIAG] tmp_out top-level: {top_items}")
+                except Exception:
+                    pass
+            if meta_dir.exists():
+                try:
+                    meta_items = sorted(p.name for p in meta_dir.iterdir())
+                    _logprint(log_path, f"[config][DIAG] .erofs_meta contents: {meta_items}")
+                except Exception:
+                    pass
+            for _name in ("fs_config", "file_contexts", "fs_options"):
+                _hits = [str(h) for h in tmp_out.rglob(f"*{_name}*")]
+                _logprint(log_path, f"[config][DIAG] rglob *{_name}*: {_hits or '(none)'}")
 
         # Part A: detect and flatten nested partition root
         real_root, nested = _normalize_erofs_root(tmp_out, partition_name, log_path)
