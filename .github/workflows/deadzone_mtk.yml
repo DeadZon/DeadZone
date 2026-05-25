@@ -3,30 +3,21 @@ name: DeadZone MTK GitHub Build
 on:
   workflow_dispatch:
     inputs:
-      # ── New preferred inputs ──────────────────────────────────────────────────
       codename:
-        description: "MTK device codename (e.g. zircon)"
-        required: false
-        type: choice
-        default: select_device_codename
-        options:
-          - select_device_codename
-          - agate
-          - aristotle
-          - daumier
-          - plato
-          - zircon
+        description: "Device codename, e.g. zircon, garnet"
+        required: true
+        type: string
 
       custom_codename:
-        description: "Custom codename (overrides selection above)"
+        description: "Optional override codename"
         required: false
         type: string
 
       edition:
-        description: "ROM edition / mod (free, gaming, legend, epic)"
-        required: false
+        description: "ROM edition"
+        required: true
         type: choice
-        default: free
+        default: legend
         options:
           - free
           - gaming
@@ -35,154 +26,114 @@ on:
 
       rom_url:
         description: "ROM download URL"
-        required: false
+        required: true
         type: string
 
       mode:
-        description: "dry_run = plan only | execute = real build"
-        required: false
+        description: "Build mode"
+        required: true
         type: choice
-        default: dry_run
+        default: execute
         options:
           - dry_run
           - execute
 
       upload_pixeldrain:
-        description: "Upload to PixelDrain after build"
-        required: false
+        description: "Upload final ROM ZIP to PixelDrain"
+        required: true
         type: boolean
         default: true
 
       notify_telegram:
-        description: "Send Telegram notifications"
-        required: false
+        description: "Send Telegram live updates"
+        required: true
         type: boolean
         default: true
 
-      # ── Legacy compatibility inputs ───────────────────────────────────────────
-      device:
-        description: "[Legacy] Device codename — use codename instead"
-        required: false
-        type: string
-
-      custom_device:
-        description: "[Legacy] Custom device — use custom_codename instead"
-        required: false
-        type: string
-
-      final_name:
-        description: "[Legacy] Final ROM name override"
-        required: false
-        type: string
-
-      platform:
-        description: "[Legacy] Platform string (e.g. mt6893)"
-        required: false
-        type: string
-
-      flavor:
-        description: "[Legacy] Mod flavor — use edition instead"
-        required: false
-        type: string
-
-      android_version:
-        description: "[Legacy] Android version"
-        required: false
-        type: string
-
-      mi_version:
-        description: "[Legacy] MIUI/HyperOS incremental version"
-        required: false
-        type: string
-
-      vbmeta_mode:
-        description: "[Legacy] vbmeta mode (default 3)"
-        required: false
-        type: string
-
-      runner_label:
-        description: "[Legacy] Runner label — ignored, always ubuntu-latest"
-        required: false
-        type: string
-
-      VM_CPUS:
-        description: "[Legacy] VM CPUs — ignored"
-        required: false
-        type: string
-
-      VM_MEMORY:
-        description: "[Legacy] VM memory — ignored"
-        required: false
-        type: string
-
 jobs:
   build:
-    name: "MTK | ${{ inputs.custom_codename || inputs.custom_device || inputs.codename || inputs.device }} | ${{ inputs.edition || inputs.flavor || 'free' }} | ${{ inputs.mode || 'dry_run' }}"
+    name: "MTK | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
     steps:
-      - name: Guard — this workflow must NOT use Fly
+      - name: Validate inputs
         run: |
-          echo "[OK] GitHub local build — no Fly required."
+          set -euo pipefail
+
+          CODENAME="${{ inputs.custom_codename }}"
+          [ -z "$CODENAME" ] && CODENAME="${{ inputs.codename }}"
+          CODENAME="$(echo "$CODENAME" | xargs)"
+
+          if [ -z "$CODENAME" ]; then
+            echo "[ERROR] codename is required. Please enter a real codename like zircon or garnet."
+            exit 1
+          fi
+
+          for BAD in select_device_codename select_device device none null default; do
+            if [ "$CODENAME" = "$BAD" ]; then
+              echo "[ERROR] Invalid device codename: $CODENAME."
+              echo "[ERROR] Please enter a real codename like zircon or garnet."
+              exit 1
+            fi
+          done
+
+          EDITION="${{ inputs.edition }}"
+          case "$EDITION" in
+            free|gaming|legend|epic) ;;
+            *) echo "[ERROR] Invalid edition: $EDITION. Must be one of: free, gaming, legend, epic."; exit 1 ;;
+          esac
+
+          MODE="${{ inputs.mode }}"
+          case "$MODE" in
+            dry_run|execute) ;;
+            *) echo "[ERROR] Invalid mode: $MODE. Must be dry_run or execute."; exit 1 ;;
+          esac
+
+          ROM_URL="${{ inputs.rom_url }}"
+          if [ "$MODE" = "execute" ]; then
+            if [ -z "$ROM_URL" ]; then
+              echo "[ERROR] rom_url is required for execute mode."
+              exit 1
+            fi
+            case "$ROM_URL" in
+              http://*|https://*) ;;
+              *) echo "[ERROR] rom_url must start with http:// or https://"; exit 1 ;;
+            esac
+          fi
+
+          echo "[OK] codename  = $CODENAME"
+          echo "[OK] edition   = $EDITION"
+          echo "[OK] mode      = $MODE"
+          echo "[OK] rom_url   = $ROM_URL"
+          echo "[OK] Inputs validated."
 
       - name: Normalize inputs
         id: norm
         run: |
           set -euo pipefail
 
-          # ── CODENAME ──────────────────────────────────────────────────────────
-          CODENAME=""
-          for candidate in \
-              "${{ inputs.custom_codename }}" \
-              "${{ inputs.custom_device }}" \
-              "${{ inputs.codename }}" \
-              "${{ inputs.device }}"; do
-            if [ -n "$candidate" ] && [ "$candidate" != "select_device_codename" ]; then
-              CODENAME="$candidate"
-              break
-            fi
-          done
-          if [ -z "$CODENAME" ]; then
-            echo "[ERROR] Provide codename, custom_codename, device, or custom_device."
-            exit 1
-          fi
+          CODENAME="${{ inputs.custom_codename }}"
+          [ -z "$CODENAME" ] && CODENAME="${{ inputs.codename }}"
+          CODENAME="$(echo "$CODENAME" | xargs)"
 
-          # ── MOD / EDITION ─────────────────────────────────────────────────────
-          RAW_EDITION="${{ inputs.edition }}"
-          RAW_FLAVOR="${{ inputs.flavor }}"
-          EDITION_INPUT="${RAW_EDITION:-$RAW_FLAVOR}"
-          case "$EDITION_INPUT" in
-            base|deadzone|free|"") MOD="free" ;;
-            deadzone_legend|legend) MOD="legend" ;;
-            gaming)                 MOD="gaming" ;;
-            epic)                   MOD="epic" ;;
-            *)                      MOD="free" ;;
+          EDITION="${{ inputs.edition }}"
+          case "$EDITION" in
+            free) MOD="free" ;;
+            gaming) MOD="gaming" ;;
+            legend) MOD="legend" ;;
+            epic) MOD="epic" ;;
+            *) MOD="free" ;;
           esac
 
-          # ── FINAL NAME ────────────────────────────────────────────────────────
-          LEGACY_FINAL="${{ inputs.final_name }}"
-          if [ -n "$LEGACY_FINAL" ]; then
-            FINAL_NAME="$LEGACY_FINAL"
-          elif [ "$MOD" = "free" ]; then
+          if [ "$MOD" = "free" ]; then
             FINAL_NAME="DeadZone_${CODENAME}_V1"
           else
             FINAL_NAME="DeadZone_${CODENAME}_${MOD}_V1"
           fi
 
-          # ── OTHER FIELDS ──────────────────────────────────────────────────────
           MODE="${{ inputs.mode }}"
-          MODE="${MODE:-dry_run}"
-
           ROM_URL="${{ inputs.rom_url }}"
-
-          PLATFORM="${{ inputs.platform }}"
-          ANDROID_VERSION="${{ inputs.android_version }}"
-          MI_VERSION="${{ inputs.mi_version }}"
-
-          VBMETA="${{ inputs.vbmeta_mode }}"
-          VBMETA="${VBMETA:-3}"
-
           UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
           NOTIFY_TG="${{ inputs.notify_telegram }}"
 
@@ -191,23 +142,14 @@ jobs:
           echo "final_name=$FINAL_NAME"       >> "$GITHUB_OUTPUT"
           echo "mode=$MODE"                   >> "$GITHUB_OUTPUT"
           echo "rom_url=$ROM_URL"             >> "$GITHUB_OUTPUT"
-          echo "platform=$PLATFORM"           >> "$GITHUB_OUTPUT"
-          echo "android_version=$ANDROID_VERSION" >> "$GITHUB_OUTPUT"
-          echo "mi_version=$MI_VERSION"       >> "$GITHUB_OUTPUT"
-          echo "vbmeta_mode=$VBMETA"          >> "$GITHUB_OUTPUT"
           echo "upload_pixeldrain=$UPLOAD_PD" >> "$GITHUB_OUTPUT"
           echo "notify_telegram=$NOTIFY_TG"   >> "$GITHUB_OUTPUT"
 
-          echo ""
-          echo "[NORM] codename         = $CODENAME"
-          echo "[NORM] mod              = $MOD"
-          echo "[NORM] final_name       = $FINAL_NAME"
-          echo "[NORM] mode             = $MODE"
-          echo "[NORM] rom_url          = $ROM_URL"
-          echo "[NORM] platform         = $PLATFORM"
-          echo "[NORM] android_version  = $ANDROID_VERSION"
-          echo "[NORM] mi_version       = $MI_VERSION"
-          echo "[NORM] vbmeta_mode      = $VBMETA"
+          echo "[NORM] codename   = $CODENAME"
+          echo "[NORM] mod        = $MOD"
+          echo "[NORM] final_name = $FINAL_NAME"
+          echo "[NORM] mode       = $MODE"
+          echo "[NORM] rom_url    = $ROM_URL"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -225,13 +167,10 @@ jobs:
 
       - name: Download source ROM (execute mode only)
         if: steps.norm.outputs.mode == 'execute'
+        id: download
         run: |
           set -euo pipefail
           ROM_URL="${{ steps.norm.outputs.rom_url }}"
-          if [ -z "$ROM_URL" ]; then
-            echo "[ERROR] rom_url is required for execute mode."
-            exit 1
-          fi
 
           mkdir -p _input_roms
 
@@ -262,7 +201,6 @@ jobs:
           fi
           echo "[DL] ROM download validated OK."
           echo "rom_path=$ROM_FILE" >> "$GITHUB_OUTPUT"
-        id: download
 
       - name: Run factory pipeline (MTK local — execute)
         if: steps.norm.outputs.mode == 'execute'
@@ -280,12 +218,6 @@ jobs:
           if [ "${{ steps.norm.outputs.notify_telegram }}" = "true" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS --notify-telegram"
           fi
-          [ -n "${{ steps.norm.outputs.platform }}" ] && \
-            EXTRA_FLAGS="$EXTRA_FLAGS --platform ${{ steps.norm.outputs.platform }}"
-          [ -n "${{ steps.norm.outputs.android_version }}" ] && \
-            EXTRA_FLAGS="$EXTRA_FLAGS --android-version ${{ steps.norm.outputs.android_version }}"
-          [ -n "${{ steps.norm.outputs.mi_version }}" ] && \
-            EXTRA_FLAGS="$EXTRA_FLAGS --mi-version ${{ steps.norm.outputs.mi_version }}"
 
           python -m factory.pipeline.orchestrator \
             --soc mtk \
@@ -294,7 +226,6 @@ jobs:
             --rom      "${{ steps.download.outputs.rom_path }}" \
             --rom-url  "${{ steps.norm.outputs.rom_url }}" \
             --mode     execute \
-            --vbmeta-mode "${{ steps.norm.outputs.vbmeta_mode }}" \
             $EXTRA_FLAGS || {
               echo "[FAIL] Factory exited non-zero. Dumping logs:"
               [ -f output/reports/deadzone_patch_report.txt ] && \
@@ -319,12 +250,6 @@ jobs:
           if [ "${{ steps.norm.outputs.notify_telegram }}" = "true" ]; then
             EXTRA_FLAGS="$EXTRA_FLAGS --notify-telegram"
           fi
-          [ -n "${{ steps.norm.outputs.platform }}" ] && \
-            EXTRA_FLAGS="$EXTRA_FLAGS --platform ${{ steps.norm.outputs.platform }}"
-          [ -n "${{ steps.norm.outputs.android_version }}" ] && \
-            EXTRA_FLAGS="$EXTRA_FLAGS --android-version ${{ steps.norm.outputs.android_version }}"
-          [ -n "${{ steps.norm.outputs.mi_version }}" ] && \
-            EXTRA_FLAGS="$EXTRA_FLAGS --mi-version ${{ steps.norm.outputs.mi_version }}"
 
           python -m factory.pipeline.orchestrator \
             --soc mtk \
@@ -332,7 +257,6 @@ jobs:
             --edition  "${{ steps.norm.outputs.mod }}" \
             --rom-url  "${{ steps.norm.outputs.rom_url }}" \
             --mode     dry_run \
-            --vbmeta-mode "${{ steps.norm.outputs.vbmeta_mode }}" \
             $EXTRA_FLAGS || {
               echo "[FAIL] Factory exited non-zero. Dumping logs:"
               [ -f output/reports/deadzone_patch_report.txt ] && \

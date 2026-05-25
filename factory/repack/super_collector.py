@@ -353,9 +353,9 @@ def build_lpmake_command(
 
     orig_sizes: dict[str, int] = original_partition_sizes or {}
     if not orig_sizes:
-        warnings.append(
-            "original_partition_sizes not provided — using image file sizes as lpmake "
-            "allocation (original super metadata had no per-partition size fields)"
+        errors.append(
+            "ERROR: original super metadata missing; cannot preserve partition byte sizes. "
+            "original_partition_sizes is empty — refusing to fall back to image file sizes."
         )
 
     cmd: list[str] = [
@@ -392,7 +392,12 @@ def build_lpmake_command(
                 )
                 continue
         else:
-            alloc = img_size
+            errors.append(
+                f"ERROR: original super metadata missing for {part}; "
+                f"cannot preserve partition byte sizes. "
+                f"Refusing to fall back to image file size."
+            )
+            continue
         cmd += [
             "--partition", f"{part}_a:readonly:{alloc}:{group_a}",
             "--image", f"{part}_a={img}",

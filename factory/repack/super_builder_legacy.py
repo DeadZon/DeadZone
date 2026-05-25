@@ -265,9 +265,9 @@ def _build_lpmake_command(
 
     orig_sizes: dict[str, int] = original_partition_sizes or {}
     if not orig_sizes:
-        warnings.append(
-            "original_partition_sizes not provided — using image file sizes as lpmake "
-            "allocation (original super metadata had no per-partition size fields)"
+        errors.append(
+            "ERROR: original super metadata missing; cannot preserve partition byte sizes. "
+            "original_partition_sizes is empty — refusing to fall back to image file sizes."
         )
 
     command = [
@@ -295,8 +295,12 @@ def _build_lpmake_command(
                 )
                 return None
             return alloc
-        # No original size known — fall back to image file size.
-        return img_size
+        errors.append(
+            f"ERROR: original super metadata missing for {part_name}; "
+            f"cannot preserve partition byte sizes. "
+            f"Refusing to fall back to image file size."
+        )
+        return None
 
     selected_parts = list(layout["selected_parts"])
     if layout["super_type"] == 1:
@@ -378,6 +382,48 @@ def build_super_image_legacy(
     images_dir = Path(images_dir).resolve()
     output_super = Path(output_super).resolve()
     device = device
+
+    # Pre-flight validation: original metadata must be present before lpmake runs.
+    preflight_errors: list[str] = []
+    partition_table = super_info.get("partition_table") or []
+    if not partition_table:
+        preflight_errors.append(
+            "ERROR: original super metadata missing; cannot preserve partition byte sizes. "
+            "super_info.partition_table is empty."
+        )
+    if not original_partition_sizes:
+        preflight_errors.append(
+            "ERROR: original super metadata missing; cannot preserve partition byte sizes. "
+            "original_partition_sizes is empty — refusing to fall back to image file sizes."
+        )
+    block_devices = super_info.get("block_devices") or []
+    raw_super_size = int(block_devices[0].get("size", 0) or 0) if block_devices else 0
+    if raw_super_size <= 0:
+        preflight_errors.append(
+            "ERROR: super_info has no valid block device size (super_size=0). "
+            "Cannot determine group allocation."
+        )
+    if preflight_errors:
+        return {
+            "dry_run": not execute,
+            "status": "FAILED",
+            "partition_images_dir": str(partition_images_dir),
+            "images_dir": str(images_dir),
+            "output_super": str(output_super),
+            "layout": {},
+            "lpmake_path": None,
+            "lpmake_command": [],
+            "lpmake_executed": False,
+            "lpmake_sparse_enabled": False,
+            "super_img_created": False,
+            "super_img_size": None,
+            "return_code": None,
+            "command_output": None,
+            "skipped_items": [{"item": "lpmake", "reason": "pre-flight validation failed"}],
+            "warnings": [],
+            "errors": preflight_errors,
+        }
+
     lpmake_path = resolve_lpmake_binary_legacy()
     command, layout, warnings, errors = _build_lpmake_command(
         partition_images_dir, output_super, super_info, lpmake_path,

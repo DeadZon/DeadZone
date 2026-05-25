@@ -24,6 +24,18 @@ FLY_WORKFLOWS = [
 
 ALL_BUILD_WORKFLOWS = GITHUB_LOCAL_WORKFLOWS + FLY_WORKFLOWS
 
+# Exactly these inputs must appear in the UI — no more, no less.
+REQUIRED_INPUTS = [
+    "codename",
+    "custom_codename",
+    "edition",
+    "rom_url",
+    "mode",
+    "upload_pixeldrain",
+    "notify_telegram",
+]
+
+# Legacy inputs that must NOT be present in any build workflow.
 LEGACY_INPUTS = [
     "device",
     "custom_device",
@@ -38,16 +50,12 @@ LEGACY_INPUTS = [
     "VM_MEMORY",
 ]
 
-NEW_INPUTS = [
-    "codename",
-    "custom_codename",
-    "edition",
-    "rom_url",
-    "mode",
-    "upload_pixeldrain",
-    "notify_telegram",
+# Placeholder codenames that must not appear anywhere in workflow files.
+PLACEHOLDER_CODENAMES = [
+    "select_device_codename",
 ]
 
+# Terms that must NOT appear in GitHub local workflow files.
 FLY_FORBIDDEN_IN_LOCAL = [
     "FLY_BUILDER_URL",
     "MTK_FLY_BUILDER_URL",
@@ -57,10 +65,19 @@ FLY_FORBIDDEN_IN_LOCAL = [
     "flyctl machine run",
 ]
 
+# Terms that must NOT appear in Fly workflow files.
 FACTORY_FORBIDDEN_IN_FLY = [
     "factory.pipeline.orchestrator",
     "python -m factory",
     "run_factory",
+    "curl -L",
+    "Download source ROM",
+]
+
+# Terms that must appear in Fly workflow files (secrets guard + notify).
+FLY_REQUIRED_PATTERNS = [
+    "notify_dispatch_failure.py",
+    "exit 3",
 ]
 
 
@@ -70,7 +87,6 @@ def _load(path: Path) -> dict:
 
 
 def _workflow_inputs(data: dict) -> set[str]:
-    # PyYAML parses 'on' as boolean True
     on_section = data.get("on") or data.get(True) or {}
     try:
         return set(on_section["workflow_dispatch"]["inputs"].keys())
@@ -120,8 +136,58 @@ for name in all_wf:
         fail(f"YAML parse error in {name}: {exc}")
 
 
-# ── Check 2: GitHub local workflows must NOT reference Fly secrets/endpoints ──
-print("\n=== Check 2: GitHub local workflows — no Fly references ===")
+# ── Check 2: Build workflows have exactly the required inputs (no legacy) ──────
+print("\n=== Check 2: Build workflow inputs — required only, no legacy ===")
+for name in ALL_BUILD_WORKFLOWS:
+    if name not in parsed:
+        continue
+    inputs = _workflow_inputs(parsed[name])
+    required_set = set(REQUIRED_INPUTS)
+    missing = [i for i in REQUIRED_INPUTS if i not in inputs]
+    extra_legacy = [i for i in LEGACY_INPUTS if i in inputs]
+
+    if missing:
+        fail(f"{name}: missing required inputs: {missing}")
+    else:
+        ok(f"{name}: all {len(REQUIRED_INPUTS)} required inputs present")
+
+    if extra_legacy:
+        fail(f"{name}: legacy inputs must be removed from UI: {extra_legacy}")
+    else:
+        ok(f"{name}: no legacy inputs in UI")
+
+
+# ── Check 3: No placeholder codename as YAML input default or choice option ────
+print("\n=== Check 3: No placeholder codename in YAML input defaults/options ===")
+for name in ALL_BUILD_WORKFLOWS:
+    if name not in parsed:
+        continue
+    on_section = parsed[name].get("on") or parsed[name].get(True) or {}
+    try:
+        inputs_section = on_section["workflow_dispatch"]["inputs"] or {}
+    except (KeyError, TypeError):
+        inputs_section = {}
+
+    found_placeholders: list[str] = []
+    for inp_name, inp_def in inputs_section.items():
+        if not isinstance(inp_def, dict):
+            continue
+        default_val = str(inp_def.get("default", ""))
+        options = inp_def.get("options") or []
+        for placeholder in PLACEHOLDER_CODENAMES:
+            if default_val == placeholder:
+                found_placeholders.append(f"{inp_name}.default={placeholder}")
+            if placeholder in [str(o) for o in options]:
+                found_placeholders.append(f"{inp_name}.options contains {placeholder}")
+
+    if found_placeholders:
+        fail(f"{name}: placeholder codename(s) in YAML input definition — must be removed: {found_placeholders}")
+    else:
+        ok(f"{name}: no placeholder codenames in input defaults/options")
+
+
+# ── Check 4: GitHub local workflows must NOT reference Fly secrets/endpoints ──
+print("\n=== Check 4: GitHub local workflows — no Fly references ===")
 for name in GITHUB_LOCAL_WORKFLOWS:
     if name not in texts:
         continue
@@ -135,8 +201,8 @@ for name in GITHUB_LOCAL_WORKFLOWS:
         ok(f"{name}: no Fly references found")
 
 
-# ── Check 3: Fly workflows must NOT run factory locally ────────────────────────
-print("\n=== Check 3: Fly workflows — must not run factory locally ===")
+# ── Check 5: Fly workflows must NOT run factory locally or download ROM ────────
+print("\n=== Check 5: Fly workflows — no local factory run or ROM download ===")
 for name in FLY_WORKFLOWS:
     if name not in texts:
         continue
@@ -144,49 +210,56 @@ for name in FLY_WORKFLOWS:
     clean = True
     for forbidden in FACTORY_FORBIDDEN_IN_FLY:
         if forbidden in text:
-            fail(f"{name}: must not run factory locally — found '{forbidden}'")
+            fail(f"{name}: must not contain '{forbidden}'")
             clean = False
     if clean:
-        ok(f"{name}: no local factory execution found")
+        ok(f"{name}: no local factory execution or ROM download found")
 
 
-# ── Check 4: All build workflows accept legacy inputs ─────────────────────────
-print("\n=== Check 4: Legacy inputs present in all build workflows ===")
-for name in ALL_BUILD_WORKFLOWS:
-    if name not in parsed:
+# ── Check 6: Fly workflows must include secrets guard + dispatch notifier ──────
+print("\n=== Check 6: Fly workflows — missing-secret Telegram dispatch notification ===")
+for name in FLY_WORKFLOWS:
+    if name not in texts:
         continue
-    inputs = _workflow_inputs(parsed[name])
-    missing = [i for i in LEGACY_INPUTS if i not in inputs]
-    if missing:
-        fail(f"{name}: missing legacy inputs: {missing}")
-    else:
-        ok(f"{name}: all {len(LEGACY_INPUTS)} legacy inputs present")
+    text = texts[name]
+    all_present = True
+    for pattern in FLY_REQUIRED_PATTERNS:
+        if pattern not in text:
+            fail(f"{name}: missing required pattern '{pattern}' (secrets guard + notify)")
+            all_present = False
+    if all_present:
+        ok(f"{name}: secrets guard and dispatch notifier present")
 
 
-# ── Check 5: All build workflows accept new inputs ────────────────────────────
-print("\n=== Check 5: New inputs present in all build workflows ===")
-for name in ALL_BUILD_WORKFLOWS:
-    if name not in parsed:
-        continue
-    inputs = _workflow_inputs(parsed[name])
-    missing = [i for i in NEW_INPUTS if i not in inputs]
-    if missing:
-        fail(f"{name}: missing new inputs: {missing}")
-    else:
-        ok(f"{name}: all {len(NEW_INPUTS)} new inputs present")
-
-
-# ── Check 6: deploy_fly_builder.yml has no ROM/device inputs ──────────────────
-print("\n=== Check 6: deploy_fly_builder.yml — no ROM/device inputs ===")
+# ── Check 7: deploy_fly_builder.yml has no ROM/device inputs ──────────────────
+print("\n=== Check 7: deploy_fly_builder.yml — no ROM/device inputs ===")
 deploy_name = "deploy_fly_builder.yml"
 if deploy_name in parsed:
     deploy_inputs = _workflow_inputs(parsed[deploy_name])
     rom_device_inputs = {"rom_url", "device", "codename", "edition", "flavor"}
-    found = deploy_inputs & rom_device_inputs
-    if found:
-        fail(f"{deploy_name}: must not have ROM/device inputs — found: {found}")
+    found_bad = deploy_inputs & rom_device_inputs
+    if found_bad:
+        fail(f"{deploy_name}: must not have ROM/device inputs — found: {found_bad}")
     else:
         ok(f"{deploy_name}: no ROM/device inputs")
+
+
+# ── Check 8: codename input type is string, not choice ────────────────────────
+print("\n=== Check 8: codename input type is string (not choice dropdown) ===")
+for name in ALL_BUILD_WORKFLOWS:
+    if name not in parsed:
+        continue
+    on_section = parsed[name].get("on") or parsed[name].get(True) or {}
+    try:
+        inputs_section = on_section["workflow_dispatch"]["inputs"]
+        codename_input = inputs_section.get("codename", {})
+        input_type = codename_input.get("type", "string")
+        if input_type == "choice":
+            fail(f"{name}: codename input must be type: string, not type: choice")
+        else:
+            ok(f"{name}: codename is type: {input_type}")
+    except (KeyError, TypeError):
+        warn(f"{name}: could not read codename input definition")
 
 
 # ── Summary ────────────────────────────────────────────────────────────────────

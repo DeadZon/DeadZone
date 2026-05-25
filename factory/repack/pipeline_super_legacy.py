@@ -285,8 +285,9 @@ def apply_super_build_legacy_stage(
             )
         else:
             print(
-                "[super_build] WARNING: no per-partition sizes in source metadata "
-                "(source may be payload manifest only) — image file sizes will be used"
+                "[super_build] ERROR: no per-partition sizes in source metadata. "
+                "original_partition_sizes is empty — build will fail. "
+                "Cannot preserve partition byte sizes without original super metadata."
             )
 
     part_names = collect_part_names_legacy(partition_source, super_info)
