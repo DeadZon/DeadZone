@@ -562,6 +562,13 @@ def apply_super_build_legacy_stage(
         "lpunpack_device_size": lpunpack_validation.get("device_size_in_super"),
         "lpunpack_partitions_in_super": lpunpack_validation.get("partitions_in_super", []),
         "missing_dynamic_partitions": lpunpack_validation.get("missing_partitions", missing),
+        "slot_metadata_entries_expected": lpunpack_validation.get("slot_metadata_entries_expected", 0),
+        "slot_metadata_entries_found": lpunpack_validation.get("slot_metadata_entries_found", 0),
+        "zero_size_b_partitions_expected": lpunpack_validation.get("zero_size_b_partitions_expected", 0),
+        "zero_size_b_partitions_found": lpunpack_validation.get("zero_size_b_partitions_found", 0),
+        "missing_slot_entries": lpunpack_validation.get("missing_slot_entries", []),
+        "invalid_zero_size_entries": lpunpack_validation.get("invalid_zero_size_entries", []),
+        "vab_b_slots_are_zero_size": lpunpack_validation.get("vab_b_slots_are_zero_size", False),
         "forbidden_standalone_dynamic_images": sorted(
             name for name in _FORBIDDEN_DYNAMIC_IN_FINAL
             if (images_dir / name).is_file()

@@ -337,22 +337,10 @@ def _build_lpmake_command(
                 "--partition", f"{part_name}_a:readonly:{alloc}:{layout['group_a_name']}",
                 "--image", f"{part_name}_a={img_path}",
             ]
+        # VAB: _b slots are always zero-size metadata placeholders — no image for any _b partition.
         command += ["--group", f"{layout['group_b_name']}:{group_size}"]
         for part_name in selected_parts:
-            img_path = partition_images_dir / f"{part_name}_b.img"
-            if can_use_slot_image_legacy(part_name, img_path, layout["slot_mode"]):
-                alloc = _alloc_size(part_name, img_path)
-                if alloc is None:
-                    command += ["--partition", f"{part_name}_b:readonly:0:{layout['group_b_name']}"]
-                    continue
-                command += [
-                    "--partition", f"{part_name}_b:readonly:{alloc}:{layout['group_b_name']}",
-                    "--image", f"{part_name}_b={img_path}",
-                ]
-            else:
-                if img_path.exists():
-                    warnings.append(f"Skipping invalid _b image and adding empty metadata partition: {img_path.name}")
-                command += ["--partition", f"{part_name}_b:readonly:0:{layout['group_b_name']}"]
+            command += ["--partition", f"{part_name}_b:readonly:0:{layout['group_b_name']}"]
         command += ["--virtual-ab"]
 
     command += ["--out", str(output_super)]

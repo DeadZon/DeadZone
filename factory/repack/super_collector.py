@@ -437,6 +437,13 @@ def validate_super_with_lpunpack(
         "device_size_in_super": None,
         "partitions_in_super": [],
         "missing_partitions": [],
+        "slot_metadata_entries_expected": 0,
+        "slot_metadata_entries_found": 0,
+        "zero_size_b_partitions_expected": 0,
+        "zero_size_b_partitions_found": 0,
+        "missing_slot_entries": [],
+        "invalid_zero_size_entries": [],
+        "vab_b_slots_are_zero_size": False,
         "errors": [],
         "warnings": [],
     }
@@ -466,6 +473,11 @@ def validate_super_with_lpunpack(
 
         partition_table = info.get("partition_table", [])
         parts_in_super = [str(p.get("name", "")) for p in partition_table]
+        part_sizes: dict[str, int] = {
+            str(p.get("name", "")): int(p.get("size", -1))
+            for p in partition_table
+            if isinstance(p, dict)
+        }
         result["partitions_in_super"] = parts_in_super
 
         group_table = info.get("group_table", [])
@@ -491,6 +503,34 @@ def validate_super_with_lpunpack(
         if missing:
             validation_errors.append(
                 f"Missing _a-slot partitions in super metadata: {', '.join(missing)}"
+            )
+
+        # VAB _b slot zero-size metadata checks.
+        # Every dynamic partition must have a paired _b entry with size == 0.
+        # Zero-size _b entries are expected and correct for VAB; they are NOT errors.
+        expected_b_slots = [f"{p}_b" for p in expected_partitions]
+        missing_b = [s for s in expected_b_slots if s not in parts_in_super]
+        invalid_b = [
+            s for s in expected_b_slots
+            if s in parts_in_super and part_sizes.get(s, -1) != 0
+        ]
+        result["slot_metadata_entries_expected"] = len(expected_b_slots)
+        result["slot_metadata_entries_found"] = sum(1 for s in expected_b_slots if s in parts_in_super)
+        result["zero_size_b_partitions_expected"] = len(expected_b_slots)
+        result["zero_size_b_partitions_found"] = sum(
+            1 for s in expected_b_slots
+            if s in parts_in_super and part_sizes.get(s, -1) == 0
+        )
+        result["missing_slot_entries"] = missing_b
+        result["invalid_zero_size_entries"] = invalid_b
+        result["vab_b_slots_are_zero_size"] = not missing_b and not invalid_b
+        if missing_b:
+            validation_errors.append(
+                f"Missing _b slot metadata entries in super: {', '.join(missing_b)}"
+            )
+        if invalid_b:
+            validation_errors.append(
+                f"_b slot entries with non-zero size (must be 0 for VAB): {', '.join(invalid_b)}"
             )
 
         result["errors"].extend(validation_errors)
