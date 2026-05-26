@@ -149,6 +149,29 @@ class UnpackPipeline:
         else:
             extracted_dir = extract_rom(self.rom_path, work_dir)
 
+        # ── 2b. EU ROM adapter — detect and normalise split-super layouts ─────
+        if super_img_path is None and extracted_dir is not None:
+            from factory.unpack.eu_rom_adapter import (
+                SOURCE_SPLIT_SUPER,
+                SOURCE_SUPER_IMG,
+                SOURCE_SUPER_IMG_ZST,
+                inspect_rom_source,
+            )
+
+            _EU_SUPER_TYPES = (SOURCE_SPLIT_SUPER, SOURCE_SUPER_IMG, SOURCE_SUPER_IMG_ZST)
+            eu_info = inspect_rom_source(extracted_dir, work_dir, reports_dir)
+            print(f"[unpack] EU adapter: source_type={eu_info.source_type}")
+
+            if eu_info.source_type in _EU_SUPER_TYPES:
+                if eu_info.status == "OK" and eu_info.normalized_path:
+                    super_img_path = eu_info.normalized_path
+                    ctx.super_found = True
+                    print(f"[unpack] EU adapter normalised super.img → {super_img_path}")
+                elif eu_info.status == "FAILED":
+                    ctx.error(f"EU ROM adapter failed: {eu_info.error}")
+                    write_reports(ctx)
+                    raise RuntimeError(f"EU ROM adapter failed: {eu_info.error}")
+
         # ── 3. Locate super.img ───────────────────────────────────────────────
         if super_img_path is None and extracted_dir is not None:
             print(f"[unpack] Searching for super.img in: {extracted_dir}")
