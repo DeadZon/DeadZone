@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -209,6 +210,32 @@ def _write_deadzone_patch_report(
     print(f"[super_build] deadzone_patch_report.txt → {out_path}")
 
 
+def _load_manifest_partition_sizes_from_report(reports_dir: Path) -> dict[str, int]:
+    """Load partition_sizes_from_manifest written by the unpack stage.
+
+    Reads output/reports/01_unpack_report.json and returns the per-partition
+    original sizes from the payload.bin manifest (new_partition_info.size).
+    These sizes are the authoritative original LP allocation values when the
+    original super.img is not available.  Only allowed dynamic partition names
+    are kept; zero-byte entries are dropped.
+    """
+    _allowed: frozenset[str] = frozenset(ALLOWED_DYNAMIC_PARTITIONS)
+    unpack_report = reports_dir / "01_unpack_report.json"
+    try:
+        data = json.loads(unpack_report.read_text(encoding="utf-8"))
+        raw = data.get("partition_sizes_from_manifest") or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            k: int(v)
+            for k, v in raw.items()
+            if k in _allowed and isinstance(v, (int, float)) and int(v) > 0
+        }
+    except Exception as exc:
+        print(f"[super_build] WARNING: could not read manifest sizes from {unpack_report}: {exc}")
+        return {}
+
+
 def apply_super_build_legacy_stage(
     project_dir: Path,
     images_dir: Path,
@@ -276,18 +303,75 @@ def apply_super_build_legacy_stage(
     # Extract per-partition original LP allocation sizes from the source metadata.
     # These are passed to lpmake so the final super uses the exact original sizes.
     original_partition_sizes: dict[str, int] = {}
+    original_partition_sizes_source: str = "missing"
+    manifest_partition_sizes_available: bool = False
+    manifest_partition_sizes_used: list[str] = []
+    manifest_partition_sizes_missing: list[str] = []
+    skipped_dynamic_partitions: list[dict] = []
+
     if super_info_source != "missing":
         original_partition_sizes = extract_original_partition_sizes(super_info)
-        if original_partition_sizes:
-            print(
-                f"[super_build] original_partition_sizes ({len(original_partition_sizes)}): "
-                + ", ".join(f"{k}={v}" for k, v in original_partition_sizes.items())
-            )
+
+    if original_partition_sizes:
+        original_partition_sizes_source = "super_metadata"
+        print(
+            f"[super_build] original_partition_sizes ({len(original_partition_sizes)} from super_metadata): "
+            + ", ".join(f"{k}={v}" for k, v in original_partition_sizes.items())
+        )
+    else:
+        # super_info has no per-partition sizes (hardcoded fallback / payload manifest
+        # source both omit sizes).  Fall back to payload manifest per-partition sizes
+        # written to 01_unpack_report.json during the unpack stage.
+        print(
+            "[super_build] super_info has no per-partition sizes; "
+            "trying payload manifest sizes from 01_unpack_report.json"
+        )
+        manifest_sizes_all = _load_manifest_partition_sizes_from_report(reports_dir)
+        manifest_partition_sizes_available = bool(manifest_sizes_all)
+
+        if manifest_sizes_all:
+            # Determine which dynamic partitions are actually present in staging.
+            part_names_in_staging = collect_part_names_legacy(partition_source, super_info)
+
+            # Every found partition must have a manifest size; any gap is a hard error.
+            missing_sizes = [p for p in part_names_in_staging if p not in manifest_sizes_all]
+            manifest_partition_sizes_missing = missing_sizes
+
+            # Record partitions that exist in the manifest but are absent from staging.
+            for part in ALLOWED_DYNAMIC_PARTITIONS:
+                if part in manifest_sizes_all and part not in part_names_in_staging:
+                    skipped_dynamic_partitions.append({
+                        "partition": part,
+                        "reason": "has manifest size but image absent from staging dir",
+                        "manifest_size_bytes": manifest_sizes_all[part],
+                    })
+
+            if missing_sizes:
+                print(
+                    f"[super_build] ERROR: manifest partition sizes missing for "
+                    f"found partitions: {missing_sizes}. "
+                    f"Refusing super build — cannot determine LP allocation sizes."
+                )
+                original_partition_sizes_source = "missing"
+                # original_partition_sizes stays empty → preflight will reject lpmake
+            else:
+                original_partition_sizes = {
+                    p: manifest_sizes_all[p]
+                    for p in part_names_in_staging
+                    if p in manifest_sizes_all
+                }
+                original_partition_sizes_source = "payload_manifest"
+                manifest_partition_sizes_used = list(original_partition_sizes.keys())
+                print(
+                    f"[super_build] Using payload manifest partition sizes for "
+                    f"{len(original_partition_sizes)} partitions (source=payload_manifest): "
+                    + ", ".join(f"{k}={v}" for k, v in original_partition_sizes.items())
+                )
         else:
+            original_partition_sizes_source = "missing"
             print(
-                "[super_build] ERROR: no per-partition sizes in source metadata. "
-                "original_partition_sizes is empty — build will fail. "
-                "Cannot preserve partition byte sizes without original super metadata."
+                "[super_build] ERROR: no per-partition sizes from super metadata or "
+                "payload manifest. original_partition_sizes is empty — build will fail."
             )
 
     part_names = collect_part_names_legacy(partition_source, super_info)
@@ -450,6 +534,12 @@ def apply_super_build_legacy_stage(
         "platform": platform,
         "flavor": flavor,
         "super_info_source": super_info_source,
+        "original_partition_sizes_source": original_partition_sizes_source,
+        "manifest_partition_sizes_available": manifest_partition_sizes_available,
+        "manifest_partition_sizes_used": manifest_partition_sizes_used,
+        "manifest_partition_sizes_missing": manifest_partition_sizes_missing,
+        "skipped_dynamic_partitions": skipped_dynamic_partitions,
+        "forbidden_image_size_fallback_used": False,
         "super_size": layout.get("super_size"),
         "group_name": layout.get("group_name"),
         "group_size": layout.get("group_size"),

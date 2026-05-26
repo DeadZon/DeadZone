@@ -152,6 +152,37 @@ def check_super_report(super_report: dict, label: str = "super_build") -> None:
     if missing_meta:
         ok(f"{label}: correct — super refused lpmake due to missing metadata")
 
+    # Forbidden image-file-size fallback must never be used
+    image_size_fallback = super_report.get("forbidden_image_size_fallback_used", False)
+    if lpmake_executed and image_size_fallback:
+        fail(
+            f"{label}: lpmake_executed=true but forbidden_image_size_fallback_used=true — "
+            "super build must never use extracted image file sizes as LP allocation sizes"
+        )
+    elif lpmake_executed:
+        ok(f"{label}: forbidden_image_size_fallback_used=false (correct)")
+
+    # original_partition_sizes_source must be set and valid when lpmake ran
+    sizes_source = super_report.get("original_partition_sizes_source")
+    if lpmake_executed:
+        if not sizes_source:
+            fail(
+                f"{label}: lpmake_executed=true but original_partition_sizes_source is "
+                "missing from report — pipeline must record the size source"
+            )
+        elif sizes_source == "image_file_size":
+            fail(
+                f"{label}: lpmake_executed=true but original_partition_sizes_source="
+                "'image_file_size' — image file sizes are forbidden as LP allocation sizes"
+            )
+        elif sizes_source == "missing":
+            fail(
+                f"{label}: lpmake_executed=true but original_partition_sizes_source='missing' — "
+                "lpmake must not run without valid partition size metadata"
+            )
+        else:
+            ok(f"{label}: original_partition_sizes_source={sizes_source!r}")
+
 
 # ── Check 6: telegram_status.json existence when notify_telegram was true ─────
 

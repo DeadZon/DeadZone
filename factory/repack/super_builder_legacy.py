@@ -384,13 +384,11 @@ def build_super_image_legacy(
     device = device
 
     # Pre-flight validation: original metadata must be present before lpmake runs.
+    # partition_table may be empty when super_info comes from a hardcoded device profile
+    # or the payload manifest path; what matters is that original_partition_sizes is
+    # populated (either from LP super metadata or from the payload manifest per-partition
+    # new_partition_info.size values threaded in by the pipeline stage).
     preflight_errors: list[str] = []
-    partition_table = super_info.get("partition_table") or []
-    if not partition_table:
-        preflight_errors.append(
-            "ERROR: original super metadata missing; cannot preserve partition byte sizes. "
-            "super_info.partition_table is empty."
-        )
     if not original_partition_sizes:
         preflight_errors.append(
             "ERROR: original super metadata missing; cannot preserve partition byte sizes. "
