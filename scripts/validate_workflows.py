@@ -173,6 +173,36 @@ for name in all_wf:
         ok(f"{name}: {lf_count} LF lines (>= {min_lf})")
 
 
+# ── Check 1c: Flattened / minified structure patterns ─────────────────────────
+# These patterns appear when a YAML file has been collapsed to fewer lines
+# (e.g. a git corruption, a broken normaliser, or a one-liner push).
+import re as _re_flat
+
+_FLAT_PATTERNS: list[tuple[str, str]] = [
+    (r"name:.*\bon:\b",
+     "line mixes 'name:' and 'on:' — top-level keys must be on separate lines"),
+    (r"workflow_dispatch:.*\binputs:\b",
+     "line mixes 'workflow_dispatch:' and 'inputs:' — must be on separate lines"),
+    (r"jobs:.*\bruns-on:\b",
+     "line mixes 'jobs:' and 'runs-on:' — must be on separate lines"),
+    (r"run: \| \S",
+     "line has 'run: |' with content after the pipe — block scalar must start on next line"),
+]
+
+print("\n=== Check 1c: No flattened/minified structure patterns ===")
+for name in all_wf:
+    if name not in texts:
+        continue
+    clean = True
+    for line_no, line in enumerate(texts[name].splitlines(), 1):
+        for pat, desc in _FLAT_PATTERNS:
+            if _re_flat.search(pat, line):
+                fail(f"{name}:{line_no}: {desc} — line: {line[:120]!r}")
+                clean = False
+    if clean:
+        ok(f"{name}: no flattened structure patterns")
+
+
 # ── Check 2: Build workflows have exactly the required inputs (no legacy) ──────
 print("\n=== Check 2: Build workflow inputs — required only, no legacy ===")
 for name in ALL_BUILD_WORKFLOWS:
@@ -364,6 +394,37 @@ if "deadzone_snapdragon.yml" in texts:
             "deadzone_snapdragon.yml: must set env key 'TELEGRAM_SNAPDRAGON_BOT_TOKEN:' "
             "(not remap it to TELEGRAM_BOT_TOKEN) so SoC-specific resolver works"
         )
+
+
+# ── Check 10: rom_url input — required=false, default="auto" ──────────────────
+print("\n=== Check 10: rom_url input — required=false, default=auto ===")
+for name in ALL_BUILD_WORKFLOWS:
+    if name not in parsed:
+        continue
+    on_section = parsed[name].get("on") or parsed[name].get(True) or {}
+    try:
+        inputs_section = on_section["workflow_dispatch"]["inputs"] or {}
+    except (KeyError, TypeError):
+        inputs_section = {}
+
+    rom_url_def = inputs_section.get("rom_url")
+    if not isinstance(rom_url_def, dict):
+        fail(f"{name}: rom_url input definition is missing or not a mapping")
+        continue
+
+    required = rom_url_def.get("required", False)
+    if required is True or str(required).lower() == "true":
+        fail(f"{name}: rom_url.required must be false (got {required!r}) — "
+             "users must be able to dispatch without supplying a URL")
+    else:
+        ok(f"{name}: rom_url.required is false")
+
+    default = rom_url_def.get("default", None)
+    if str(default) != "auto":
+        fail(f"{name}: rom_url.default must be 'auto' (got {default!r}) — "
+             "the bash steps convert 'auto' to an empty string at runtime")
+    else:
+        ok(f"{name}: rom_url.default is 'auto'")
 
 
 # ── Summary ────────────────────────────────────────────────────────────────────

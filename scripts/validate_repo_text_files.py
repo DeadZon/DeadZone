@@ -141,10 +141,14 @@ WORKFLOW_CHECKS = [
 WORKFLOW_FORBIDDEN_INPUTS = [
     "select_device_codename",
     "select_device",
+    "device",
     "custom_device",
     "final_name",
+    "platform",
     "flavor",
     "runner_label",
+    "VM_CPUS",
+    "VM_MEMORY",
 ]
 
 for wf_path, wf_min_lf in WORKFLOW_CHECKS:

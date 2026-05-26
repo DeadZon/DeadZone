@@ -25,8 +25,9 @@ on:
           - epic
 
       rom_url:
-        description: "ROM download URL"
-        required: true
+        description: "ROM download URL (leave as auto to use device default)"
+        required: false
+        default: "auto"
         type: string
 
       mode:
@@ -91,6 +92,9 @@ jobs:
           esac
 
           ROM_URL="${{ inputs.rom_url }}"
+          if [ "$ROM_URL" = "auto" ]; then
+            ROM_URL=""
+          fi
           if [ "$MODE" = "execute" ]; then
             if [ -z "$ROM_URL" ]; then
               echo "[ERROR] rom_url is required for execute mode."
@@ -134,6 +138,9 @@ jobs:
 
           MODE="${{ inputs.mode }}"
           ROM_URL="${{ inputs.rom_url }}"
+          if [ "$ROM_URL" = "auto" ]; then
+            ROM_URL=""
+          fi
           UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
           NOTIFY_TG="${{ inputs.notify_telegram }}"
 
@@ -171,6 +178,11 @@ jobs:
         run: |
           set -euo pipefail
           ROM_URL="${{ steps.norm.outputs.rom_url }}"
+
+          if [ -z "$ROM_URL" ]; then
+            echo "[ERROR] rom_url is empty in execute mode."
+            exit 1
+          fi
 
           mkdir -p _input_roms
 
