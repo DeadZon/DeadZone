@@ -1,5 +1,5 @@
 # fly.toml — DeadZone ROM factory builder
-app = "deadzone-factory-builder"
+# app name is passed via --app flag in deploy workflow (dz-builder-mtk or dz-builder-snap)
 primary_region = "iad"
 
 [build]
