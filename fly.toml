@@ -14,8 +14,8 @@ primary_region = "iad"
 
   [http_service.concurrency]
     type = "requests"
-    hard_limit = 1
-    soft_limit = 1
+    hard_limit = 10
+    soft_limit = 7
 
 [[vm]]
   size = "performance-4x"
