@@ -32,6 +32,8 @@ _STRAY_PATTERNS: list[re.Pattern] = [
 # Paths that are explicitly allowed to reference Legend.
 _ALLOWED_PREFIXES: tuple[Path, ...] = (
     _LEGEND_HOME / "archived_legacy",
+    # Mods tree archived_legacy — dead archive, not executed at runtime.
+    _REPO_ROOT / "factory" / "patch" / "mods" / "legend" / "archived_legacy",
     _REPO_ROOT / "registry" / "flavors",
     _REPO_ROOT / ".github" / "workflows",
 )

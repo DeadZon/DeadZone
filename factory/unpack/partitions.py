@@ -459,18 +459,26 @@ def _collect_and_install_config_files(
     log_path: Path,
 ) -> tuple[dict, dict]:
     """
-    Search tmp_out recursively for fs_config, file_contexts, fs_options and
+    Search tmp_out for fs_config / file_contexts / fs_options sidecars and
     copy them to config_dir/<partition_name>_<name>.
 
-    Returns (found_dict, installed_dict) where each key is one of the three
-    config file names and values are bool / str-path-or-None respectively.
+    extract.erofs writes partition-prefixed names (<partition>_fs_config, etc.)
+    to its CWD (tmp_out/config/ or tmp_out/.erofs_meta/).  Runtime files under
+    etc/ subtrees (vendor/etc/fs_config_files, etc/selinux/…) must NOT be
+    selected over sidecar files.
 
-    Missing fs_options is a warning only; missing fs_config or file_contexts
-    means EROFS repack will fail.
+    Priority per config type:
+      1. tmp_out/config/<partition>_<name>
+      2. tmp_out/config/<name>
+      3. tmp_out/.erofs_meta/<partition>_<name>
+      4. tmp_out/.erofs_meta/<name>
+      5. tmp_out/<partition>_<name>
+      6. tmp_out/<name>
+      7. rglob for prefixed/bare name skipping etc/ subtrees
+      8. rglob including etc/ subtrees (WARNING logged)
 
-    extract.erofs writes sidecar files to its CWD.  With cwd=.erofs_meta
-    (inside tmp_out) the rglob below finds them automatically.  The explicit
-    search_roots list is logged so failures are easy to diagnose.
+    Returns (found_dict, installed_dict).  Missing fs_options is a warning
+    only; missing fs_config or file_contexts means EROFS repack will fail.
     """
     target_names = ("fs_config", "file_contexts", "fs_options")
     found: dict[str, bool] = {n: False for n in target_names}
@@ -487,16 +495,71 @@ def _collect_and_install_config_files(
     existing_roots = [str(r) for r in search_roots if r.exists()]
     _logprint(log_path, f"[config] search roots: {existing_roots}")
 
+    def _is_runtime_path(p: Path) -> bool:
+        """True when p lives under an etc/ subtree inside tmp_out."""
+        try:
+            parts = p.relative_to(tmp_out).parts
+        except ValueError:
+            return False
+        return "etc" in parts
+
+    def _find_sidecar(name: str) -> tuple["Path | None", bool]:
+        """
+        Return (best_candidate, is_runtime_fallback) for a config file name.
+        Accepts both the bare name and the partition-prefixed variant.
+        """
+        prefixed    = f"{partition_name}_{name}"
+        config_sub  = tmp_out / "config"
+        meta_sub    = tmp_out / ".erofs_meta"
+
+        # Priority 1-6: explicit sidecar locations, no rglob required.
+        for p in (
+            config_sub / prefixed,
+            config_sub / name,
+            meta_sub   / prefixed,
+            meta_sub   / name,
+            tmp_out    / prefixed,
+            tmp_out    / name,
+        ):
+            if p.is_file():
+                return p, False
+
+        # Priority 7: rglob for prefixed or bare name, excluding etc/ subtrees.
+        for search_name in (prefixed, name):
+            hits = [h for h in tmp_out.rglob(search_name) if not _is_runtime_path(h)]
+            if hits:
+                return hits[0], False
+
+        # Priority 8 (last resort): any match, including runtime etc/ paths.
+        for search_name in (prefixed, name):
+            hits = list(tmp_out.rglob(search_name))
+            if hits:
+                return hits[0], True
+
+        return None, False
+
     for name in target_names:
-        candidates = list(tmp_out.rglob(name))
-        if not candidates:
+        prefixed = f"{partition_name}_{name}"
+        all_candidates = [
+            str(h) for h in tmp_out.rglob(f"*{name}*")
+        ]
+        _logprint(log_path, f"[config] candidates for {name}: {all_candidates or '(none)'}")
+
+        src, is_runtime = _find_sidecar(name)
+
+        if src is None:
             severity = "warn" if name == "fs_options" else "MISSING"
             _logprint(log_path, f"[config] {name} not found under {tmp_out} ({severity})")
             continue
 
+        if is_runtime:
+            _logprint(
+                log_path,
+                f"[config] WARNING: {name} selected from runtime path (no sidecar found): {src}",
+            )
+
         found[name] = True
-        src = candidates[0]
-        _logprint(log_path, f"[config] found {name}: {src}")
+        _logprint(log_path, f"[config] selected {name}: {src}")
 
         dst = config_dir / f"{partition_name}_{name}"
         try:
@@ -670,30 +733,7 @@ def extract_partition_image(
                 f"[config] WARNING: file_contexts missing for {partition_name} — EROFS repack will fail",
             )
 
-        # Part B diagnostic: if critical files are still missing, do a broad
-        # filesystem search to expose where extract.erofs actually wrote them.
-        _missing_critical = [n for n in ("fs_config", "file_contexts") if not cfg_found[n]]
-        if _missing_critical:
-            meta_dir = tmp_out / ".erofs_meta"
-            _logprint(log_path, f"[config][DIAG] missing after search: {_missing_critical}")
-            _logprint(log_path, f"[config][DIAG] metadata_cwd: {meta_dir}")
-            if tmp_out.exists():
-                try:
-                    top_items = sorted(p.name for p in tmp_out.iterdir())
-                    _logprint(log_path, f"[config][DIAG] tmp_out top-level: {top_items}")
-                except Exception:
-                    pass
-            if meta_dir.exists():
-                try:
-                    meta_items = sorted(p.name for p in meta_dir.iterdir())
-                    _logprint(log_path, f"[config][DIAG] .erofs_meta contents: {meta_items}")
-                except Exception:
-                    pass
-            for _name in ("fs_config", "file_contexts", "fs_options"):
-                _hits = [str(h) for h in tmp_out.rglob(f"*{_name}*")]
-                _logprint(log_path, f"[config][DIAG] rglob *{_name}*: {_hits or '(none)'}")
-
-        # Part A: detect and flatten nested partition root
+        # Detect and flatten nested partition root
         real_root, nested = _normalize_erofs_root(tmp_out, partition_name, log_path)
 
         # Move real root to final location
