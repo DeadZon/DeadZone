@@ -63,6 +63,7 @@ logs/
 *_compare*/
 *_comparison*/
 *_reference*/
+!third_party/eu_reference/
 
 # Python env
 .env
