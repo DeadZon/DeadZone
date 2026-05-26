@@ -36,6 +36,7 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
         f"validation_status: {report.get('validation_status')}",
         f"compression_mode: {report.get('compression_mode', 'ZIP_DEFLATED compresslevel=9')}",
         f"super_img_detected: {report.get('super_img_detected', False)}",
+        f"super_img_source: {report.get('super_img_source')}",
         f"zip_size_mib: {zip_size_str}",
         *([f"WARNING: ZIP size {zip_size_mib} MiB exceeds 6000 MiB — check for duplicate images"] if size_warn else []),
         "",
@@ -68,6 +69,23 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
     lines.append("")
     lines.append("Warnings:")
     lines.extend(f"- {item}" for item in report.get("warnings", []))
+    lines.append("")
+    lines.append("Bootchain images required:")
+    lines.extend(f"- {name}" for name in report.get("bootchain_images_required", []))
+    lines.append("")
+    lines.append("Bootchain images found (in output/images):")
+    bc_found = report.get("bootchain_images_found", [])
+    if bc_found:
+        lines.extend(f"- {name}" for name in bc_found)
+    else:
+        lines.append("  (none)")
+    lines.append("")
+    lines.append("Bootchain images missing:")
+    bc_missing = report.get("bootchain_images_missing", [])
+    if bc_missing:
+        lines.extend(f"- MISSING: {name}" for name in bc_missing)
+    else:
+        lines.append("  (none — all bootchain images present)")
     lines.append("")
     lines.append("Errors:")
     lines.extend(f"- {item}" for item in report.get("errors", []))

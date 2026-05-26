@@ -47,6 +47,19 @@ REQUIRED_FINAL_IMAGES = [
     "vbmeta.img",
 ]
 
+# Bootchain images expected from payload extraction (distinct from MTK SoC firmware blobs).
+REQUIRED_BOOTCHAIN_IMAGES: list[str] = [
+    "boot.img",
+    "init_boot.img",
+    "vendor_boot.img",
+    "vbmeta.img",
+    "vbmeta_system.img",
+    "dtbo.img",
+    "lk.img",
+    "tee.img",
+    "logo.img",
+]
+
 SIDECARE_FILES_EXCLUDED = [
     "sha256sums.txt",
     "build_info.txt",
@@ -203,6 +216,10 @@ def _report_base(
         "errors": [],
         "compression_mode": "ZIP_DEFLATED compresslevel=9",
         "super_img_detected": False,
+        "super_img_source": None,
+        "bootchain_images_required": REQUIRED_BOOTCHAIN_IMAGES,
+        "bootchain_images_found": [],
+        "bootchain_images_missing": [],
         "images_excluded_dynamic": [],
         "dynamic_images_excluded_from_final_zip": [],
         "forbidden_dynamic_images_in_output_images": [],
@@ -264,6 +281,13 @@ def build_final_fastboot_zip(
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
+    # Detect super.img and bootchain images early so the report is always populated.
+    has_super = (images_dir / "super.img").is_file()
+    report["super_img_detected"] = has_super
+    report["super_img_source"] = str(images_dir / "super.img") if has_super else None
+    report["bootchain_images_found"] = [n for n in REQUIRED_BOOTCHAIN_IMAGES if (images_dir / n).is_file()]
+    report["bootchain_images_missing"] = [n for n in REQUIRED_BOOTCHAIN_IMAGES if not (images_dir / n).is_file()]
+
     # Strict MTK firmware completeness check — must pass before any ZIP is built.
     if soc == "mtk":
         missing_required = validate_mtk_required_images(images_dir)
@@ -305,8 +329,6 @@ def build_final_fastboot_zip(
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
-    has_super = (images_dir / "super.img").is_file()
-    report["super_img_detected"] = has_super
     exclude = DYNAMIC_PARTITION_IMAGES if has_super else frozenset()
 
     image_files, excluded_dynamic = _collect_image_files(images_dir, exclude=exclude)
