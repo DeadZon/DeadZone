@@ -167,6 +167,30 @@ jobs:
             requests pyyaml flask cryptography httpx protobuf \
             pycryptodome toml zstandard brotli
 
+      - name: Send Telegram build start
+        id: tg_start
+        if: steps.norm.outputs.notify_telegram == 'true'
+        env:
+          TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_SNAPDRAGON_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+        run: |
+          set +e
+          MSG_ID=$(python -m factory.notify.telegram_live \
+            --soc snapdragon \
+            --codename "${{ steps.norm.outputs.codename }}" \
+            --edition  "${{ steps.norm.outputs.mod }}" \
+            --action   start 2>/dev/null)
+          EXIT_CODE=$?
+          MSG_ID="${MSG_ID//[$'\t\r\n ']}"
+          if echo "$MSG_ID" | grep -qE '^[0-9]+$'; then
+            echo "DEADZONE_TELEGRAM_MESSAGE_ID=${MSG_ID}" >> "$GITHUB_ENV"
+            echo "tg_message_id=${MSG_ID}" >> "$GITHUB_OUTPUT"
+            echo "[TG] Start message sent: message_id=${MSG_ID}"
+          else
+            echo "[TG] Telegram start skipped or failed (exit=${EXIT_CODE})."
+          fi
+
       - name: Download source ROM (execute mode only)
         if: steps.norm.outputs.mode == 'execute'
         id: download
@@ -275,6 +299,41 @@ jobs:
               done
               exit 1
             }
+
+      - name: Finalize Telegram notification
+        if: always() && steps.norm.outputs.notify_telegram == 'true'
+        env:
+          TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_SNAPDRAGON_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          DEADZONE_TELEGRAM_MESSAGE_ID: ${{ env.DEADZONE_TELEGRAM_MESSAGE_ID }}
+        run: |
+          set +e
+          CODENAME="${{ steps.norm.outputs.codename }}"
+          EDITION="${{ steps.norm.outputs.mod }}"
+          JOB_STATUS="${{ job.status }}"
+
+          FINAL_STATUS=""
+          if [ -f output/reports/telegram_status.json ]; then
+            FINAL_STATUS=$(python3 -c "import json; d=json.load(open('output/reports/telegram_status.json')); print(d.get('final_status') or '')" 2>/dev/null || true)
+          fi
+
+          if [ -n "$FINAL_STATUS" ] && [ "$FINAL_STATUS" != "None" ] && [ "$FINAL_STATUS" != "null" ]; then
+            echo "[TG] Orchestrator already finalized: $FINAL_STATUS"
+            exit 0
+          fi
+
+          echo "[TG] Job status: $JOB_STATUS - sending final notification"
+          if [ "$JOB_STATUS" = "cancelled" ]; then
+            python -m factory.notify.telegram_live \
+              --soc snapdragon --codename "$CODENAME" --edition "$EDITION" \
+              --action cancelled || true
+          else
+            python -m factory.notify.telegram_live \
+              --soc snapdragon --codename "$CODENAME" --edition "$EDITION" \
+              --action fail \
+              --error-summary "Build did not complete. Check logs in GitHub artifacts." || true
+          fi
 
       - name: Upload build reports
         if: always()

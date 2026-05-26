@@ -153,8 +153,9 @@ def run_factory(
     import os
 
     output_dir = (Path(output_dir) if output_dir else _REPO_ROOT / "output").resolve()
+    _pipeline_start = time.monotonic()
 
-    # ── Telegram early-fail / notifier creation for GitHub local builds ───────
+    # ── Telegram notifier creation ────────────────────────────────────────────
     if notify_telegram and notifier is None:
         soc_norm = (soc or "").lower()
         _token = _chat = ""
@@ -164,7 +165,6 @@ def run_factory(
         elif soc_norm == "snapdragon":
             _token = os.environ.get("TELEGRAM_SNAPDRAGON_BOT_TOKEN", "")
             _chat  = os.environ.get("TELEGRAM_SNAPDRAGON_CHAT_ID", "")
-        # Allow fallback only when SoC-specific vars are absent
         if not _token:
             _token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         if not _chat:
@@ -185,31 +185,35 @@ def run_factory(
         try:
             from factory.notify.telegram_live import TelegramLiveStatus, generate_build_id
             _build_id = generate_build_id(soc_norm or "unk", codename)
+            os_ver = _os_family(mi_incremental).replace("OS3", "HyperOS 3").replace("OS2", "HyperOS 2").replace("OS1", "HyperOS 1")
             notifier = TelegramLiveStatus(
                 build_id=_build_id,
                 soc=soc_norm or "unknown",
                 codename=codename,
-                mod=edition,
+                edition=edition,
                 mode=mode,
                 rom_url=rom_url,
                 upload_pixeldrain=upload_pixeldrain,
                 source=source,
                 enabled=True,
                 output_dir=output_dir,
+                android_version=android_version,
+                os_version=os_ver if mi_incremental else "",
+                build_name=f"DeadZone_{edition.capitalize()}_{codename}",
             )
-            notifier.start()
+            notifier.start_build()
         except Exception as exc:
             print(f"[orchestrator] Telegram notifier setup failed: {exc}")
 
-    def _notify(stage: str, action: str, error: str | None = None) -> None:
+    def _notify(stage: str, detail: str, error: str | None = None, force: bool = False) -> None:
         if notifier is not None:
             try:
-                notifier.update_stage(stage, action, error=error)
+                notifier.update_stage(stage, detail=detail, error=error, force=force)
             except Exception:
                 pass
 
     # ── Step 1-3: Resolve and create context ─────────────────────────────────
-    _notify("RESOLVING_DEVICE", "Resolving device metadata")
+    _notify("RESOLVING_DEVICE", "Resolving device metadata", force=True)
     device_profile = resolve_device(codename, soc_hint=soc)
     resolved_soc = device_profile.get("soc") or soc or "unknown"
     super_size = resolve_super_size(device_profile, resolved_soc)
@@ -432,15 +436,48 @@ def run_factory(
                 )
             _run(ctx, "cleanup", _cleanup)
 
+    # ── Finalize Telegram message ─────────────────────────────────────────────
+    final_status = "FAILED" if (ctx.errors and ctx.execute) else ("APPLIED" if ctx.execute else "DRY_RUN")
+    _duration = time.monotonic() - _pipeline_start
+
+    if notifier is not None:
+        try:
+            if final_status == "FAILED":
+                first_error = ctx.errors[0][:300] if ctx.errors else None
+                notifier.fail(
+                    stage=notifier.current_stage,
+                    error_summary=first_error,
+                    duration=_duration,
+                )
+            else:
+                zip_name = None
+                if ctx.final_zip:
+                    zip_name = Path(ctx.final_zip).name
+                notifier.success(
+                    final_zip_name=zip_name,
+                    pixeldrain_link=ctx.pixeldrain_link,
+                    duration=_duration,
+                )
+        except Exception as _tg_exc:
+            print(f"[orchestrator] Telegram finalize error: {_tg_exc}")
+
+    # Export message_id for GitHub Actions handoff
+    if notifier is not None and notifier.message_id is not None:
+        _gha_env = os.environ.get("GITHUB_ENV", "")
+        if _gha_env:
+            try:
+                with open(_gha_env, "a", encoding="utf-8") as _f:
+                    _f.write(f"DEADZONE_TELEGRAM_MESSAGE_ID={notifier.message_id}\n")
+            except Exception:
+                pass
+
     # ── Write reports ─────────────────────────────────────────────────────────
     build_id = notifier.build_id if notifier is not None else None
     telegram_section = notifier.report_section() if notifier is not None else None
     report_files = write_pipeline_report(ctx, ctx.output_dir, telegram=telegram_section, build_id=build_id)
 
-    # Write telegram_status.json for diagnostics and validation
     _write_telegram_status(notifier, notify_telegram, soc or "", source, output_dir)
 
-    final_status = "FAILED" if (ctx.errors and ctx.execute) else ("APPLIED" if ctx.execute else "DRY_RUN")
     print(f"[orchestrator] final_status={final_status}")
     if ctx.errors:
         print(f"[orchestrator] ERRORS ({len(ctx.errors)}):")
