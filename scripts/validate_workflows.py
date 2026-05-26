@@ -396,8 +396,8 @@ if "deadzone_snapdragon.yml" in texts:
         )
 
 
-# ── Check 10: rom_url input — required=false, default="auto" ──────────────────
-print("\n=== Check 10: rom_url input — required=false, default=auto ===")
+# ── Check 10: rom_url input — required=true, no default ───────────────────────
+print("\n=== Check 10: rom_url input — required=true, no default ===")
 for name in ALL_BUILD_WORKFLOWS:
     if name not in parsed:
         continue
@@ -413,18 +413,27 @@ for name in ALL_BUILD_WORKFLOWS:
         continue
 
     required = rom_url_def.get("required", False)
-    if required is True or str(required).lower() == "true":
-        fail(f"{name}: rom_url.required must be false (got {required!r}) — "
-             "users must be able to dispatch without supplying a URL")
+    if required is not True and str(required).lower() != "true":
+        fail(f"{name}: rom_url.required must be true (got {required!r}) — "
+             "explicit ROM URL is mandatory")
     else:
-        ok(f"{name}: rom_url.required is false")
+        ok(f"{name}: rom_url.required is true")
 
     default = rom_url_def.get("default", None)
-    if str(default) != "auto":
-        fail(f"{name}: rom_url.default must be 'auto' (got {default!r}) — "
-             "the bash steps convert 'auto' to an empty string at runtime")
+    if default is not None:
+        fail(f"{name}: rom_url must NOT have a default (got {default!r}) — "
+             "remove the default field so the UI shows an empty required field")
     else:
-        ok(f"{name}: rom_url.default is 'auto'")
+        ok(f"{name}: rom_url has no default")
+
+    text = texts.get(name, "")
+    # Forbidden: the old silent-conversion pattern ROM_URL="" after an auto check.
+    # The new rejection guard (exit 1) is allowed; only the silent empty-assignment is banned.
+    _silent_conversion = 'ROM_URL=""'
+    if _silent_conversion in text:
+        fail(f"{name}: contains silent auto-conversion '{_silent_conversion}' — remove all auto handling")
+    else:
+        ok(f"{name}: no silent rom_url=auto conversion found")
 
 
 # ── Summary ────────────────────────────────────────────────────────────────────

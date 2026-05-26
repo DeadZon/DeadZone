@@ -173,6 +173,37 @@ else:
     ok("os.system not present")
 
 # ---------------------------------------------------------------------------
+# Check 6: rom_url must not be set to "auto" or 'auto'
+# ---------------------------------------------------------------------------
+
+import re as _re_bot
+
+_AUTO_PATTERNS = [
+    r'rom_url\s*[=:]\s*["\']auto["\']',
+    r'"auto"\s*#.*rom',
+    r"'auto'\s*#.*rom",
+]
+_found_auto = False
+for _pat in _AUTO_PATTERNS:
+    if _re_bot.search(_pat, source, _re_bot.IGNORECASE):
+        fail(f"Bot source contains rom_url=auto pattern matching /{_pat}/ — remove all auto handling")
+        _found_auto = True
+
+if not _found_auto:
+    ok("No rom_url=auto patterns found")
+
+# ---------------------------------------------------------------------------
+# Check 7: build commands require URL argument (len(args) >= 3)
+# ---------------------------------------------------------------------------
+
+if "len(args) < 3" in source:
+    ok("build commands enforce 3-argument minimum (codename edition rom_url)")
+elif "len(args) < 2" in source:
+    fail("build commands only check for 2 args — must require 3: codename edition rom_url")
+else:
+    warn("Could not verify argument count check for build commands")
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 

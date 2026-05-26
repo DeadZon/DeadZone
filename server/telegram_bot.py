@@ -157,29 +157,30 @@ def handle_help(chat_id: int) -> None:
     send_message(
         chat_id,
         "<b>Commands</b>\n\n"
-        "/build_mtk &lt;codename&gt; &lt;edition&gt;\n"
+        "/build_mtk &lt;codename&gt; &lt;edition&gt; &lt;rom_url&gt;\n"
         "  Dispatch a MediaTek build on GitHub Actions.\n\n"
-        "/build_snapdragon &lt;codename&gt; &lt;edition&gt;\n"
+        "/build_snapdragon &lt;codename&gt; &lt;edition&gt; &lt;rom_url&gt;\n"
         "  Dispatch a Snapdragon build on GitHub Actions.\n\n"
         "/status\n"
         "  Link to the Actions run list.\n\n"
         "/latest\n"
         "  Link to the latest workflow runs.\n\n"
-        "Allowed editions: <code>legend</code>",
+        "Allowed editions: <code>legend</code>\n"
+        "ROM URL is required — paste the direct ZIP/TGZ link.",
     )
 
 
 def handle_build(chat_id: int, soc: str, args: list[str]) -> None:
-    if len(args) < 2:
+    if len(args) < 3:
         send_message(
             chat_id,
-            f"Usage: /build_{soc} &lt;codename&gt; &lt;edition&gt;\n"
-            f"Example: /build_{soc} zircon legend",
+            f"ROM URL is required. Example: /build_{soc} zircon legend https://...",
         )
         return
 
     codename = args[0].strip().lower()
     edition = args[1].strip().lower()
+    rom_url = args[2].strip()
 
     if not codename:
         send_message(chat_id, "Error: codename must not be empty.")
@@ -193,12 +194,23 @@ def handle_build(chat_id: int, soc: str, args: list[str]) -> None:
         )
         return
 
+    if not rom_url or rom_url == "auto":
+        send_message(
+            chat_id,
+            f"ROM URL is required. Example: /build_{soc} zircon legend https://...",
+        )
+        return
+
+    if not (rom_url.startswith("http://") or rom_url.startswith("https://")):
+        send_message(chat_id, "Error: rom_url must start with http:// or https://")
+        return
+
     workflow_file = WORKFLOWS[soc]
     inputs = {
         "codename": codename,
         "custom_codename": "",
         "edition": edition,
-        "rom_url": "",
+        "rom_url": rom_url,
         "mode": "execute",
         "upload_pixeldrain": "true",
         "notify_telegram": "true",
@@ -216,7 +228,7 @@ def handle_build(chat_id: int, soc: str, args: list[str]) -> None:
             f"Workflow: <code>{workflow_file}</code>\n"
             f"<a href=\"{actions_url}\">View on GitHub Actions</a>",
         )
-        log.info("Dispatched %s build: codename=%s edition=%s", soc, codename, edition)
+        log.info("Dispatched %s build: codename=%s edition=%s rom_url=%s", soc, codename, edition, rom_url)
     else:
         send_message(chat_id, f"Failed to queue build.\n{detail}")
         log.error("Dispatch failed for %s/%s: %s", soc, codename, detail)

@@ -25,10 +25,13 @@ The bot **never runs builds locally** — it only calls the GitHub API.
 |---------|-------------|
 | `/start` | Welcome message |
 | `/help` | List all commands |
-| `/build_mtk <codename> <edition>` | Dispatch `deadzone_mtk.yml` workflow |
-| `/build_snapdragon <codename> <edition>` | Dispatch `deadzone_snapdragon.yml` workflow |
+| `/build_mtk <codename> <edition> <rom_url>` | Dispatch `deadzone_mtk.yml` workflow |
+| `/build_snapdragon <codename> <edition> <rom_url>` | Dispatch `deadzone_snapdragon.yml` workflow |
 | `/status` | Link to all GitHub Actions runs |
 | `/latest` | Links to latest runs per workflow |
+
+ROM URL is **required** — paste the direct ZIP or TGZ download link.
+Example: `/build_mtk zircon legend https://example.com/rom.zip`
 
 ## Allowed editions
 
@@ -41,12 +44,14 @@ Only `legend` is accepted. Sending any other edition is rejected with an error m
   "codename":         "<device codename>",
   "custom_codename":  "",
   "edition":          "legend",
-  "rom_url":          "",
+  "rom_url":          "<direct ROM URL — required>",
   "mode":             "execute",
   "upload_pixeldrain": "true",
   "notify_telegram":   "true"
 }
 ```
+
+`rom_url` must start with `http://` or `https://`. The value `auto` is rejected.
 
 ## Security model
 

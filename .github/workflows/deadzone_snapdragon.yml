@@ -25,9 +25,8 @@ on:
           - epic
 
       rom_url:
-        description: "ROM download URL (leave as auto to use device default)"
-        required: false
-        default: "auto"
+        description: "Direct ROM ZIP/TGZ URL. Required for execute builds."
+        required: true
         type: string
 
       mode:
@@ -92,19 +91,18 @@ jobs:
           esac
 
           ROM_URL="${{ inputs.rom_url }}"
+          if [ -z "$ROM_URL" ]; then
+            echo "::error::rom_url is required. Paste the real ROM URL."
+            exit 1
+          fi
           if [ "$ROM_URL" = "auto" ]; then
-            ROM_URL=""
+            echo "::error::rom_url=auto is disabled. Paste the real ROM URL."
+            exit 1
           fi
-          if [ "$MODE" = "execute" ]; then
-            if [ -z "$ROM_URL" ]; then
-              echo "[ERROR] rom_url is required for execute mode."
-              exit 1
-            fi
-            case "$ROM_URL" in
-              http://*|https://*) ;;
-              *) echo "[ERROR] rom_url must start with http:// or https://"; exit 1 ;;
-            esac
-          fi
+          case "$ROM_URL" in
+            http://*|https://*) ;;
+            *) echo "[ERROR] rom_url must start with http:// or https://"; exit 1 ;;
+          esac
 
           echo "[OK] codename  = $CODENAME"
           echo "[OK] edition   = $EDITION"
@@ -138,9 +136,6 @@ jobs:
 
           MODE="${{ inputs.mode }}"
           ROM_URL="${{ inputs.rom_url }}"
-          if [ "$ROM_URL" = "auto" ]; then
-            ROM_URL=""
-          fi
           UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
           NOTIFY_TG="${{ inputs.notify_telegram }}"
 
