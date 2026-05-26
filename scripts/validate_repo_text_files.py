@@ -130,19 +130,28 @@ check_lf_bytes("fly.toml", min_lf=20, min_lines=20)
 print("\n-- docker/Dockerfile.builder --")
 check_lf_bytes("docker/Dockerfile.builder", min_lf=20, min_lines=20)
 
-# ── deadzone_mtk_fly.yml ─────────────────────────────────────────────────────
-print("\n-- .github/workflows/deadzone_mtk_fly.yml --")
-mtk_fly_path = ".github/workflows/deadzone_mtk_fly.yml"
-mtk_raw = check_lf_bytes(mtk_fly_path, min_lf=50, min_lines=50)
-if mtk_raw:
-    check_forbidden_inputs(mtk_fly_path, mtk_raw, [
-        "select_device_codename",
-        "select_device",
-        "custom_device",
-        "final_name",
-        "flavor",
-        "runner_label",
-    ])
+# ── workflow files ────────────────────────────────────────────────────────────
+WORKFLOW_CHECKS = [
+    (".github/workflows/deadzone_mtk.yml",              120),
+    (".github/workflows/deadzone_snapdragon.yml",        120),
+    (".github/workflows/deadzone_mtk_fly.yml",           180),
+    (".github/workflows/deadzone_snapdragon_fly.yml",    180),
+    (".github/workflows/deploy_fly_builder.yml",          30),
+]
+WORKFLOW_FORBIDDEN_INPUTS = [
+    "select_device_codename",
+    "select_device",
+    "custom_device",
+    "final_name",
+    "flavor",
+    "runner_label",
+]
+
+for wf_path, wf_min_lf in WORKFLOW_CHECKS:
+    print(f"\n-- {wf_path} --")
+    wf_raw = check_lf_bytes(wf_path, min_lf=wf_min_lf, min_lines=wf_min_lf)
+    if wf_raw:
+        check_forbidden_inputs(wf_path, wf_raw, WORKFLOW_FORBIDDEN_INPUTS)
 
 # ── validate_repo_text_files.py itself ───────────────────────────────────────
 print("\n-- scripts/validate_repo_text_files.py --")

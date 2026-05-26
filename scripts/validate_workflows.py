@@ -24,6 +24,15 @@ FLY_WORKFLOWS = [
 
 ALL_BUILD_WORKFLOWS = GITHUB_LOCAL_WORKFLOWS + FLY_WORKFLOWS
 
+# Minimum LF line counts per workflow file (guards against minification/corruption).
+MIN_LF_COUNTS: dict[str, int] = {
+    "deadzone_mtk.yml":              120,
+    "deadzone_snapdragon.yml":       120,
+    "deadzone_mtk_fly.yml":          180,
+    "deadzone_snapdragon_fly.yml":   180,
+    "deploy_fly_builder.yml":         30,
+}
+
 # Exactly these inputs must appear in the UI — no more, no less.
 REQUIRED_INPUTS = [
     "codename",
@@ -134,6 +143,34 @@ for name in all_wf:
         ok(f"Parsed OK: {name}")
     except Exception as exc:
         fail(f"YAML parse error in {name}: {exc}")
+
+
+# ── Check 1b: LF integrity — CR, BOM, minimum line count ─────────────────────
+print("\n=== Check 1b: LF integrity (CR=0, BOM=false, minimum lines) ===")
+for name in all_wf:
+    path = WORKFLOWS_DIR / name
+    if not path.exists():
+        continue
+    raw = path.read_bytes()
+    cr_count = raw.count(b"\r")
+    bom = raw.startswith(b"\xef\xbb\xbf")
+    lf_count = raw.count(b"\n")
+    min_lf = MIN_LF_COUNTS.get(name, 0)
+
+    if cr_count > 0:
+        fail(f"{name}: contains {cr_count} CR byte(s) — file must be LF-only")
+    else:
+        ok(f"{name}: no CR bytes")
+
+    if bom:
+        fail(f"{name}: starts with UTF-8 BOM — must be BOM-free")
+    else:
+        ok(f"{name}: no BOM")
+
+    if min_lf > 0 and lf_count < min_lf:
+        fail(f"{name}: only {lf_count} LF lines (minimum {min_lf}) — file may be minified/corrupted")
+    elif min_lf > 0:
+        ok(f"{name}: {lf_count} LF lines (>= {min_lf})")
 
 
 # ── Check 2: Build workflows have exactly the required inputs (no legacy) ──────
