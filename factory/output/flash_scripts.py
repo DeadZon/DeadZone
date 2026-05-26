@@ -1,4 +1,4 @@
-"""Image-driven flash script generator.
+"""Image-driven fastboot flash script generator for DeadZone.
 
 Rules (per spec):
   - super.img    →  super  (no _ab suffix)
@@ -7,17 +7,18 @@ Rules (per spec):
 Scripts are generated from ACTUAL images present in images_dir.
 Hardcoded image lists are NOT used to decide what to flash.
 
-No:
+Hard restrictions (never in generated scripts):
   fastboot -w
   --disable-verity / --disable-verification
-  lk1 / bootloader2
-  tee1 / tee2
-  scp1 / scp2
-  per-device handwritten scripts
+  lk1 / bootloader2 / tee1 / tee2 / scp1 / scp2
 
 Preflight: every referenced image is verified to exist before
-set_active, flash, or wipe. Failure: no reboot, no wipe, phone
-stays in fastboot.
+set_active, flash, or wipe. On any failure the script stops
+immediately — no reboot, no wipe, device stays in fastboot.
+Wipe (clean install only) runs AFTER all flash commands succeed.
+
+Auto metadata: metadata_from_context() extracts FlashScriptMetadata
+fields from a BuildContext produced by UnpackPipeline.
 """
 from __future__ import annotations
 
@@ -89,6 +90,20 @@ _EDITION_MAP: dict[str, str] = {
     "base": "DeadZone",
     "deadzone": "DeadZone",
 }
+
+
+def metadata_from_context(ctx) -> dict:
+    """Extract flash script keyword args from a BuildContext.
+
+    Returns a dict suitable for unpacking into generate_windows_flash_scripts().
+    Caller must still pass edition/soc/platform separately.
+    """
+    return {
+        "device": getattr(ctx, "effective_device", None) or getattr(ctx, "factory_device", None),
+        "device_model": getattr(ctx, "detected_device", None),
+        "android_version": getattr(ctx, "android_version", None),
+        "build_incremental": getattr(ctx, "mi_version", None),
+    }
 
 
 def _image_to_partition(image_name: str) -> str:
@@ -242,20 +257,32 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
     log_mode = mode_label.lower().replace(" ", "_").replace("/", "_")
     return [
         "@echo off",
-        f"title {BRAND} Fastboot Installer - {mode_label}",
+        "chcp 65001 >nul",  # UTF-8 code page — required for banner box-drawing characters
+        f"title {BRAND} by {DEVELOPER}  ^|  {mode_label}  ^|  {meta.device_codename}",
         "color 0B",
-        "setlocal",
+        "setlocal enabledelayedexpansion",
         "cd /d \"%~dp0\"",
         "set \"fastboot=bin\\windows\\fastboot.exe\"",
         *_ansi_setup(),
         "md \"flash_logs\" 2>nul",
-        "for /f \"delims=\" %%T in ('powershell -nologo -noprofile -command \"Get-Date -Format yyyyMMdd_HHmmss\"') do set \"_TS=%%T\"",
+        "for /f \"delims=\" %%T in ('powershell -nologo -noprofile -command"
+        " \"Get-Date -Format yyyyMMdd_HHmmss\"') do set \"_TS=%%T\"",
         f"set \"LOG_FILE=flash_logs\\deadzone_{log_mode}_%_TS%.log\"",
-        f"echo [%DATE% %TIME%] {BRAND} {mode_label} - START > \"%LOG_FILE%\"",
+        f"echo [%DATE% %TIME%] {BRAND} {mode_label} START > \"%LOG_FILE%\"",
         "cls",
+        # ── Banner ──────────────────────────────────────────────────────────
+        "echo %C_CYAN%",
+        "echo  ██████╗ ███████╗ █████╗ ██████╗ ███████╗ ██████╗ ███╗   ██╗███████╗",
+        "echo  ██╔══██╗██╔════╝██╔══██╗██╔══██╗╚══███╔╝██╔═══██╗████╗  ██║██╔════╝",
+        "echo  ██║  ██║█████╗  ███████║██║  ██║  ███╔╝ ██║   ██║██╔██╗ ██║█████╗  ",
+        "echo  ██║  ██║██╔══╝  ██╔══██║██║  ██║ ███╔╝  ██║   ██║██║╚██╗██║██╔══╝  ",
+        "echo  ██████╔╝███████╗██║  ██║██████╔╝███████╗╚██████╔╝██║ ╚████║███████╗",
+        "echo  ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝",
+        "echo %C_RST%",
         _SEP,
-        f"echo   {BRAND}",
+        f"echo   {BRAND} Fastboot Installer",
         f"echo   Developer  : {DEVELOPER}",
+        _BLK,
         f"echo   Device     : {meta.device_codename}",
         f"echo   Model      : {meta.device_model}",
         f"echo   Edition    : {meta.edition}",
@@ -263,28 +290,40 @@ def _bat_header(meta: FlashScriptMetadata, mode_label: str) -> list[str]:
         f"echo   Android    : {meta.android_version}",
         f"echo   Build      : {meta.build_incremental}",
         f"echo   Region     : {meta.region}",
+        _BLK,
+        f"echo   Mode       : %C_YELLOW%{mode_label}%C_RST%",
         f"echo   Images     : {meta.image_count}",
-        f"echo   Mode       : {mode_label}",
         _SEP,
         _BLK,
+        # ── Pre-flight: fastboot binary ───────────────────────────────────
         "if not exist \"%fastboot%\" (",
         "    echo %C_RED%[FAILED] fastboot.exe not found at: %fastboot%%C_RST%",
+        "    echo [%DATE% %TIME%] PREFLIGHT: fastboot.exe not found >> \"%LOG_FILE%\" 2>nul",
         "    goto :fail",
         ")",
+        # ── Pre-flight: images folder ────────────────────────────────────
         "if not exist \"images\" (",
-        "    echo %C_RED%[FAILED] images folder not found.%C_RST%",
+        "    echo %C_RED%[FAILED] images\\ folder not found in script directory.%C_RST%",
+        "    echo [%DATE% %TIME%] PREFLIGHT: images folder missing >> \"%LOG_FILE%\" 2>nul",
         "    goto :fail",
         ")",
-        "echo %C_YELLOW%[CHECK]%C_RST% Detecting connected device ...",
+        # ── Device detection ─────────────────────────────────────────────
+        _SEP,
+        "echo   [SECTION] Device Detection",
+        _SEP,
+        "echo %C_YELLOW%[CHECK]%C_RST% Looking for device in fastboot mode ...",
         "call :run \"%fastboot% devices\"",
         "if errorlevel 1 goto :fail",
         "set \"detected=\"",
-        "for /f \"tokens=2\" %%D in ('\"%fastboot%\" getvar product 2^>^&1 ^| findstr /l /b /c:\"product:\"') do set \"detected=%%D\"",
+        "for /f \"tokens=2\" %%D in ('\"%fastboot%\" getvar product 2^>^&1"
+        " ^| findstr /l /b /c:\"product:\"') do set \"detected=%%D\"",
         "if not defined detected (",
-        "    echo %C_RED%[FAILED] No device in fastboot mode detected.%C_RST%",
+        "    echo %C_RED%[FAILED] No device detected in fastboot mode.%C_RST%",
+        "    echo %C_YELLOW%  Make sure:  adb reboot bootloader  was run first.%C_RST%",
         "    goto :fail",
         ")",
-        "echo %C_GREEN%[OK]%C_RST% Connected: %detected%",
+        "echo %C_GREEN%[OK]%C_RST% Connected device: %detected%",
+        "echo [%DATE% %TIME%] Device: %detected% >> \"%LOG_FILE%\" 2>nul",
         _BLK,
     ]
 
@@ -352,40 +391,53 @@ def _success_footer(message: str) -> list[str]:
     return [
         "color 0A",
         _SEP,
-        f"echo   SUCCESS: {message}",
-        "echo   Rebooting device ...",
+        f"echo %C_GREEN%  SUCCESS: {message}%C_RST%",
+        "echo   Rebooting device to system ...",
         _SEP,
         "echo [%DATE% %TIME%] SUCCESS >> \"%LOG_FILE%\" 2>nul",
         "call :run \"%fastboot% reboot\"",
         "if errorlevel 1 goto :fail",
         "exit /b 0",
         "",
+        # ── :run subroutine — logs every command + exit code ──────────────
         ":run",
         "echo %C_YELLOW%[RUN]%C_RST% %~1",
+        "echo [%TIME%] RUN: %~1 >> \"%LOG_FILE%\" 2>nul",
         "%~1",
         "set \"_ERR=%errorlevel%\"",
-        "echo [%TIME%] %~1 exit=%_ERR% >> \"%LOG_FILE%\" 2>nul",
+        "echo [%TIME%] EXIT=%_ERR% >> \"%LOG_FILE%\" 2>nul",
         "if %_ERR% neq 0 exit /b 1",
         "exit /b 0",
         "",
+        # ── :fail — strict handler: no reboot, no wipe on failure ─────────
         ":fail",
         "color 0C",
         _BLK,
         "echo %C_RED%============================================================%C_RST%",
-        "echo   FAILED. Do not disconnect the device.",
+        "echo %C_RED%  FAILED — A command returned a non-zero exit code.%C_RST%",
+        "echo %C_RED%============================================================%C_RST%",
+        "echo.",
+        "echo   Do NOT disconnect or reboot the device.",
         "echo   Keep the phone in fastboot mode.",
-        "echo   Review the command output above before taking any action.",
+        "echo   Review the output above and the log file before taking any action.",
+        "echo.",
+        "echo   Log: %LOG_FILE%",
         "echo %C_RED%============================================================%C_RST%",
         "echo [%DATE% %TIME%] FAILED >> \"%LOG_FILE%\" 2>nul",
         "exit /b 1",
         "",
+        # ── :missing_image — preflight guard ─────────────────────────────
         ":missing_image",
         "color 0C",
         _BLK,
         "echo %C_RED%============================================================%C_RST%",
-        "echo   FAILED. A required image file is missing from images\\.",
-        "echo   Do not disconnect the device.",
+        "echo %C_RED%  FAILED — A required image file is missing from images\\.%C_RST%",
+        "echo %C_RED%============================================================%C_RST%",
+        "echo.",
+        "echo   Do NOT disconnect or reboot the device.",
         "echo   Keep the phone in fastboot mode.",
+        "echo.",
+        "echo   Log: %LOG_FILE%",
         "echo %C_RED%============================================================%C_RST%",
         "echo [%DATE% %TIME%] MISSING_IMAGE >> \"%LOG_FILE%\" 2>nul",
         "exit /b 1",
@@ -481,7 +533,8 @@ def generate_windows_flash_scripts(
     if execute:
         staging_dir.mkdir(parents=True, exist_ok=True)
         for name, text in scripts.items():
-            (staging_dir / name).write_text(text, encoding="ascii", newline="")
+            # UTF-8 with BOM so cmd.exe on Windows 10/11 renders the banner correctly.
+            (staging_dir / name).write_text(text, encoding="utf-8-sig", newline="")
             generated.append(name)
     else:
         generated = list(scripts)

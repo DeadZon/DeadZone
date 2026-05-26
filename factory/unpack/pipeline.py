@@ -150,8 +150,11 @@ class UnpackPipeline:
             extracted_dir = extract_rom(self.rom_path, work_dir)
 
         # ── 2b. EU ROM adapter — detect and normalise split-super layouts ─────
+        eu_info = None
+        datbr_processed = False
         if super_img_path is None and extracted_dir is not None:
             from factory.unpack.eu_rom_adapter import (
+                SOURCE_NEW_DAT_BR,
                 SOURCE_SPLIT_SUPER,
                 SOURCE_SUPER_IMG,
                 SOURCE_SUPER_IMG_ZST,
@@ -162,6 +165,13 @@ class UnpackPipeline:
             eu_info = inspect_rom_source(extracted_dir, work_dir, reports_dir)
             print(f"[unpack] EU adapter: source_type={eu_info.source_type}")
 
+            # Propagate op_list partition sizes when available.
+            if eu_info.original_partition_sizes:
+                ctx.partition_sizes_from_manifest = {
+                    **ctx.partition_sizes_from_manifest,
+                    **eu_info.original_partition_sizes,
+                }
+
             if eu_info.source_type in _EU_SUPER_TYPES:
                 if eu_info.status == "OK" and eu_info.normalized_path:
                     super_img_path = eu_info.normalized_path
@@ -171,6 +181,64 @@ class UnpackPipeline:
                     ctx.error(f"EU ROM adapter failed: {eu_info.error}")
                     write_reports(ctx)
                     raise RuntimeError(f"EU ROM adapter failed: {eu_info.error}")
+
+        # ── 2c. dat.br adapter — convert *.new.dat.br to partition images ─────
+        if (
+            super_img_path is None
+            and extracted_dir is not None
+            and eu_info is not None
+            and eu_info.source_type == SOURCE_NEW_DAT_BR
+        ):
+            from factory.unpack.datbr_adapter import (
+                STATUS_FAILED as DATBR_FAILED,
+                process_datbr_rom,
+            )
+
+            print(f"[unpack] dat.br adapter: processing *.new.dat.br files …")
+            datbr_result = process_datbr_rom(extracted_dir, work_dir, reports_dir)
+            print(
+                f"[unpack] dat.br adapter: status={datbr_result.status}, "
+                f"images={sorted(datbr_result.images)}"
+            )
+
+            if datbr_result.original_partition_sizes:
+                ctx.partition_sizes_from_manifest = {
+                    **ctx.partition_sizes_from_manifest,
+                    **datbr_result.original_partition_sizes,
+                }
+
+            if datbr_result.images:
+                # Copy .img files to a staging directory and treat like payload output.
+                import shutil
+                datbr_img_dir = work_dir / "datbr_images"
+                datbr_img_dir.mkdir(parents=True, exist_ok=True)
+                for part_name, img_path in datbr_result.images.items():
+                    shutil.copy2(img_path, datbr_img_dir / f"{part_name}.img")
+
+                ctx.partition_image_files_found = [
+                    f"{n}.img" for n in sorted(datbr_result.images)
+                ]
+                ctx.payload_found = True
+                datbr_processed = True
+
+                partition_log_path = self.output_root / "logs" / "datbr_partition_extract.log"
+                ctx.partition_extract_log = str(partition_log_path)
+
+                parts_info, partition_extract_results = extract_dynamic_partitions_from_payload_dir(
+                    payload_out_dir=datbr_img_dir,
+                    project_dir=project_dir,
+                    log_path=partition_log_path,
+                )
+                ctx.partition_extract_results = partition_extract_results
+                if parts_info:
+                    print(
+                        f"[unpack] dat.br partitions extracted: "
+                        f"{', '.join(sorted(parts_info))}"
+                    )
+            elif datbr_result.status == DATBR_FAILED:
+                ctx.error(f"dat.br adapter failed: {datbr_result.error}")
+                write_reports(ctx)
+                raise RuntimeError(f"dat.br adapter failed: {datbr_result.error}")
 
         # ── 3. Locate super.img ───────────────────────────────────────────────
         if super_img_path is None and extracted_dir is not None:
@@ -282,8 +350,8 @@ class UnpackPipeline:
         ctx.partitions = collect_extracted_partitions(project_dir)
         print(f"[unpack] Extracted partitions: {ctx.partitions or '(none yet)'}")
 
-        # ── 7a. Fail-fast: payload found but no dynamic partitions extracted ──
-        if ctx.payload_found and not ctx.super_found and not ctx.partitions:
+        # ── 7a. Fail-fast: payload/datbr found but no dynamic partitions extracted ──
+        if (ctx.payload_found or datbr_processed) and not ctx.super_found and not ctx.partitions:
             _fail_msg = (
                 "Payload extraction produced no dynamic partitions; refusing to continue "
                 "patch/repack/super stages."

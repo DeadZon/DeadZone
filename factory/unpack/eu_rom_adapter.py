@@ -12,6 +12,7 @@ Supported layouts
 * images/super.img      → source_type="super_img"    (preferred path variant)
 * super.img.0 / .1 …   → source_type="split_super"  (merged → work/eu_adapter/super.img)
 * super.img.zst         → source_type="super_img_zst" (decompressed → work/eu_adapter/super.img)
+* cust.img.0 / .1 …    → merged alongside super (work/eu_adapter/cust.img)
 
 Public API
 ----------
@@ -22,6 +23,8 @@ Public API
         raise RuntimeError(info.error)
     if info.source_type in ("split_super", "super_img", "super_img_zst"):
         use_super_img = info.normalized_path
+    # original_partition_sizes populated when op_list is present
+    sizes = info.original_partition_sizes
 """
 from __future__ import annotations
 
@@ -51,7 +54,9 @@ class EuRomInfo:
     source_type: str
     original_path: Path
     normalized_path: Optional[Path] = None
+    cust_img_path: Optional[Path] = None          # merged cust.img if present
     found_files: list = field(default_factory=list)
+    original_partition_sizes: dict = field(default_factory=dict)  # from op_list
     status: str = STATUS_OK
     error: Optional[str] = None
 
@@ -87,6 +92,8 @@ def _scan_layout(rom_path: Path) -> dict:
         "super_img": None,
         "split_parts": [],
         "super_zst": None,
+        "cust_parts": [],     # cust.img.0 / cust.img.1 / …
+        "op_list": None,      # dynamic_partitions_op_list
     }
 
     search_root = rom_path if rom_path.is_dir() else rom_path.parent
@@ -116,7 +123,14 @@ def _scan_layout(rom_path: Path) -> dict:
         elif name in ("super.img.zst", "super.zst"):
             result["super_zst"] = p
 
+        elif re.fullmatch(r"cust\.img\.\d+", name):
+            result["cust_parts"].append(p)
+
+        elif name == "dynamic_partitions_op_list":
+            result["op_list"] = p
+
     result["split_parts"].sort(key=_natural_key)
+    result["cust_parts"].sort(key=_natural_key)
     return result
 
 
@@ -211,6 +225,81 @@ def _decompress_zst(src: Path, dst: Path, diag: list) -> bool:
     return True
 
 
+# ── dynamic_partitions_op_list parser ─────────────────────────────────────────
+def _parse_op_list(path: Path) -> dict[str, int]:
+    """Parse dynamic_partitions_op_list → {base_group_name: max_size_bytes}.
+
+    Lines of interest:
+      add_group  <name>  <max_size>
+
+    Strips trailing _a/_b suffixes so keys are base names.
+    """
+    sizes: dict[str, int] = {}
+    try:
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            tokens = line.split()
+            if tokens[0] == "add_group" and len(tokens) >= 3:
+                try:
+                    name = tokens[1]
+                    if name.endswith("_a") or name.endswith("_b"):
+                        name = name[:-2]
+                    val = int(tokens[2])
+                    if val > 0:
+                        sizes[name] = val
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+    return sizes
+
+
+# ── cust.img merge (optional) ──────────────────────────────────────────────────
+def _merge_cust_parts(
+    parts: list,
+    out_cust: Path,
+    diag: list,
+) -> bool:
+    """Merge cust.img.* split parts, same logic as split-super merge."""
+    nums = [_extract_numeric_suffix(p) for p in parts]
+    if None in nums:
+        diag.append(
+            f"WARNING: Could not parse numeric suffix from cust parts: "
+            f"{[p.name for p in parts]} — skipping cust merge"
+        )
+        return False
+    expected = list(range(len(parts)))
+    if nums != expected:
+        missing = sorted(set(expected) - set(nums))
+        diag.append(
+            f"WARNING: cust.img parts are not contiguous (missing: {missing}) "
+            f"— skipping cust merge"
+        )
+        return False
+
+    out_cust.parent.mkdir(parents=True, exist_ok=True)
+    diag.append(f"Merging {len(parts)} cust.img parts → {out_cust}")
+    _CHUNK = 8 * 1024 * 1024
+    try:
+        with out_cust.open("wb") as dst:
+            for p in parts:
+                with p.open("rb") as src:
+                    while True:
+                        buf = src.read(_CHUNK)
+                        if not buf:
+                            break
+                        dst.write(buf)
+    except OSError as exc:
+        diag.append(f"WARNING: I/O error merging cust.img: {exc} — skipping")
+        out_cust.unlink(missing_ok=True)
+        return False
+
+    diag.append(f"cust merge complete — {out_cust.stat().st_size:,} bytes")
+    return True
+
+
 # ── Report writer ──────────────────────────────────────────────────────────────
 def _write_report(
     reports_dir: Path,
@@ -228,6 +317,7 @@ def _write_report(
         f"  Detected source type : {info.source_type}",
         f"  Original path        : {info.original_path}",
         f"  Normalized path      : {info.normalized_path or '(none)'}",
+        f"  Cust img path        : {info.cust_img_path or '(none)'}",
         "",
         "  Files found:",
     ]
@@ -237,6 +327,12 @@ def _write_report(
     else:
         lines.append("    (none)")
     lines.append("")
+
+    if info.original_partition_sizes:
+        lines.append("  Original partition sizes (from op_list):")
+        for k, v in sorted(info.original_partition_sizes.items()):
+            lines.append(f"    {k:20s}: {v:,} bytes")
+        lines.append("")
 
     if info.error:
         lines.append(f"  Error: {info.error}")
@@ -302,14 +398,35 @@ def inspect_rom_source(
     found.extend(layout["split_parts"])
     if layout["super_zst"]:
         found.append(layout["super_zst"])
+    found.extend(layout["cust_parts"])
+    if layout["op_list"]:
+        found.append(layout["op_list"])
 
-    diag.append(f"  payload.bin      : {layout['payload'] or 'not found'}")
-    diag.append(f"  *.new.dat.br     : {len(layout['new_dat_br'])} file(s)")
-    diag.append(f"  super.img        : {layout['super_img'] or 'not found'}")
-    diag.append(f"  split-super parts: {len(layout['split_parts'])} file(s)")
-    diag.append(f"  super.img.zst    : {layout['super_zst'] or 'not found'}")
+    diag.append(f"  payload.bin           : {layout['payload'] or 'not found'}")
+    diag.append(f"  *.new.dat.br          : {len(layout['new_dat_br'])} file(s)")
+    diag.append(f"  super.img             : {layout['super_img'] or 'not found'}")
+    diag.append(f"  split-super parts     : {len(layout['split_parts'])} file(s)")
+    diag.append(f"  super.img.zst         : {layout['super_zst'] or 'not found'}")
+    diag.append(f"  cust.img split parts  : {len(layout['cust_parts'])} file(s)")
+    diag.append(f"  dynamic_partitions_op_list: {layout['op_list'] or 'not found'}")
+
+    # ── Parse op_list for original partition sizes (best-effort) ─────────────
+    op_sizes: dict[str, int] = {}
+    if layout["op_list"]:
+        op_sizes = _parse_op_list(layout["op_list"])
+        if op_sizes:
+            diag.append(f"  op_list partition sizes: {op_sizes}")
 
     adapter_dir = work_dir / "eu_adapter"
+
+    def _try_merge_cust(info: EuRomInfo) -> None:
+        """Best-effort: merge cust.img.* if parts were found; never fails the build."""
+        if not layout["cust_parts"]:
+            return
+        out_cust = adapter_dir / "cust.img"
+        ok = _merge_cust_parts(layout["cust_parts"], out_cust, diag)
+        if ok:
+            info.cust_img_path = out_cust
 
     # ── Priority 1: split-super ───────────────────────────────────────────────
     if layout["split_parts"]:
@@ -323,6 +440,7 @@ def inspect_rom_source(
             source_type=SOURCE_SPLIT_SUPER,
             original_path=rom_path,
             found_files=found,
+            original_partition_sizes=op_sizes,
         )
 
         ok = _merge_split_super(layout["split_parts"], out_super, diag)
@@ -334,6 +452,7 @@ def inspect_rom_source(
             info.status = STATUS_FAILED
             info.error = "Split-super merge failed — see diagnostics in the report."
 
+        _try_merge_cust(info)
         _write_report(reports_dir, info, diag)
         return info
 
@@ -346,6 +465,7 @@ def inspect_rom_source(
             source_type=SOURCE_SUPER_IMG_ZST,
             original_path=rom_path,
             found_files=found,
+            original_partition_sizes=op_sizes,
         )
 
         ok = _decompress_zst(layout["super_zst"], out_super, diag)
@@ -356,6 +476,7 @@ def inspect_rom_source(
             info.status = STATUS_FAILED
             info.error = "ZST decompression failed — see diagnostics in the report."
 
+        _try_merge_cust(info)
         _write_report(reports_dir, info, diag)
         return info
 
@@ -367,8 +488,10 @@ def inspect_rom_source(
             original_path=rom_path,
             normalized_path=layout["super_img"],
             found_files=found,
+            original_partition_sizes=op_sizes,
             status=STATUS_OK,
         )
+        _try_merge_cust(info)
         _write_report(reports_dir, info, diag)
         return info
 
@@ -379,6 +502,7 @@ def inspect_rom_source(
             source_type=SOURCE_PAYLOAD,
             original_path=rom_path,
             found_files=found,
+            original_partition_sizes=op_sizes,
             status=STATUS_OK,
         )
         _write_report(reports_dir, info, diag)
@@ -388,12 +512,13 @@ def inspect_rom_source(
     if layout["new_dat_br"]:
         diag.append(
             f"Detected layout: new_dat_br "
-            f"({len(layout['new_dat_br'])} file(s) — existing pipeline will handle extraction)"
+            f"({len(layout['new_dat_br'])} file(s) — datbr_adapter will handle extraction)"
         )
         info = EuRomInfo(
             source_type=SOURCE_NEW_DAT_BR,
             original_path=rom_path,
             found_files=found,
+            original_partition_sizes=op_sizes,
             status=STATUS_OK,
         )
         _write_report(reports_dir, info, diag)
@@ -405,6 +530,7 @@ def inspect_rom_source(
         source_type=SOURCE_UNKNOWN,
         original_path=rom_path,
         found_files=found,
+        original_partition_sizes=op_sizes,
         status=STATUS_OK,
     )
     _write_report(reports_dir, info, diag)
