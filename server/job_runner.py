@@ -17,6 +17,32 @@ _WORK_ROOT = Path(os.environ.get("DZ_WORK_DIR", "/mnt/dz_data/work"))
 _MIN_ROM_BYTES = 100 * 1024 * 1024  # 100 MB
 
 
+def _fly_stop_self() -> None:
+    """Ask Fly to stop this machine after the job is done.
+
+    Uses the Fly internal machine API so the machine shuts itself down
+    cleanly instead of being force-killed by the autostop heuristic
+    while a build is still running.
+    """
+    machine_id = os.environ.get("FLY_MACHINE_ID", "")
+    app_name   = os.environ.get("FLY_APP_NAME", "")
+    if not machine_id or not app_name:
+        print("[job_runner] FLY_MACHINE_ID / FLY_APP_NAME not set — skipping self-stop")
+        return
+    try:
+        import urllib.request as _ur
+        import json as _json
+        url = f"http://_api.internal:4280/v1/apps/{app_name}/machines/{machine_id}/stop"
+        req = _ur.Request(url, method="POST",
+                          data=b"{}",
+                          headers={"Content-Type": "application/json"})
+        with _ur.urlopen(req, timeout=10):
+            pass
+        print(f"[job_runner] Sent self-stop to Fly machine {machine_id}")
+    except Exception as exc:
+        print(f"[job_runner] Self-stop failed (non-fatal): {exc}")
+
+
 def _download_rom(rom_url: str, build_id: str) -> Path:
     """Download ROM to local work directory; return path."""
     import urllib.request
@@ -139,6 +165,12 @@ def _run_job(job) -> None:
                 pass
 
         fail_job(job.job_id, f"{short_err}\n{tb}")
+
+    finally:
+        # Let Fly stop this machine cleanly now that the job is done.
+        # This replaces the autostop heuristic which was killing the machine
+        # mid-build because it saw no incoming HTTP traffic.
+        _fly_stop_self()
 
 
 def _worker_loop() -> None:
