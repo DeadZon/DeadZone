@@ -69,6 +69,29 @@ _PREFERRED_ORDER: list[str] = [
     "vendor_boot.img",
 ]
 
+_DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
+    "system.img",
+    "system_ext.img",
+    "system_dlkm.img",
+    "product.img",
+    "vendor.img",
+    "vendor_dlkm.img",
+    "odm.img",
+    "odm_dlkm.img",
+    "mi_ext.img",
+})
+
+_NEVER_FLASH_IMAGES: frozenset[str] = frozenset({
+    "super.unsparse.img",
+    "super_raw.img",
+    "super_sparse.img",
+    "super_metadata.img",
+    "lpdump.img",
+    "lpdump_validation.img",
+    "userdata.img",
+    "metadata.img",
+})
+
 _REGION_MAP: dict[str, str] = {
     "CNXM": "China",
     "MIXM": "Global",
@@ -127,8 +150,11 @@ def _collect_flash_commands(images_dir: Path) -> list[tuple[str, str]]:
     images_dir = Path(images_dir)
     present = {f.name for f in images_dir.iterdir() if f.is_file() and f.suffix == ".img"}
 
-    # Exclude unsparse intermediate files
-    present = {n for n in present if "unsparse" not in n.lower()}
+    has_super = "super.img" in present
+    present = {
+        n for n in present
+        if not _should_skip_flash_image(n, has_super=has_super)
+    }
 
     ordered: list[str] = []
     for name in _PREFERRED_ORDER:
@@ -147,6 +173,19 @@ def _collect_flash_commands(images_dir: Path) -> list[tuple[str, str]]:
         ordered.append("super.img")
 
     return [(_image_to_partition(name), name) for name in ordered]
+
+
+def _should_skip_flash_image(name: str, has_super: bool) -> bool:
+    lower = name.lower()
+    if lower in _NEVER_FLASH_IMAGES:
+        return True
+    if lower.startswith("super.img.") or lower.endswith(".chunk"):
+        return True
+    if "unsparse" in lower or "validation" in lower or "lpdump" in lower:
+        return True
+    if has_super and lower in _DYNAMIC_PARTITION_IMAGES:
+        return True
+    return False
 
 
 # ── Metadata ──────────────────────────────────────────────────────────────────

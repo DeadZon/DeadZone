@@ -1784,6 +1784,186 @@ class TestSameFileSuperCopy:
             assert dyn not in manifest, f"{dyn} must not be in final assembled dir"
 
 
+class TestSmartSourceImageManifest:
+    def test_unknown_source_image_is_copied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "random_firmware.img")
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            final_dir = Path(tmp) / "output" / "images" / "final"
+
+            result = assemble_final_images(super_img, source_dir, final_dir, execute=True)
+
+        assert result["status"] == "APPLIED"
+        assert "random_firmware.img" in set(result["final_manifest"])
+
+    def test_zorn_style_source_images_are_copied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            names = [
+                "userdata.img", "metadata.img", "misc.img",
+                "persist.img", "rescue.img", "vm-bootsys.img",
+            ]
+            for name in names:
+                _write(source_dir / name)
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            final_dir = Path(tmp) / "output" / "images" / "final"
+
+            result = assemble_final_images(super_img, source_dir, final_dir, execute=True)
+
+        manifest = set(result["final_manifest"])
+        for name in names:
+            assert name in manifest
+
+    def test_super_exactly_once_excludes_temp_and_chunks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "boot.img")
+            _write(source_dir / "super.img", b"SOURCE_SUPER")
+            _write(source_dir / "super.unsparse.img", b"TEMP")
+            _write(source_dir / "super.img.0", b"PART0")
+            super_img = source_dir / "super.img"
+            final_dir = Path(tmp) / "output" / "images" / "final"
+
+            result = assemble_final_images(super_img, source_dir, final_dir, execute=True)
+
+        manifest = set(result["final_manifest"])
+        assert result["exactly_one_super_img"] is True
+        assert "super.img" in manifest
+        assert "super.unsparse.img" not in manifest
+        assert "super.img.0" not in manifest
+
+    def test_split_super_chunks_merge_to_one_super(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "super.img.0", b"AA")
+            _write(source_dir / "super.img.1", b"BB")
+            final_dir = Path(tmp) / "output" / "images" / "final"
+
+            result = assemble_final_images(
+                super_img=Path(tmp) / "missing_super.img",
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+            merged = (final_dir / "super.img").read_bytes()
+
+        assert result["status"] == "APPLIED"
+        assert merged == b"AABB"
+        assert result["final_manifest"] == ["super.img"]
+
+    def test_super_workspace_dynamic_and_unknown_are_not_copied(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "work"
+            source_dir = work / "source_images"
+            _write(source_dir / "boot.img")
+            for name in ["system.img", "product.img", "vendor.img", "mystery.img"]:
+                _write(work / "super_parts" / name)
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            final_dir = Path(tmp) / "output" / "images" / "final"
+
+            result = assemble_final_images(super_img, source_dir, final_dir, execute=True)
+
+        manifest = set(result["final_manifest"])
+        assert "boot.img" in manifest
+        for name in ["system.img", "product.img", "vendor.img", "mystery.img"]:
+            assert name not in manifest
+
+    def test_source_manifest_report_contains_required_fields(self):
+        import json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "boot.img")
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            final_dir = Path(tmp) / "output" / "images" / "final"
+
+            result = assemble_final_images(super_img, source_dir, final_dir, execute=True)
+            report = Path(tmp) / "reports" / "source_image_manifest.json"
+            report_exists = report.is_file()
+            data = json.loads(report.read_text(encoding="utf-8"))
+
+        assert report_exists
+        assert data["super_handling"]["exactly_one_super_img"] is True
+        assert result["exactly_one_super_img"] is True
+        for image in data["images"]:
+            for key in ["role", "origin", "include_in_final", "reason"]:
+                assert key in image
+
+    def test_final_zip_rejects_super_variants_and_includes_all_final_images(self):
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images_dir = root / "output" / "images" / "final"
+            for name in ["super.img", "boot.img", "random_firmware.img"]:
+                _write(images_dir / name)
+            _write(images_dir / "super.img.0")
+            template_zip = root / "template.zip"
+            with zipfile.ZipFile(template_zip, "w") as zf:
+                zf.writestr("bin/windows/fastboot.exe", b"")
+                zf.writestr("bin/windows/AdbWinApi.dll", b"")
+                zf.writestr("bin/windows/AdbWinUsbApi.dll", b"")
+
+            result = build_final_fastboot_zip(
+                images_dir=images_dir,
+                output_dir=root / "output" / "final",
+                build_name="DeadZone_Test",
+                device="zorn",
+                flavor="deadzone",
+                soc="snapdragon",
+                template_zip=template_zip,
+                device_model="Test Device",
+                android_version="16",
+                build_incremental="OS3.0.1.0.WNOCNXM",
+                execute=False,
+            )
+
+        assert result["final_status"] == "FAILED"
+        assert result["exactly_one_super_img"] is False
+        assert any("exactly one super" in e.lower() for e in result["errors"])
+
+    def test_final_zip_plans_all_final_source_images(self):
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images_dir = root / "output" / "images" / "final"
+            for name in ["super.img", "boot.img", "random_firmware.img", "misc.img"]:
+                _write(images_dir / name)
+            template_zip = root / "template.zip"
+            with zipfile.ZipFile(template_zip, "w") as zf:
+                zf.writestr("bin/windows/fastboot.exe", b"")
+                zf.writestr("bin/windows/AdbWinApi.dll", b"")
+                zf.writestr("bin/windows/AdbWinUsbApi.dll", b"")
+
+            result = build_final_fastboot_zip(
+                images_dir=images_dir,
+                output_dir=root / "output" / "final",
+                build_name="DeadZone_Test",
+                device="zorn",
+                flavor="deadzone",
+                soc="snapdragon",
+                template_zip=template_zip,
+                device_model="Test Device",
+                android_version="16",
+                build_incremental="OS3.0.1.0.WNOCNXM",
+                execute=False,
+            )
+
+        assert result["final_status"] == "DRY_RUN"
+        assert result["exactly_one_super_img"] is True
+        assert result["final_image_count"] == 4
+        for name in ["super.img", "boot.img", "random_firmware.img", "misc.img"]:
+            assert f"images/{name}" in result["zip_entries"]
+        assert not any("output/work" in e for e in result["zip_entries"])
+        assert not result["forbidden_entries"]
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

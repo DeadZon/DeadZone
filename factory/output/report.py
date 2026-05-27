@@ -37,12 +37,28 @@ def write_final_fastboot_zip_report(report: dict[str, Any], reports_dir: Path) -
         f"compression_mode: {report.get('compression_mode', 'ZIP_DEFLATED compresslevel=9')}",
         f"super_img_detected: {report.get('super_img_detected', False)}",
         f"super_img_source: {report.get('super_img_source')}",
+        f"final_image_count: {report.get('final_image_count', len(report.get('images_included', [])))}",
+        f"exactly_one_super_img: {report.get('exactly_one_super_img', False)}",
         f"zip_size_mib: {zip_size_str}",
         *([f"WARNING: ZIP size {zip_size_mib} MiB exceeds 6000 MiB — check for duplicate images"] if size_warn else []),
         "",
         "Images included:",
     ]
     lines.extend(f"- {name}" for name in report.get("images_included", []))
+    lines.append("")
+    lines.append("Skipped duplicate super images:")
+    dup_super = report.get("skipped_duplicate_super_images", [])
+    if dup_super:
+        lines.extend(f"- {name}" for name in dup_super)
+    else:
+        lines.append("  (none)")
+    lines.append("")
+    lines.append("Skipped dynamic/temp images:")
+    skipped_dt = report.get("skipped_dynamic_temp_images", [])
+    if skipped_dt:
+        lines.extend(f"- {name}" for name in skipped_dt)
+    else:
+        lines.append("  (none)")
     lines.append("")
     lines.append("Images excluded (dynamic, packed in super.img):")
     excluded = report.get("images_excluded_dynamic", [])

@@ -21,6 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from factory.images.source_image_manifest import build_source_image_manifest
+
 
 DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
     "system.img",
@@ -68,21 +70,31 @@ def assemble_final_images(
 
     standalone_to_copy: dict[str, Path] = {}
     excluded_dynamic: list[str] = []
+    skipped_images: list[str] = []
     warnings: list[str] = []
     errors: list[str] = []
 
-    # Collect standalone images, excluding dynamic partitions and bare super.img
-    if source_images_dir.is_dir():
-        for img in sorted(source_images_dir.rglob("*.img")):
-            if not img.is_file():
-                continue
-            name_lower = img.name.lower()
-            if name_lower in DYNAMIC_PARTITION_IMAGES:
-                excluded_dynamic.append(img.name)
-                continue
-            if name_lower == "super.img":
-                continue  # will be placed from rebuilt super_img path
-            standalone_to_copy[name_lower] = img
+    work_root = source_images_dir.parent
+    manifest = build_source_image_manifest(
+        source_roots=[source_images_dir],
+        work_root=work_root,
+        final_super_path=super_img if super_img.is_file() else None,
+    )
+
+    split_super_parts: list[Path] = []
+    for entry in manifest.get("images", []):
+        name = str(entry.get("name", ""))
+        name_lower = name.lower()
+        role = entry.get("role")
+        if entry.get("include_in_final") and role != "super":
+            standalone_to_copy[name_lower] = Path(entry["path"])
+        elif role == "dynamic_partition":
+            excluded_dynamic.append(name)
+        elif role == "split_super":
+            split_super_parts.append(Path(entry["path"]))
+            skipped_images.append(name)
+        elif role in {"validation", "temp"}:
+            skipped_images.append(name)
 
     # Apply patched overrides
     for fname, ppath in patched_images.items():
@@ -96,8 +108,9 @@ def assemble_final_images(
         else:
             warnings.append(f"Patched image not found: {ppath}")
 
-    if not super_img.is_file():
-        errors.append(f"super.img not found at {super_img} — final assembly cannot proceed")
+    can_merge_split_super = bool(split_super_parts)
+    if not super_img.is_file() and not can_merge_split_super:
+        errors.append(f"super.img not found at {super_img} - final assembly cannot proceed")
 
     result = {
         "status": "DRY_RUN" if not execute else "FAILED",
@@ -105,6 +118,8 @@ def assemble_final_images(
         "super_img_source": str(super_img),
         "standalone_to_copy": {k: str(v) for k, v in standalone_to_copy.items()},
         "excluded_dynamic": excluded_dynamic,
+        "skipped_images": skipped_images,
+        "source_image_manifest": manifest,
         "warnings": warnings,
         "errors": errors,
         "final_images": [],
@@ -123,19 +138,23 @@ def assemble_final_images(
     # Place super.img
     target_super = final_dir / "super.img"
     try:
-        if super_img.resolve() == target_super.resolve():
+        if super_img.is_file() and super_img.resolve() == target_super.resolve():
             # Already in final dir (preserve_original_super strategy placed it here)
             copied.append("super.img")
             warnings.append(
-                "super.img already present in final images; skipping same-file copy"
+                "super.img already present; keeping final super (same-file skip)"
             )
             print(
                 f"[final_assembler] super.img already in final dir (same-file); skipping copy"
             )
-        else:
+        elif super_img.is_file():
             shutil.copy2(super_img, target_super)
             copied.append("super.img")
             print(f"[final_assembler] super.img → {target_super}")
+        elif can_merge_split_super:
+            _merge_split_super_chunks(split_super_parts, target_super)
+            copied.append("super.img")
+            warnings.append("split super chunks merged into final super.img")
     except Exception as exc:
         errors.append(f"copy super.img: {exc}")
 
@@ -157,10 +176,72 @@ def assemble_final_images(
         p.name for p in final_dir.glob("*.img") if p.is_file()
     )
     result["final_images"] = result["final_manifest"]
+    result["exactly_one_super_img"] = _exactly_one_super(final_dir)
     result["status"] = "FAILED" if errors else "APPLIED"
     result["errors"] = errors
     result["warnings"] = warnings
+    _write_final_image_manifest(final_dir, result, manifest)
     return result
+
+
+def _natural_key(path: Path) -> list:
+    import re
+
+    return [int(x) if x.isdigit() else x.lower() for x in re.split(r"(\d+)", path.name)]
+
+
+def _merge_split_super_chunks(parts: list[Path], target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("wb") as dst:
+        for part in sorted(parts, key=_natural_key):
+            with part.open("rb") as src:
+                shutil.copyfileobj(src, dst, length=1024 * 1024)
+
+
+def _is_super_variant(path: Path) -> bool:
+    name = path.name.lower()
+    return (
+        name == "super.img"
+        or name.startswith("super.img.")
+        or name.endswith(".unsparse.img")
+        or (name.startswith("super_") and name.endswith(".chunk"))
+    )
+
+
+def _exactly_one_super(final_dir: Path) -> bool:
+    variants = sorted(p.name for p in final_dir.iterdir() if p.is_file() and _is_super_variant(p))
+    return variants == ["super.img"]
+
+
+def _write_final_image_manifest(final_dir: Path, result: dict, source_manifest: dict) -> None:
+    import json
+
+    reports_dir = final_dir.parents[1] / "reports" if len(final_dir.parents) > 1 else final_dir.parent / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    images = [
+        {"name": path.name, "path": str(path), "size_bytes": path.stat().st_size}
+        for path in sorted(final_dir.glob("*.img"))
+        if path.is_file()
+    ]
+    payload = {
+        "final_dir": str(final_dir),
+        "final_image_count": len(images),
+        "included_images": [image["name"] for image in images],
+        "images": images,
+        "skipped_duplicate_super_images": [
+            e["name"] for e in source_manifest.get("images", [])
+            if e.get("role") in {"super", "split_super"} and not e.get("include_in_final")
+        ],
+        "skipped_dynamic_temp_images": [
+            e["name"] for e in source_manifest.get("images", [])
+            if e.get("role") in {"dynamic_partition", "validation", "temp"}
+        ],
+        "exactly_one_super_img": result.get("exactly_one_super_img", False),
+    }
+    (reports_dir / "final_image_manifest.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def write_intake_report(

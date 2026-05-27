@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import zipfile
@@ -41,10 +42,6 @@ DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
 
 REQUIRED_FINAL_IMAGES = [
     "super.img",
-    "boot.img",
-    "init_boot.img",
-    "vendor_boot.img",
-    "vbmeta.img",
 ]
 
 # Bootchain images expected from payload extraction (distinct from MTK SoC firmware blobs).
@@ -93,6 +90,8 @@ FORBIDDEN_SUBSTRINGS = [
 # Image filenames that must never appear in the final ZIP regardless of location.
 FORBIDDEN_IMAGE_NAMES: frozenset[str] = frozenset({
     "super.unsparse.img",
+    "super_raw.img",
+    "super_sparse.img",
     "super_metadata.img",
     "lpdump.img",
     "lpdump_validation.img",
@@ -124,8 +123,12 @@ def _forbidden_reason(name: str) -> str | None:
         return "sidecar checksum"
     if leaf.lower().endswith(".unsparse.img"):
         return "unsparse image must not be in final ZIP"
-    if leaf in FORBIDDEN_IMAGE_NAMES:
+    if leaf.lower() in FORBIDDEN_IMAGE_NAMES:
         return f"forbidden image: {leaf}"
+    if leaf.lower().startswith("super.img."):
+        return "split super chunk must not be in final ZIP"
+    if leaf.lower().endswith(".chunk"):
+        return "split chunk must not be in final ZIP"
     for pattern in FORBIDDEN_SUBSTRINGS:
         if pattern.lower() in lowered:
             return f"forbidden pattern: {pattern}"
@@ -159,7 +162,34 @@ def _is_excluded_super_artifact(name: str) -> bool:
     return (
         lower.endswith(".unsparse.img")
         or name in FORBIDDEN_IMAGE_NAMES
+        or lower.startswith("super.img.")
+        or (lower.startswith("super_") and lower.endswith(".chunk"))
+        or lower.endswith(".chunk")
     )
+
+
+def _super_variant_names(names: list[str]) -> list[str]:
+    variants = []
+    for name in names:
+        lower = name.lower()
+        if (
+            lower == "super.img"
+            or lower.startswith("super.img.")
+            or lower.endswith(".unsparse.img")
+            or (lower.startswith("super_") and lower.endswith(".chunk"))
+        ):
+            variants.append(name)
+    return sorted(variants)
+
+
+def _load_final_image_manifest(images_dir: Path, reports_dir: Path) -> dict[str, Any] | None:
+    manifest_path = reports_dir / "final_image_manifest.json"
+    if not manifest_path.is_file():
+        return None
+    try:
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 def _collect_image_files(
@@ -225,6 +255,11 @@ def _report_base(
         "forbidden_dynamic_images_in_output_images": [],
         "missing_final_required_images": [],
         "final_zip_image_list": [],
+        "final_image_count": 0,
+        "included_images": [],
+        "skipped_duplicate_super_images": [],
+        "skipped_dynamic_temp_images": [],
+        "exactly_one_super_img": False,
         "zip_size_mib": None,
         "final_zip_size_mib": None,
         "final_status": "DRY_RUN" if not execute else "FAILED",
@@ -273,6 +308,9 @@ def build_final_fastboot_zip(
     final_zip = output_dir / f"{build_name}_{device}_fastboot.zip"
     report = _report_base(images_dir, output_dir, build_name, device, flavor, soc, staging_dir, final_zip, execute)
     reports_dir = output_dir.parent / "reports"
+    final_image_manifest = _load_final_image_manifest(images_dir, reports_dir)
+    if final_image_manifest:
+        report["final_image_manifest"] = final_image_manifest
 
     if not images_dir.is_dir():
         report["errors"].append(f"Images directory not found: {images_dir}")
@@ -287,6 +325,19 @@ def build_final_fastboot_zip(
     report["super_img_source"] = str(images_dir / "super.img") if has_super else None
     report["bootchain_images_found"] = [n for n in REQUIRED_BOOTCHAIN_IMAGES if (images_dir / n).is_file()]
     report["bootchain_images_missing"] = [n for n in REQUIRED_BOOTCHAIN_IMAGES if not (images_dir / n).is_file()]
+    current_image_names = sorted(p.name for p in images_dir.iterdir() if p.is_file())
+    super_variants = _super_variant_names(current_image_names)
+    report["skipped_duplicate_super_images"] = [n for n in super_variants if n != "super.img"]
+    report["exactly_one_super_img"] = super_variants == ["super.img"]
+    if not report["exactly_one_super_img"]:
+        report["errors"].append(
+            "final images must contain exactly one super image named super.img; "
+            f"found: {super_variants or '(none)'}"
+        )
+        report["validation_status"] = "FAILED"
+        report["final_status"] = "FAILED"
+        report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
+        return report
 
     # Strict MTK firmware completeness check — must pass before any ZIP is built.
     if soc == "mtk":
@@ -334,8 +385,11 @@ def build_final_fastboot_zip(
     image_files, excluded_dynamic = _collect_image_files(images_dir, exclude=exclude)
     report["images_included"] = [path.name for path in image_files]
     report["final_zip_image_list"] = report["images_included"]
+    report["included_images"] = report["images_included"]
+    report["final_image_count"] = len(image_files)
     report["images_excluded_dynamic"] = excluded_dynamic
     report["dynamic_images_excluded_from_final_zip"] = excluded_dynamic
+    report["skipped_dynamic_temp_images"] = excluded_dynamic
     report["images_missing"] = [name for name in KNOWN_IMAGE_ORDER if not (images_dir / name).is_file()]
 
     # Hard-fail: required final images must all be present before packaging.
