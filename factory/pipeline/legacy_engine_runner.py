@@ -412,6 +412,13 @@ def run_legacy_engine(
                 }
 
             ok = _run("detect_rom", _detect, critical=True)
+
+        # Propagate filename-parsed metadata to context if build.prop left them empty.
+        if _detection is not None:
+            if not ctx.android_version and _detection.detected_android_version:
+                ctx.android_version = _detection.detected_android_version
+            if not ctx.mi_incremental and _detection.detected_hyperos_or_miui_version:
+                ctx.mi_incremental = _detection.detected_hyperos_or_miui_version
     else:
         ctx.stage_reports["detect_rom"] = {
             "status": "DRY_RUN" if not ctx.execute else "SKIPPED_NO_ROM",

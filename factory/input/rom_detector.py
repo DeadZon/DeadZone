@@ -299,6 +299,26 @@ def detect_rom_format(rom_path: Path) -> RomDetectionResult:
     except Exception as exc:
         result.warnings.append(f"metadata extraction failed: {exc}")
 
+    # Fallback: parse missing metadata fields from the ROM filename.
+    # Applies when the archive has no accessible build.prop (common for fastboot TGZ).
+    if not all([result.detected_android_version,
+                result.detected_hyperos_or_miui_version,
+                result.detected_region]):
+        try:
+            from factory.input.xiaomi_rom_metadata import parse_xiaomi_rom_metadata
+            parsed = parse_xiaomi_rom_metadata(rom_path.name)
+            if parsed:
+                if not result.detected_device_codename:
+                    result.detected_device_codename = parsed.get("codename")
+                if not result.detected_android_version:
+                    result.detected_android_version = parsed.get("android_version")
+                if not result.detected_hyperos_or_miui_version:
+                    result.detected_hyperos_or_miui_version = parsed.get("build_incremental")
+                if not result.detected_region:
+                    result.detected_region = parsed.get("region")
+        except Exception as exc:
+            result.warnings.append(f"filename metadata fallback failed: {exc}")
+
     # ── Classification (priority order) ───────────────────────────────────────
     #
     # IMPORTANT: For TAR/TGZ archives, fastboot_tgz/tar is checked BEFORE
