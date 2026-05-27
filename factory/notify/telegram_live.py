@@ -170,6 +170,11 @@ class TelegramLiveStatus:
         self.thread_id = thread_id or _auto_thread
 
         self.message_id: Optional[int] = telegram_message_id
+        self.previous_message_id: Optional[int] = None
+        self.edit_failed: bool = False
+        self.replacement_message_created: bool = False
+        self.replacement_reason: Optional[str] = None
+        self.last_api_error: Optional[str] = None
         if self.message_id is None:
             _existing = _env("DEADZONE_TELEGRAM_MESSAGE_ID")
             if _existing:
@@ -451,6 +456,11 @@ class TelegramLiveStatus:
         return {
             "notify_telegram":     self.enabled,
             "telegram_message_id": self.message_id,
+            "previous_message_id": self.previous_message_id,
+            "edit_failed": self.edit_failed,
+            "replacement_message_created": self.replacement_message_created,
+            "replacement_reason": self.replacement_reason,
+            "last_api_error": self.last_api_error,
             "telegram_chat_id":    masked_chat,
             "first_update_time":   self.first_update_time,
             "last_update_time":    self.last_update_time,
@@ -540,6 +550,11 @@ class TelegramLiveStatus:
                     "raw_error":        self.raw_error,
                     "last_update_time": self.last_update_time,
                     "message_id":       self.message_id,
+                    "previous_message_id": self.previous_message_id,
+                    "edit_failed":      self.edit_failed,
+                    "replacement_message_created": self.replacement_message_created,
+                    "replacement_reason": self.replacement_reason,
+                    "last_api_error":   self.last_api_error,
                     "heartbeat_count":  self._heartbeat_count,
                 }
             import json as _json
@@ -572,6 +587,9 @@ class TelegramLiveStatus:
         payload = self._base_payload(text)
         with self._state_lock:
             payload["message_id"] = self.message_id
+        old_message_id = payload.get("message_id")
+        self._replacement_text = text
+        self._log("edit attempt", f"message_id={old_message_id}")
 
         response: dict = {"ok": False, "error": "no attempts made"}
         for attempt, backoff in enumerate(_RETRY_BACKOFF):
@@ -587,10 +605,77 @@ class TelegramLiveStatus:
 
         self.warnings.append("Telegram edit failed")
         err = str(response.get("error", ""))
+        with self._state_lock:
+            self.edit_failed = True
+            self.last_api_error = err or None
         if err:
             self.errors.append(err)
-            self._logger.error("build_id=%s edit failed: %s", self.build_id, err)
+            self._logger.error(
+                "build_id=%s edit failed old_message_id=%s reason=%s",
+                self.build_id, old_message_id, err,
+            )
+        if self._is_unrecoverable_edit_error(err):
+            return self._send_new_live_message(err or "edit failed")
         return self._result("EDIT_FAILED")
+
+    @staticmethod
+    def _is_unrecoverable_edit_error(error: str) -> bool:
+        text = (error or "").lower()
+        return any(
+            marker in text
+            for marker in (
+                "message can't be edited",
+                "message to edit not found",
+                "message_id_invalid",
+                "chat not found",
+            )
+        )
+
+    def _send_new_live_message(self, reason: str) -> dict:
+        text = getattr(self, "_replacement_text", None) or self._render_live()
+        payload = self._base_payload(text)
+        previous_id = self.message_id
+        response = self._post("sendMessage", payload)
+        if response.get("ok") and isinstance(response.get("result"), dict):
+            new_id = response["result"].get("message_id")
+            with self._state_lock:
+                self.previous_message_id = previous_id
+                self.message_id = new_id
+                self.edit_failed = True
+                self.replacement_message_created = True
+                self.replacement_reason = reason
+                self.last_api_error = reason
+            self._record_update()
+            self._write_status_json()
+            self._export_message_id_to_github_env(new_id)
+            self._logger.info(
+                "build_id=%s edit failed, sent replacement live message_id=%s old_message_id=%s reason=%s",
+                self.build_id, new_id, previous_id, reason,
+            )
+            return self._result("REPLACED")
+
+        err = str(response.get("error", "")) or "sendMessage replacement failed"
+        self.warnings.append("Telegram replacement send failed")
+        self.errors.append(err)
+        with self._state_lock:
+            self.last_api_error = err
+            self.replacement_reason = reason
+        self._logger.error(
+            "build_id=%s replacement send failed old_message_id=%s reason=%s send_error=%s",
+            self.build_id, previous_id, reason, err,
+        )
+        self._write_status_json()
+        return self._result("EDIT_FAILED")
+
+    def _export_message_id_to_github_env(self, message_id: Any) -> None:
+        env_path = os.environ.get("GITHUB_ENV", "").strip()
+        if not env_path or message_id is None:
+            return
+        try:
+            with open(env_path, "a", encoding="utf-8") as fh:
+                fh.write(f"DEADZONE_TELEGRAM_MESSAGE_ID={message_id}\n")
+        except Exception as exc:
+            self._logger.warning("build_id=%s could not append GITHUB_ENV: %s", self.build_id, exc)
 
     def _post(self, method: str, payload: dict[str, Any], _migration_retry: bool = False) -> dict:
         url  = f"https://api.telegram.org/bot{self.token}/{method}"

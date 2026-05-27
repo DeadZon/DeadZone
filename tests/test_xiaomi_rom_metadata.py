@@ -24,7 +24,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from factory.input.xiaomi_rom_metadata import parse_xiaomi_rom_metadata
+from factory.input.xiaomi_rom_metadata import (
+    parse_xiaomi_rom_metadata,
+    parse_xiaomi_rom_metadata_from_sources,
+)
 from factory.input.rom_detector import detect_rom_format, FORMAT_FASTBOOT_TGZ
 from factory.output.flash_scripts import FlashScriptMetadata, generate_windows_flash_scripts
 
@@ -209,6 +212,30 @@ class TestUnknownFilenameReturnsEmpty:
     def test_empty_string_returns_empty(self):
         result = parse_xiaomi_rom_metadata("")
         assert result == {}
+
+
+class TestParseMetadataFromSources:
+    _URL = (
+        "https://bigota.d.miui.com/OS3.0.303.0.WOKCNXM/"
+        "zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_e6cf5ef711.tgz"
+    )
+
+    def test_parse_metadata_from_url(self):
+        result = parse_xiaomi_rom_metadata_from_sources(self._URL)
+        assert result["codename"] == "zorn"
+        assert result["android_version"] == "16.0"
+        assert result["build_incremental"] == "OS3.0.303.0.WOKCNXM"
+        assert result["region"] == "CN"
+        assert result["metadata_source"] == "rom_url_filename"
+
+    def test_url_fills_when_local_filename_is_source_rom(self):
+        result = parse_xiaomi_rom_metadata_from_sources("source_rom.tgz", self._URL)
+        assert result["android_version"] == "16.0"
+        assert result["build_incremental"] == "OS3.0.303.0.WOKCNXM"
+        assert result["metadata_source"] == "rom_url_filename"
+
+    def test_local_source_rom_alone_has_no_metadata(self):
+        assert parse_xiaomi_rom_metadata("source_rom.tgz") == {}
 
 
 # ═══════════════════════════════════════════════════════════════════

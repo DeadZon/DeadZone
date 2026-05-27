@@ -31,6 +31,10 @@ class BuildContext:
     # Detected from ROM
     android_version: Optional[str] = None
     mi_incremental: Optional[str] = None
+    region: Optional[str] = None
+    os_name: Optional[str] = None
+    metadata_source: Optional[str] = None
+    metadata_sources_attempted: list[str] = field(default_factory=list)
 
     # Upload / notify
     upload_pixeldrain: bool = False

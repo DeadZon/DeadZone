@@ -64,6 +64,11 @@ def _write_telegram_status(
             status["failure_reason"]    = getattr(notifier, "failure_reason", None)
             status["failure_hint"]      = getattr(notifier, "failure_hint", None)
             status["raw_error"]         = getattr(notifier, "raw_error", None)
+            status["previous_message_id"] = getattr(notifier, "previous_message_id", None)
+            status["edit_failed"] = getattr(notifier, "edit_failed", False)
+            status["replacement_message_created"] = getattr(notifier, "replacement_message_created", False)
+            status["replacement_reason"] = getattr(notifier, "replacement_reason", None)
+            status["last_api_error"] = getattr(notifier, "last_api_error", None)
         except Exception:
             pass
 
@@ -114,8 +119,10 @@ def _write_free_build_report(
             f"    Format    : {det.rom_format if det else 'N/A'}",
             f"    Codename  : {det.detected_device_codename if det else 'N/A'}",
             f"    Android   : {det.detected_android_version if det else 'N/A'}",
+            f"    Build     : {det.detected_hyperos_or_miui_version if det else 'N/A'}",
             f"    Version   : {det.detected_hyperos_or_miui_version if det else 'N/A'}",
             f"    Region    : {det.detected_region if det else 'N/A'}",
+            f"    Metadata source : {getattr(ctx, 'metadata_source', '') or 'N/A'}",
         ]
 
         # Payload dump section

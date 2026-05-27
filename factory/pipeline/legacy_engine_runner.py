@@ -168,6 +168,14 @@ def _write_free_engine_report(
 
     input_rom_path = getattr(ctx, "rom_path", None)
     input_rom_exists = input_rom_path is not None and Path(input_rom_path).exists()
+    rom_url = getattr(ctx, "rom_url", "") or ""
+    original_rom_url_filename = ""
+    if rom_url:
+        try:
+            from urllib.parse import unquote, urlparse
+            original_rom_url_filename = Path(unquote(urlparse(rom_url).path)).name
+        except Exception:
+            original_rom_url_filename = ""
     lines = [
         "═══════════════════════════════════════════════════════",
         "  DeadZone Factory — Free Engine Report",
@@ -177,6 +185,9 @@ def _write_free_engine_report(
         f"  apply_mods            : False",
         f"  fast_mode             : True",
         f"  Input ROM path        : {input_rom_path or '(none)'}",
+        f"  local_rom_name        : {Path(input_rom_path).name if input_rom_path else ''}",
+        f"  original_rom_url_filename: {original_rom_url_filename}",
+        f"  metadata_source       : {getattr(ctx, 'metadata_source', '') or 'N/A'}",
         f"  Input ROM exists      : {input_rom_exists}",
         f"  ROM format            : {det.rom_format if det else 'N/A'}",
         f"  Super strategy        : {result.get('_super_strategy', 'unknown')}",
@@ -413,12 +424,38 @@ def run_legacy_engine(
 
             ok = _run("detect_rom", _detect, critical=True)
 
-        # Propagate filename-parsed metadata to context if build.prop left them empty.
+        # Propagate filename/URL parsed metadata to context if build.prop left fields empty.
         if _detection is not None:
+            try:
+                from factory.input.xiaomi_rom_metadata import parse_xiaomi_rom_metadata_from_sources
+                parsed_meta = parse_xiaomi_rom_metadata_from_sources(
+                    Path(ctx.rom_path).name if ctx.rom_path else "",
+                    ctx.rom_url or "",
+                    str(ctx.rom_path or ""),
+                )
+                if parsed_meta:
+                    if not _detection.detected_device_codename:
+                        _detection.detected_device_codename = parsed_meta.get("codename")
+                    if not _detection.detected_android_version:
+                        _detection.detected_android_version = parsed_meta.get("android_version")
+                    if not _detection.detected_hyperos_or_miui_version:
+                        _detection.detected_hyperos_or_miui_version = parsed_meta.get("build_incremental")
+                    if not _detection.detected_region:
+                        _detection.detected_region = parsed_meta.get("region")
+                    ctx.metadata_source = parsed_meta.get("metadata_source")
+                    ctx.metadata_sources_attempted = parsed_meta.get("metadata_sources_attempted", [])
+                    if not getattr(ctx, "os_name", None):
+                        ctx.os_name = parsed_meta.get("os_name")
+                    if not getattr(ctx, "platform", None):
+                        ctx.platform = parsed_meta.get("os_family") or ctx.platform
+            except Exception as exc:
+                ctx.warnings.append(f"Xiaomi ROM URL metadata fallback failed: {exc}")
             if not ctx.android_version and _detection.detected_android_version:
                 ctx.android_version = _detection.detected_android_version
             if not ctx.mi_incremental and _detection.detected_hyperos_or_miui_version:
                 ctx.mi_incremental = _detection.detected_hyperos_or_miui_version
+            if not getattr(ctx, "region", None) and _detection.detected_region:
+                ctx.region = _detection.detected_region
     else:
         ctx.stage_reports["detect_rom"] = {
             "status": "DRY_RUN" if not ctx.execute else "SKIPPED_NO_ROM",
@@ -595,6 +632,13 @@ def run_legacy_engine(
             col = _collect or {}
             si  = _super_input or {}
             asm = _assemble or {}
+            _original_rom_url_filename = ""
+            if ctx.rom_url:
+                try:
+                    from urllib.parse import unquote, urlparse
+                    _original_rom_url_filename = Path(unquote(urlparse(ctx.rom_url).path)).name
+                except Exception:
+                    _original_rom_url_filename = ""
             write_intake_report(
                 reports_dir=reports_dir,
                 rom_url_or_path=str(ctx.rom_url or ctx.rom_path or ""),
@@ -612,6 +656,11 @@ def run_legacy_engine(
                 super_rebuilt=ok,
                 final_image_list=list(asm.get("final_manifest") or asm.get("final_images") or []),
                 cleanup_status="PENDING",
+                extra_notes=[
+                    f"metadata_source: {getattr(ctx, 'metadata_source', '') or 'N/A'}",
+                    f"local_rom_name: {Path(ctx.rom_path).name if ctx.rom_path else ''}",
+                    f"original_rom_url_filename: {_original_rom_url_filename}",
+                ],
             )
         except Exception as exc:
             print(f"[legacy_engine] Warning: could not write rom_intake_report.txt: {exc}")
@@ -626,6 +675,24 @@ def run_legacy_engine(
         zip_mod = _import("factory.output.final_zip_legacy")
         if zip_mod and hasattr(zip_mod, "build_final_fastboot_zip"):
             def _do_zip() -> dict:
+                missing_meta = []
+                if not ctx.android_version:
+                    missing_meta.append("android_version")
+                if not ctx.mi_incremental:
+                    missing_meta.append("mi_incremental/build_incremental")
+                if not getattr(ctx, "region", None) and not ctx.mi_incremental:
+                    missing_meta.append("region")
+                if missing_meta:
+                    attempted = getattr(ctx, "metadata_sources_attempted", [])
+                    return {
+                        "status": "FAILED",
+                        "errors": [
+                            "Missing flash script metadata: "
+                            + ", ".join(missing_meta)
+                            + f"; sources_attempted={attempted}"
+                        ],
+                        "warnings": [],
+                    }
                 return zip_mod.build_final_fastboot_zip(
                     images_dir=final_img_dir,
                     output_dir=output_dir / "final",

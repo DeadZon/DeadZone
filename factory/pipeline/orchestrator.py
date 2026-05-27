@@ -113,6 +113,15 @@ def _write_telegram_status(
             status["first_update_time"] = notifier.first_update_time
             status["last_update_time"]  = notifier.last_update_time
             status["final_status"]      = notifier.final_status
+            status["current_stage"]     = getattr(notifier, "current_stage", None)
+            status["failure_stage"]     = getattr(notifier, "failure_stage", None)
+            status["failure_reason"]    = getattr(notifier, "failure_reason", None)
+            status["failure_hint"]      = getattr(notifier, "failure_hint", None)
+            status["previous_message_id"] = getattr(notifier, "previous_message_id", None)
+            status["edit_failed"] = getattr(notifier, "edit_failed", False)
+            status["replacement_message_created"] = getattr(notifier, "replacement_message_created", False)
+            status["replacement_reason"] = getattr(notifier, "replacement_reason", None)
+            status["last_api_error"] = getattr(notifier, "last_api_error", None)
             last_err = getattr(notifier, "last_error", None)
             status["last_error"] = str(last_err)[:500] if last_err else None
         except Exception:

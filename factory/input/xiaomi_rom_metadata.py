@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 
 # Region suffix → 2-letter code used in intake reports
@@ -137,3 +138,46 @@ def parse_xiaomi_rom_metadata(path_or_name: str) -> dict:
         }
 
     return {}
+
+
+def _basename_from_source(source: str) -> tuple[str, str]:
+    text = str(source or "").strip()
+    if not text:
+        return "", ""
+    parsed = urlparse(text)
+    if parsed.scheme and parsed.netloc:
+        name = Path(unquote(parsed.path)).name
+        return name, "rom_url_filename"
+    return Path(text).name, "local_filename"
+
+
+def parse_xiaomi_rom_metadata_from_sources(*sources: str) -> dict:
+    """Parse Xiaomi metadata from multiple names/paths/URLs.
+
+    Sources are tried in order. Non-empty values from earlier useful sources win;
+    later sources fill only missing fields. URLs are parsed by path basename.
+    """
+    merged: dict = {}
+    attempted: list[str] = []
+    useful_sources: list[str] = []
+
+    for source in sources:
+        name, label = _basename_from_source(str(source or ""))
+        if not name:
+            continue
+        attempted.append(name)
+        parsed = parse_xiaomi_rom_metadata(name)
+        if not parsed:
+            continue
+        added = False
+        for key, value in parsed.items():
+            if value and not merged.get(key):
+                merged[key] = value
+                added = True
+        if added:
+            useful_sources.append(label)
+
+    if merged:
+        merged["metadata_source"] = useful_sources[0] if useful_sources else "unknown"
+        merged["metadata_sources_attempted"] = attempted
+    return merged

@@ -6,6 +6,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+import json
 
 from factory.notify.telegram_live import (
     TelegramLiveStatus,
@@ -163,6 +164,38 @@ class TestUpdateStage(unittest.TestCase):
             n.success()
             result = n.update_stage("APPLYING_PATCHES", "Too late")
         self.assertEqual(result["status"], "DISABLED")
+
+    def test_edit_failure_sends_replacement_and_reuses_it(self):
+        n = _make(self.tmp, telegram_message_id=21)
+        calls = []
+
+        def _fake(method, payload):
+            calls.append((method, dict(payload)))
+            if method == "editMessageText" and payload.get("message_id") == 21:
+                return {"ok": False, "error": "Bad Request: message can't be edited"}
+            if method == "sendMessage":
+                return {"ok": True, "result": {"message_id": 99}}
+            return {"ok": True, "result": {}}
+
+        with patch.object(n, "_post", side_effect=_fake):
+            result = n.update_stage("DOWNLOADING_ROM", "Downloading", force=True)
+            n._last_edit = 0.0
+            later = n.update_stage("UNPACKING_ROM", "Unpacking", force=True)
+            n._last_heartbeat = 0.0
+            n.heartbeat()
+
+        self.assertEqual(result["status"], "REPLACED")
+        self.assertIn(later["status"], ("UPDATED", "UPDATED_AFTER_RETRY"))
+        self.assertEqual(n.message_id, 99)
+        edit_ids = [payload.get("message_id") for method, payload in calls if method == "editMessageText"]
+        self.assertIn(21, edit_ids)
+        self.assertGreaterEqual(edit_ids.count(99), 2)
+
+        status = json.loads((self.tmp / "reports" / "telegram_status.json").read_text(encoding="utf-8"))
+        self.assertEqual(status["message_id"], 99)
+        self.assertEqual(status["previous_message_id"], 21)
+        self.assertTrue(status["replacement_message_created"])
+        self.assertTrue(status["edit_failed"])
 
 
 class TestSuccess(unittest.TestCase):
