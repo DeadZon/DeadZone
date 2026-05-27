@@ -241,6 +241,19 @@ def run_factory(
     if device_profile.get("_warning"):
         ctx.warnings.append(device_profile["_warning"])
 
+    # ── Free edition: delegate entirely to Universal ROM Intake pipeline ───────
+    if edition == "free":
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        return run_free_pipeline(
+            ctx=ctx,
+            notifier=notifier,
+            soc=soc or ctx.soc or "",
+            source=source,
+            output_dir=output_dir,
+            template_zip=template_zip,
+            pipeline_start=_pipeline_start,
+        )
+
     ok = True
 
     # ── Step 4: Download / unpack ROM ─────────────────────────────────────────

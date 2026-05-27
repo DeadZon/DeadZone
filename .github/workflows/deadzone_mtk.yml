@@ -38,7 +38,7 @@ on:
         description: "ROM edition"
         required: true
         type: choice
-        default: legend
+        default: free
         options:
           - free
           - gaming
@@ -316,6 +316,8 @@ jobs:
           TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
           TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          DEADZONE_EDITION: "${{ inputs.edition }}"
+          DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""
@@ -351,6 +353,8 @@ jobs:
           TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
           TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          DEADZONE_EDITION: "${{ inputs.edition }}"
+          DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""
