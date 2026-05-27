@@ -34,6 +34,7 @@ from factory.input.rom_detector import (
     FORMAT_UNKNOWN,
     FORMAT_XIAOMI_EU_ZIP,
 )
+from factory.input.payload_dumper import dump_payload
 
 
 # ── Archive extraction ────────────────────────────────────────────────────────
@@ -129,6 +130,47 @@ def _merge_split_super(parts: list[Path], out: Path, diag: list[str]) -> bool:
     return True
 
 
+# ── Payload dump report ───────────────────────────────────────────────────────
+
+def _write_payload_dump_report(reports_dir: Path, dump: dict) -> None:
+    """Write output/reports/payload_dump_report.txt from a dump_payload result."""
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        lines = [
+            "=" * 60,
+            "  Payload Dump Report",
+            "=" * 60,
+            f"  payload.bin   : {dump.get('payload_bin', 'N/A')}",
+            f"  Output dir    : {dump.get('output_dir', 'N/A')}",
+            f"  Tool used     : {dump.get('tool_used', 'unknown')}",
+            f"  Status        : {dump.get('status', 'FAILED')}",
+            f"  Dumped count  : {dump.get('dumped_count', 0)}",
+        ]
+        imgs = dump.get("dumped_images") or []
+        if imgs:
+            lines.append("  Dumped images:")
+            for img in sorted(imgs):
+                lines.append(f"    - {img}")
+        else:
+            lines.append("  Dumped images : (none)")
+        errs = dump.get("errors") or []
+        if errs:
+            lines.append("  Errors:")
+            for e in errs:
+                lines.append(f"    ! {e}")
+        warns = dump.get("warnings") or []
+        if warns:
+            lines.append("  Warnings:")
+            for w in warns:
+                lines.append(f"    - {w}")
+        lines.append("=" * 60)
+        (reports_dir / "payload_dump_report.txt").write_text(
+            "\n".join(lines) + "\n", encoding="utf-8"
+        )
+    except Exception as exc:
+        print(f"[rom_unpacker] Warning: could not write payload_dump_report.txt: {exc}")
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def unpack_rom(
@@ -211,7 +253,30 @@ def unpack_rom(
         if not payload_list:
             _err("payload.bin not found after extraction")
             return result
-        _msg(f"payload.bin found: {payload_list[0]}")
+        payload_bin = payload_list[0]
+        _msg(f"payload.bin found: {payload_bin}")
+
+        _msg("Dumping payload.bin partitions into source_images/")
+        dump = dump_payload(payload_bin, source_images_dir)
+
+        # Write payload_dump_report.txt alongside other reports.
+        reports_dir = work_dir.parent / "reports"
+        _write_payload_dump_report(reports_dir, dump)
+
+        result["payload_dump_status"] = dump["status"]
+        result["payload_dump_report"] = str(reports_dir / "payload_dump_report.txt")
+        result["payload_dump_images"] = dump["dumped_images"]
+        result["payload_dump_errors"] = dump["errors"]
+        result["payload_dump_tool"]   = dump["tool_used"]
+
+        if dump["status"] != "OK":
+            _err(
+                "payload.bin was extracted but could not be dumped into images. "
+                + ("; ".join(dump["errors"]) if dump["errors"] else "")
+            )
+            return result
+
+        _msg(f"payload dump: {dump['dumped_count']} images → source_images/")
         result["status"] = "OK"
         return result
 

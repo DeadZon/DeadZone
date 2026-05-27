@@ -90,6 +90,7 @@ def _write_free_build_report(
     super_input: Optional[dict],
     assemble: Optional[dict],
     final_zip: Optional[str],
+    unpack: Optional[dict] = None,
 ) -> None:
     """Write output/reports/free_build_report.txt."""
     try:
@@ -97,6 +98,7 @@ def _write_free_build_report(
         col = collect or {}
         si  = super_input or {}
         asm = assemble or {}
+        unp = unpack or {}
 
         lines = [
             "=" * 60,
@@ -114,6 +116,25 @@ def _write_free_build_report(
             f"    Android   : {det.detected_android_version if det else 'N/A'}",
             f"    Version   : {det.detected_hyperos_or_miui_version if det else 'N/A'}",
             f"    Region    : {det.detected_region if det else 'N/A'}",
+        ]
+
+        # Payload dump section (only present for payload_ota ROMs)
+        if unp.get("payload_dump_status") is not None:
+            dump_status = unp.get("payload_dump_status", "N/A")
+            dump_count  = len(unp.get("payload_dump_images") or [])
+            dump_tool   = unp.get("payload_dump_tool", "unknown")
+            dump_errs   = unp.get("payload_dump_errors") or []
+            lines += [
+                "=" * 60,
+                "  Payload Dump:",
+                f"    Status        : {dump_status}",
+                f"    Tool used     : {dump_tool}",
+                f"    Dumped images : {dump_count}",
+            ]
+            if dump_errs:
+                lines.append(f"    Error         : {dump_errs[0]}")
+
+        lines += [
             "=" * 60,
             "  Image Collection:",
             f"    Normal images    : {len(col.get('standalone_images', {}))}",
@@ -420,6 +441,7 @@ def run_free_pipeline(
         super_input=_super_input,
         assemble=_assemble,
         final_zip=ctx.final_zip,
+        unpack=_unpack,
     )
 
     # ── Stage 7: Package fastboot ZIP ─────────────────────────────────────────
@@ -461,6 +483,7 @@ def run_free_pipeline(
         super_input=_super_input,
         assemble=_assemble,
         final_zip=ctx.final_zip,
+        unpack=_unpack,
     )
 
     # ── Stage 8: Upload PixelDrain ────────────────────────────────────────────

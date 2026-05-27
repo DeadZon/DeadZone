@@ -3,6 +3,7 @@
 Covers:
   rom_detector     — detect_rom_format(), check_codename_match()
   rom_unpacker     — unpack_rom()
+  payload_dumper   — dump_payload()
   source_image_collector — collect_source_images()
   super_input_collector  — collect_super_inputs()
   final_image_assembler  — assemble_final_images(), write_intake_report()
@@ -15,6 +16,7 @@ import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -262,18 +264,138 @@ class TestDetectUnknownFormat:
 # 2. ROM UNPACKING
 # ═══════════════════════════════════════════════════════════════════
 
+def _dump_ok_result(output_dir: Path, images: list[str]) -> dict:
+    """Build a successful dump_payload return value with fake images on disk."""
+    for name in images:
+        img = Path(output_dir) / name
+        img.parent.mkdir(parents=True, exist_ok=True)
+        img.write_bytes(b"fake_img")
+    return {
+        "status": "OK",
+        "payload_bin": "payload.bin",
+        "output_dir": str(output_dir),
+        "dumped_images": images,
+        "dumped_count": len(images),
+        "tool_used": "payload_extract (internal)",
+        "errors": [],
+        "warnings": [],
+    }
+
+
+def _dump_fail_result() -> dict:
+    return {
+        "status": "FAILED",
+        "payload_bin": "payload.bin",
+        "output_dir": "",
+        "dumped_images": [],
+        "dumped_count": 0,
+        "tool_used": "unknown",
+        "errors": ["payload.bin was extracted but could not be dumped into images."],
+        "warnings": [],
+    }
+
+
 class TestUnpackPayloadOta:
     def test_payload_ota_zip_extracts_payload(self):
+        """payload.bin must be extracted to unpacked_rom/ and dump called."""
         with tempfile.TemporaryDirectory() as tmp:
             rom = _make_zip(
                 Path(tmp) / "ota.zip",
                 {"payload.bin": b"OTA_PAYLOAD", "payload_properties.txt": b"prop=1"},
             )
             work_dir = Path(tmp) / "work"
-            result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok_result(output_dir, ["boot.img"])
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
             assert result["status"] == "OK"
             payload = list((work_dir / "unpacked_rom").rglob("payload.bin"))
             assert payload, "payload.bin must be extracted to unpacked_rom/"
+
+    def test_payload_ota_calls_dump_payload(self):
+        """unpack_rom must call dump_payload for payload_ota format."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "ota.zip", {"payload.bin": b"OTA"})
+            work_dir = Path(tmp) / "work"
+            called = []
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                called.append(str(payload_bin))
+                return _dump_ok_result(output_dir, ["boot.img"])
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            assert called, "dump_payload must be called for payload_ota"
+
+    def test_payload_dump_fail_makes_unpack_fail(self):
+        """If dump_payload returns FAILED the unpack result must be FAILED."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "ota.zip", {"payload.bin": b"OTA"})
+            work_dir = Path(tmp) / "work"
+
+            with patch("factory.input.rom_unpacker.dump_payload", return_value=_dump_fail_result()):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            assert result["status"] == "FAILED"
+            assert result["errors"], "errors list must be non-empty after dump failure"
+
+    def test_payload_dump_success_puts_images_in_source_images(self):
+        """Dumped images must land in work_dir/source_images/."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "ota.zip", {"payload.bin": b"OTA"})
+            work_dir = Path(tmp) / "work"
+            source_images_dir = work_dir / "source_images"
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok_result(
+                    output_dir,
+                    ["boot.img", "system.img", "product.img", "vendor.img"],
+                )
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            assert result["status"] == "OK"
+            assert (source_images_dir / "boot.img").is_file()
+            assert (source_images_dir / "system.img").is_file()
+
+    def test_payload_dump_report_written(self):
+        """payload_dump_report.txt must be written under output/reports/."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "ota.zip", {"payload.bin": b"OTA"})
+            work_dir = Path(tmp) / "work"
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok_result(output_dir, ["boot.img"])
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            # reports sit at work_dir.parent / "reports"
+            report = work_dir.parent / "reports" / "payload_dump_report.txt"
+            assert report.is_file(), "payload_dump_report.txt must be written"
+            content = report.read_text(encoding="utf-8")
+            assert "boot.img" in content
+
+    def test_payload_dump_result_fields_in_unpack_result(self):
+        """unpack_rom result must carry payload_dump_* fields for payload_ota."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "ota.zip", {"payload.bin": b"OTA"})
+            work_dir = Path(tmp) / "work"
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok_result(output_dir, ["boot.img", "vbmeta.img"])
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            assert result["payload_dump_status"] == "OK"
+            assert "boot.img" in result["payload_dump_images"]
+            assert result["payload_dump_tool"] == "payload_extract (internal)"
 
 
 class TestUnpackSplitSuperZip:
@@ -307,6 +429,45 @@ class TestUnpackUnknownFormat:
             result = unpack_rom(rom, FORMAT_UNKNOWN, work_dir)
         assert result["status"] == "UNSUPPORTED"
         assert result["errors"]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 2b. PAYLOAD DUMP — collect_source_images and super_input_collector
+# ═══════════════════════════════════════════════════════════════════
+
+class TestCollectImagesSeesDumpedPayload:
+    """collect_source_images must see boot/vbmeta/vendor_boot dumped from payload."""
+
+    def test_collect_sees_boot_vbmeta_vendor_boot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_images_dir = Path(tmp) / "work" / "source_images"
+            for name in ["boot.img", "vendor_boot.img", "vbmeta.img", "dtbo.img"]:
+                _write(source_images_dir / name)
+            out = Path(tmp) / "output" / "images" / "source"
+            result = collect_source_images([source_images_dir], out, execute=False)
+
+        assert "boot.img" in result["standalone_images"]
+        assert "vbmeta.img" in result["standalone_images"]
+        assert "vendor_boot.img" in result["standalone_images"]
+        assert result["missing_required"] == []
+
+    def test_super_input_collector_sees_dynamic_from_payload_dump(self):
+        """super_input_collector must detect system/product/vendor/mi_ext dumped by payload."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source_images_dir = Path(tmp) / "work" / "source_images"
+            for name in ["system.img", "product.img", "vendor.img", "mi_ext.img",
+                         "odm.img", "system_ext.img"]:
+                _write(source_images_dir / name)
+            parts_dir = Path(tmp) / "super_parts"
+            reports_dir = Path(tmp) / "reports"
+            result = collect_super_inputs(
+                [source_images_dir], parts_dir, reports_dir, execute=False
+            )
+
+        assert "system" in result["found_dynamic_partitions"]
+        assert "product" in result["found_dynamic_partitions"]
+        assert "vendor" in result["found_dynamic_partitions"]
+        assert "mi_ext" in result["found_dynamic_partitions"]
 
 
 # ═══════════════════════════════════════════════════════════════════

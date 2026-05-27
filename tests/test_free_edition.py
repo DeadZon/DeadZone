@@ -18,6 +18,7 @@ import tarfile
 import tempfile
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -26,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from factory.input.rom_detector import (
     FORMAT_IMAGES_ZIP,
+    FORMAT_PAYLOAD_OTA,
     FORMAT_SPLIT_SUPER_ZIP,
     FORMAT_UNKNOWN,
     detect_rom_format,
@@ -630,6 +632,244 @@ class TestCleanupRemovesTempFolders:
 
             cleanup(out)
             assert (reports / "free_build_report.txt").is_file()
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 11. PAYLOAD OTA SUPPORT IN FREE PIPELINE
+# ═══════════════════════════════════════════════════════════════════
+
+def _make_payload_ota_zip(path: Path) -> Path:
+    """Write a minimal payload_ota ZIP (fake payload.bin content)."""
+    with zipfile.ZipFile(str(path), "w") as zf:
+        zf.writestr("payload.bin", b"OTA_FAKE")
+        zf.writestr("payload_properties.txt", b"FILE_HASH=abc\n")
+    return path
+
+
+def _dump_ok(output_dir, images):
+    """Return a successful dump_payload result, writing fake images to disk."""
+    for name in images:
+        img = Path(output_dir) / name
+        img.parent.mkdir(parents=True, exist_ok=True)
+        img.write_bytes(b"fake_img_data")
+    return {
+        "status": "OK",
+        "payload_bin": "payload.bin",
+        "output_dir": str(output_dir),
+        "dumped_images": images,
+        "dumped_count": len(images),
+        "tool_used": "payload_extract (internal)",
+        "errors": [],
+        "warnings": [],
+    }
+
+
+_DUMP_FAIL = {
+    "status": "FAILED",
+    "payload_bin": "payload.bin",
+    "output_dir": "",
+    "dumped_images": [],
+    "dumped_count": 0,
+    "tool_used": "unknown",
+    "errors": ["payload.bin was extracted but could not be dumped into images."],
+    "warnings": [],
+}
+
+# Images that cover both standalone and dynamic partition sets.
+_FULL_DUMP_IMAGES = [
+    "boot.img", "vendor_boot.img", "vbmeta.img", "dtbo.img",
+    "system.img", "product.img", "vendor.img", "mi_ext.img",
+    "odm.img", "system_ext.img",
+]
+
+
+class TestPayloadOtaFreePipeline:
+    """payload_ota ROM in the Free pipeline must dump before collecting images."""
+
+    def test_payload_ota_calls_dump_payload_in_unpack(self):
+        """unpack_rom must invoke dump_payload for payload_ota format."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_payload_ota_zip(Path(tmp) / "ota.zip")
+            work_dir = Path(tmp) / "work"
+            called = []
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                called.append(True)
+                return _dump_ok(output_dir, ["boot.img"])
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            assert called, "dump_payload must be called for payload_ota"
+            assert result["status"] == "OK"
+
+    def test_payload_dump_fail_stops_pipeline_before_super_rebuilder(self):
+        """When payload dump fails the Free pipeline must fail and not reach super_rebuilder."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_payload_ota_zip(Path(tmp) / "ota.zip")
+            output_dir = Path(tmp) / "output"
+
+            ctx = BuildContext(
+                codename="zircon",
+                edition="free",
+                mode="execute",
+                soc="mtk",
+                rom_path=rom,
+                output_dir=output_dir,
+            )
+
+            rebuild_called = []
+
+            def _fake_rebuild(*a, **kw):
+                rebuild_called.append(True)
+                return {"status": "APPLIED", "warnings": [], "errors": []}
+
+            with (
+                patch("factory.input.rom_unpacker.dump_payload", return_value=_DUMP_FAIL),
+                patch("factory.super.super_rebuilder.rebuild_super", side_effect=_fake_rebuild),
+            ):
+                result = run_free_pipeline(
+                    ctx=ctx,
+                    notifier=None,
+                    soc="mtk",
+                    source="test",
+                    output_dir=output_dir,
+                    template_zip=None,
+                    pipeline_start=time.monotonic(),
+                )
+
+            assert result["final_status"] == "FAILED"
+            assert not rebuild_called, "super_rebuilder must NOT run when payload dump fails"
+
+    def test_payload_dump_writes_boot_system_product_vendor_to_source_images(self):
+        """After a successful dump, source_images/ must contain the dumped .img files."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_payload_ota_zip(Path(tmp) / "ota.zip")
+            work_dir = Path(tmp) / "work"
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok(output_dir, _FULL_DUMP_IMAGES)
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                result = unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            source_images = work_dir / "source_images"
+            assert result["status"] == "OK"
+            for name in ["boot.img", "system.img", "product.img", "vendor.img"]:
+                assert (source_images / name).is_file(), (
+                    f"{name} must be present in source_images/ after payload dump"
+                )
+
+    def test_payload_dump_report_written_in_free_pipeline(self):
+        """payload_dump_report.txt must be written under output/reports/."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_payload_ota_zip(Path(tmp) / "ota.zip")
+            work_dir = Path(tmp) / "work"
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok(output_dir, ["boot.img"])
+
+            with patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump):
+                unpack_rom(rom, FORMAT_PAYLOAD_OTA, work_dir)
+
+            report = work_dir.parent / "reports" / "payload_dump_report.txt"
+            assert report.is_file(), "payload_dump_report.txt must be written"
+
+    def test_no_zip_packaged_if_payload_dump_fails(self):
+        """The final_zip stage must not run if the payload dump failed."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_payload_ota_zip(Path(tmp) / "ota.zip")
+            output_dir = Path(tmp) / "output"
+
+            ctx = BuildContext(
+                codename="zircon",
+                edition="free",
+                mode="execute",
+                soc="mtk",
+                rom_path=rom,
+                output_dir=output_dir,
+            )
+
+            zip_called = []
+
+            def _fake_zip(*a, **kw):
+                zip_called.append(True)
+                return {"status": "APPLIED", "final_zip": "/fake.zip", "warnings": [], "errors": []}
+
+            with (
+                patch("factory.input.rom_unpacker.dump_payload", return_value=_DUMP_FAIL),
+                patch("factory.output.final_zip_legacy.build_final_fastboot_zip", side_effect=_fake_zip),
+            ):
+                result = run_free_pipeline(
+                    ctx=ctx,
+                    notifier=None,
+                    soc="mtk",
+                    source="test",
+                    output_dir=output_dir,
+                    template_zip=None,
+                    pipeline_start=time.monotonic(),
+                )
+
+            assert result["final_status"] == "FAILED"
+            assert not zip_called, "final_zip must NOT be packaged when payload dump fails"
+
+    def test_free_build_report_includes_payload_dump_section(self):
+        """free_build_report.txt must mention payload dump status for payload_ota ROMs."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_payload_ota_zip(Path(tmp) / "ota.zip")
+            output_dir = Path(tmp) / "output"
+
+            ctx = BuildContext(
+                codename="zircon",
+                edition="free",
+                mode="execute",
+                soc="mtk",
+                rom_path=rom,
+                output_dir=output_dir,
+            )
+
+            def _fake_dump(payload_bin, output_dir, partitions=None):
+                return _dump_ok(output_dir, ["boot.img"])
+
+            # Patch downstream stages so we don't need real images.
+            with (
+                patch("factory.input.rom_unpacker.dump_payload", side_effect=_fake_dump),
+                patch("factory.images.source_image_collector.collect_source_images",
+                      return_value={"status": "APPLIED", "standalone_images": {}, "dynamic_images": {}, "missing_required": [], "warnings": [], "errors": []}),
+                patch("factory.super.super_input_collector.collect_super_inputs",
+                      return_value={"status": "APPLIED", "found_dynamic_partitions": [], "vab_b_placeholders": [], "warnings": [], "errors": []}),
+                patch("factory.super.super_rebuilder.rebuild_super",
+                      return_value={"status": "APPLIED", "warnings": [], "errors": []}),
+                patch("factory.images.final_image_assembler.assemble_final_images",
+                      return_value={"status": "APPLIED", "final_images": ["super.img", "boot.img"], "excluded_dynamic": [], "warnings": [], "errors": []}),
+            ):
+                run_free_pipeline(
+                    ctx=ctx,
+                    notifier=None,
+                    soc="mtk",
+                    source="test",
+                    output_dir=output_dir,
+                    template_zip=None,
+                    pipeline_start=time.monotonic(),
+                )
+
+            report_path = output_dir / "reports" / "free_build_report.txt"
+            assert report_path.is_file()
+            content = report_path.read_text(encoding="utf-8")
+            assert "Payload Dump" in content, "free_build_report.txt must contain Payload Dump section"
+            assert "OK" in content
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────
