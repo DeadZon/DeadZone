@@ -247,8 +247,8 @@ class TestFail(unittest.TestCase):
         with patch.object(n, "_post", side_effect=_fake):
             n.fail(stage="BUILDING_SUPER", error_summary="overflow at byte 0x1A2B")
         text = sent_texts[-1]
-        # BUILDING_SUPER maps to REPACKING_SUPER → "Repack super"
-        self.assertIn("Repack super", text)
+        # BUILDING_SUPER maps to PRESERVING_SUPER → "Preserve super image"
+        self.assertIn("Preserve super image", text)
         self.assertIn("overflow at byte 0x1A2B", text)
 
     def test_fail_final_status_set(self):
@@ -466,8 +466,8 @@ class TestRenderer(unittest.TestCase):
             n._last_edit = 0.0
             with patch.object(n, "_post", side_effect=_fake):
                 n.update_stage("UNPACKING_ROM", "Extracting payload")
-        # UNPACKING_ROM is stage 4/9
-        self.assertTrue(any("[4/9]" in t for t in texts))
+        # UNPACKING_ROM is stage 4/11
+        self.assertTrue(any("[4/11]" in t for t in texts))
 
 
 class TestBackwardCompat(unittest.TestCase):

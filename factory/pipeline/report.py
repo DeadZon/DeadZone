@@ -12,6 +12,7 @@ def write_pipeline_report(
     output_dir: Path,
     telegram: Optional[dict] = None,
     build_id: Optional[str] = None,
+    failure_summary: Optional[dict] = None,
 ) -> dict[str, str]:
     """Write both txt and json pipeline reports. Returns {txt, json} paths."""
     output_dir = Path(output_dir)
@@ -21,7 +22,7 @@ def write_pipeline_report(
     txt_path  = reports_dir / "deadzone_patch_report.txt"
     json_path = reports_dir / "pipeline_report.json"
 
-    data = _build_report_data(ctx, telegram=telegram, build_id=build_id)
+    data = _build_report_data(ctx, telegram=telegram, build_id=build_id, failure_summary=failure_summary)
 
     txt_path.write_text(_format_txt(data), encoding="utf-8")
     json_path.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
@@ -29,7 +30,13 @@ def write_pipeline_report(
     return {"txt": str(txt_path), "json": str(json_path)}
 
 
-def _build_report_data(ctx: Any, telegram: Optional[dict] = None, build_id: Optional[str] = None) -> dict:
+def _build_report_data(
+    ctx: Any,
+    telegram: Optional[dict] = None,
+    build_id: Optional[str] = None,
+    failure_summary: Optional[dict] = None,
+) -> dict:
+    fs = failure_summary or {}
     return {
         "timestamp":          time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "build_id":           build_id or getattr(ctx, "build_id", None),
@@ -49,6 +56,11 @@ def _build_report_data(ctx: Any, telegram: Optional[dict] = None, build_id: Opti
         "warnings":           getattr(ctx, "warnings", []),
         "errors":             getattr(ctx, "errors", []),
         "stage_reports":      getattr(ctx, "stage_reports", {}),
+        "failed_stage":       fs.get("stage"),
+        "failed_stage_human": fs.get("title"),
+        "failure_reason":     fs.get("reason"),
+        "failure_hint":       fs.get("hint"),
+        "raw_error":          fs.get("raw_error"),
     }
 
 
@@ -83,6 +95,15 @@ def _format_txt(data: dict) -> str:
         f"    final_status       : {tg.get('final_status', 'n/a')}",
         "=" * 60,
     ]
+    if data.get("failed_stage"):
+        lines += [
+            "  Failure:",
+            f"    Stage  : {data.get('failed_stage') or 'n/a'}",
+            f"    Title  : {data.get('failed_stage_human') or 'n/a'}",
+            f"    Reason : {data.get('failure_reason') or 'n/a'}",
+            f"    Hint   : {data.get('failure_hint') or 'n/a'}",
+            "=" * 60,
+        ]
     if data["warnings"]:
         lines.append("  Warnings:")
         for w in data["warnings"]:

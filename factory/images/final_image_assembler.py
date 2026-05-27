@@ -107,6 +107,7 @@ def assemble_final_images(
         "excluded_dynamic": excluded_dynamic,
         "warnings": warnings,
         "errors": errors,
+        "final_images": [],
     }
 
     if not execute:
@@ -122,9 +123,19 @@ def assemble_final_images(
     # Place super.img
     target_super = final_dir / "super.img"
     try:
-        shutil.copy2(super_img, target_super)
-        copied.append("super.img")
-        print(f"[final_assembler] super.img → {target_super}")
+        if super_img.resolve() == target_super.resolve():
+            # Already in final dir (preserve_original_super strategy placed it here)
+            copied.append("super.img")
+            warnings.append(
+                "super.img already present in final images; skipping same-file copy"
+            )
+            print(
+                f"[final_assembler] super.img already in final dir (same-file); skipping copy"
+            )
+        else:
+            shutil.copy2(super_img, target_super)
+            copied.append("super.img")
+            print(f"[final_assembler] super.img → {target_super}")
     except Exception as exc:
         errors.append(f"copy super.img: {exc}")
 
@@ -132,8 +143,12 @@ def assemble_final_images(
     for _key, src in standalone_to_copy.items():
         target = final_dir / src.name
         try:
-            shutil.copy2(src, target)
-            copied.append(src.name)
+            if src.resolve() == target.resolve():
+                copied.append(src.name)
+                warnings.append(f"{src.name} already in final dir; skipping same-file copy")
+            else:
+                shutil.copy2(src, target)
+                copied.append(src.name)
         except Exception as exc:
             errors.append(f"copy {src.name}: {exc}")
 
@@ -141,8 +156,10 @@ def assemble_final_images(
     result["final_manifest"] = sorted(
         p.name for p in final_dir.glob("*.img") if p.is_file()
     )
+    result["final_images"] = result["final_manifest"]
     result["status"] = "FAILED" if errors else "APPLIED"
     result["errors"] = errors
+    result["warnings"] = warnings
     return result
 
 

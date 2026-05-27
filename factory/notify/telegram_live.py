@@ -24,41 +24,45 @@ from typing import Any, Optional
 _MAX_TEXT_LEN     = 4096
 _THROTTLE_SECONDS = 3.0
 _RETRY_BACKOFF    = [1.0, 2.0, 4.0]
+_HEARTBEAT_INTERVAL = 60  # seconds between heartbeat Telegram edits during long stages
 
-# 9 canonical pipeline stages (stage_id, display_label, stage_number)
+# 11 canonical pipeline stages (stage_id, display_label, stage_number)
 PIPELINE_STAGES: list[tuple[str, str, int]] = [
-    ("VALIDATING",       "Validate inputs",        1),
-    ("DOWNLOADING_ROM",  "Download ROM",            2),
-    ("DETECTING_ROM",    "Detect ROM format",       3),
-    ("UNPACKING_ROM",    "Unpack ROM",              4),
-    ("APPLYING_PATCHES", "Apply DeadZone patches",  5),
-    ("REPACKING_SUPER",  "Repack super",            6),
-    ("PACKAGING_ZIP",    "Package fastboot ZIP",    7),
-    ("UPLOADING",        "Upload PixelDrain",       8),
-    ("VALIDATING_ZIP",   "Final validation",        9),
+    ("STARTING",            "Starting build",         1),
+    ("DOWNLOADING_ROM",     "Download ROM",           2),
+    ("DETECTING_ROM",       "Detect ROM format",      3),
+    ("UNPACKING_ROM",       "Unpack ROM",             4),
+    ("COLLECTING_IMAGES",   "Collect images",         5),
+    ("PRESERVING_SUPER",    "Preserve super image",   6),
+    ("ASSEMBLING_IMAGES",   "Assemble final images",  7),
+    ("PACKAGING_ZIP",       "Package fastboot ZIP",   8),
+    ("UPLOADING_PIXELDRAIN","Upload to PixelDrain",   9),
+    ("VALIDATING_ZIP",      "Validate final ZIP",    10),
+    ("CLEANUP",             "Cleanup workspace",     11),
 ]
 
 _STAGE_ID_TO_NUM: dict[str, int] = {s: n for s, _, n in PIPELINE_STAGES}
 _TOTAL_STAGES = len(PIPELINE_STAGES)
 
-# Map legacy/orchestrator stage IDs → canonical 9-stage IDs
+# Map legacy/orchestrator stage IDs → canonical stage IDs
 _STAGE_ALIAS: dict[str, str] = {
-    "QUEUED":                          "VALIDATING",
-    "FLY_RECEIVED":                    "VALIDATING",
-    "VALIDATING_REQUEST":              "VALIDATING",
-    "RESOLVING_DEVICE":                "VALIDATING",
+    "QUEUED":                          "STARTING",
+    "FLY_RECEIVED":                    "STARTING",
+    "VALIDATING":                      "STARTING",
+    "VALIDATING_REQUEST":              "STARTING",
+    "RESOLVING_DEVICE":                "STARTING",
     "DETECTING_METADATA":              "DETECTING_ROM",
-    "APPLYING_BASE_PATCHES":           "APPLYING_PATCHES",
-    "APPLYING_MOD_PATCHES":            "APPLYING_PATCHES",
-    "REPACKING_PARTITIONS":            "REPACKING_SUPER",
-    "CAPTURING_ORIGINAL_SUPER_LAYOUT": "REPACKING_SUPER",
-    "BUILDING_SUPER":                  "REPACKING_SUPER",
-    "VALIDATING_SUPER":                "REPACKING_SUPER",
-    "COLLECTING_IMAGES":               "PACKAGING_ZIP",
+    "APPLYING_PATCHES":                "ASSEMBLING_IMAGES",
+    "APPLYING_BASE_PATCHES":           "ASSEMBLING_IMAGES",
+    "APPLYING_MOD_PATCHES":            "ASSEMBLING_IMAGES",
+    "REPACKING_PARTITIONS":            "PRESERVING_SUPER",
+    "CAPTURING_ORIGINAL_SUPER_LAYOUT": "PRESERVING_SUPER",
+    "BUILDING_SUPER":                  "PRESERVING_SUPER",
+    "REPACKING_SUPER":                 "PRESERVING_SUPER",
+    "VALIDATING_SUPER":                "PRESERVING_SUPER",
     "GENERATING_FLASH_SCRIPT":         "PACKAGING_ZIP",
     "VALIDATING_FINAL_ZIP":            "VALIDATING_ZIP",
-    "UPLOADING_PIXELDRAIN":            "UPLOADING",
-    "CLEANUP":                         "VALIDATING_ZIP",
+    "UPLOADING":                       "UPLOADING_PIXELDRAIN",
 }
 
 
@@ -137,6 +141,9 @@ class TelegramLiveStatus:
         os_version: Optional[str] = None,
         build_name: Optional[str] = None,
         developer: str = "Mezo",
+        rom_format: Optional[str] = None,
+        super_strategy: Optional[str] = None,
+        engine: Optional[str] = None,
         # Legacy compat alias
         mod: Optional[str] = None,
     ):
@@ -153,6 +160,9 @@ class TelegramLiveStatus:
         self.os_version        = os_version or ""
         self.build_name        = build_name or f"DeadZone_{self.edition.capitalize()}_{codename}"
         self.developer         = developer
+        self.rom_format        = rom_format or ""
+        self.super_strategy    = super_strategy or ""
+        self.engine            = engine or "Legacy"
 
         _auto_token, _auto_chat, _auto_thread = _resolve_credentials(soc)
         self.token     = token     or _auto_token
@@ -184,6 +194,15 @@ class TelegramLiveStatus:
         self.last_update_time:  Optional[str] = None
         self.final_status:      Optional[str] = None
 
+        # Failure details (populated by fail())
+        self.failure_stage:  Optional[str] = None
+        self.failure_reason: Optional[str] = None
+        self.failure_hint:   Optional[str] = None
+        self.raw_error:      Optional[str] = None
+
+        self._heartbeat_count: int = 0
+        self._last_heartbeat: float = 0.0
+
         self.warnings: list[str] = []
         self.errors:   list[str] = []
 
@@ -209,6 +228,15 @@ class TelegramLiveStatus:
             ))
             self._logger.addHandler(h)
         self._logger.setLevel(logging.DEBUG)
+
+    def close(self) -> None:
+        """Close logger file handlers. Call when done to release file locks (especially on Windows)."""
+        for handler in list(self._logger.handlers):
+            try:
+                handler.close()
+            except Exception:
+                pass
+        self._logger.handlers.clear()
 
     def _log(self, event: str, detail: str = "") -> None:
         self._logger.info(
@@ -304,6 +332,7 @@ class TelegramLiveStatus:
         result = self._do_edit(text)
         self._last_edit = time.monotonic()
         self._record_update()
+        self._write_status_json()
         self._log(f"update_stage={stage}", f"detail={detail!r}")
         return result
 
@@ -341,11 +370,12 @@ class TelegramLiveStatus:
         stage: Optional[str] = None,
         error_summary: Optional[str] = None,
         duration: Optional[float] = None,
+        reason: Optional[str] = None,
+        hint: Optional[str] = None,
+        raw_error: Optional[str] = None,
     ) -> dict:
-        """Force final FAILED edit. Shows failed stage + short error. Removes loading line."""
-        if not self._usable():
-            return self._result("DISABLED")
-
+        """Force final FAILED state. Always updates internal state and status JSON.
+        Edits Telegram message only when enabled and message_id is set."""
         elapsed = _elapsed_str(
             duration if duration is not None else (time.monotonic() - self.started_at)
         )
@@ -358,14 +388,25 @@ class TelegramLiveStatus:
             err = error_summary or self.last_error or ""
             if error_summary:
                 self.last_error = error_summary
-            text = self._render_fail(failed_stage, err, elapsed)
+            self.failure_stage  = failed_stage
+            self.failure_reason = reason or err
+            self.failure_hint   = hint
+            self.raw_error      = raw_error or err
+
+        self._write_status_json()
+        self._log("fail", f"stage={failed_stage} reason={str(reason or err)[:100]!r}")
+
+        if not self._usable():
+            return self._result("DISABLED")
+
+        with self._state_lock:
+            text = self._render_fail(failed_stage, reason or err, elapsed, hint=hint)
             if self.message_id is None:
                 return self._result("DISABLED")
 
         result = self._do_edit(text)
         self._last_edit = time.monotonic()
         self._record_update()
-        self._log("fail", f"stage={failed_stage}")
         return result
 
     def cancelled(self, duration: Optional[float] = None) -> dict:
@@ -419,14 +460,57 @@ class TelegramLiveStatus:
     def snapshot(self) -> dict:
         with self._state_lock:
             return {
-                "build_id":     self.build_id,
-                "stage":        self.current_stage,
-                "action":       self.current_detail,
-                "message_id":   self.message_id,
-                "started_at":   self.started_wall,
-                "elapsed":      _elapsed_str(time.monotonic() - self.started_at),
-                "final_status": self.final_status,
+                "build_id":      self.build_id,
+                "stage":         self.current_stage,
+                "action":        self.current_detail,
+                "message_id":    self.message_id,
+                "started_at":    self.started_wall,
+                "elapsed":       _elapsed_str(time.monotonic() - self.started_at),
+                "final_status":  self.final_status,
+                "failure_stage": self.failure_stage,
+                "failure_reason":self.failure_reason,
             }
+
+    def update_fields(
+        self,
+        rom_format: Optional[str] = None,
+        super_strategy: Optional[str] = None,
+        engine: Optional[str] = None,
+    ) -> None:
+        """Update build metadata fields (ROM format, super strategy, engine label)."""
+        if rom_format is not None:
+            self.rom_format = rom_format
+        if super_strategy is not None:
+            self.super_strategy = super_strategy
+        if engine is not None:
+            self.engine = engine
+
+    def heartbeat(self) -> dict:
+        """Send a heartbeat edit if _HEARTBEAT_INTERVAL seconds have passed.
+
+        Does NOT create a new message — only edits the existing one.
+        Telegarm API failures are logged but do not raise.
+        """
+        if not self._usable():
+            return self._result("DISABLED")
+        now = time.monotonic()
+        if now - self._last_heartbeat < _HEARTBEAT_INTERVAL:
+            return self._result("THROTTLED")
+        if self._is_final:
+            return self._result("DISABLED")
+        with self._state_lock:
+            if self.message_id is None:
+                return self._result("DISABLED")
+            self._heartbeat_count += 1
+            elapsed = _elapsed_str(now - self.started_at)
+            detail_save = self.current_detail
+            self.current_detail = f"Still working... ({elapsed})"
+            text = self._render_live()
+            self.current_detail = detail_save
+        self._last_heartbeat = now
+        result = self._do_edit(text)
+        self._log("heartbeat", f"tick={self._heartbeat_count} elapsed={elapsed}")
+        return result
 
     # ── Internals ─────────────────────────────────────────────────────────────
 
@@ -439,6 +523,31 @@ class TelegramLiveStatus:
                 self._logger.warning("build_id=%s Telegram skipped: missing secrets", self.build_id)
             return False
         return True
+
+    def _write_status_json(self) -> None:
+        try:
+            status_dir = self.output_dir / "reports"
+            status_dir.mkdir(parents=True, exist_ok=True)
+            with self._state_lock:
+                data = {
+                    "build_id":         self.build_id,
+                    "current_stage":    self.current_stage,
+                    "last_stage_detail": self.current_detail,
+                    "final_status":     self.final_status,
+                    "failure_stage":    self.failure_stage,
+                    "failure_reason":   self.failure_reason,
+                    "failure_hint":     self.failure_hint,
+                    "raw_error":        self.raw_error,
+                    "last_update_time": self.last_update_time,
+                    "message_id":       self.message_id,
+                    "heartbeat_count":  self._heartbeat_count,
+                }
+            import json as _json
+            (status_dir / "telegram_status.json").write_text(
+                _json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+        except Exception as exc:
+            self._logger.warning("build_id=%s could not write telegram_status.json: %s", self.build_id, exc)
 
     def _record_update(self) -> None:
         now = _now_utc()
@@ -561,14 +670,20 @@ class TelegramLiveStatus:
         soc_disp     = self.soc.upper() if self.soc else "Unknown"
         android_disp = self.android_version or "—"
         os_disp      = self.os_version or "—"
-        return [
+        lines = [
             f"Device:  {self.codename}",
             f"Edition: {self.edition.capitalize()}",
+            f"Engine:  {self.engine or 'Legacy'}",
             f"SoC:     {soc_disp}",
             f"OS:      {os_disp}",
             f"Android: {android_disp}",
-            f"Build:   {self.build_name}",
         ]
+        if self.rom_format:
+            lines.append(f"ROM:     {self.rom_format}")
+        if self.super_strategy:
+            lines.append(f"Super:   {self.super_strategy}")
+        lines.append(f"Build:   {self.build_name}")
+        return lines
 
     def _render_live(self) -> str:
         """Render running build message with progress bar and loading line."""
@@ -586,6 +701,8 @@ class TelegramLiveStatus:
 
         if progress is None and stage_num:
             progress = round((stage_num - 1) / _TOTAL_STAGES * 100)
+
+        elapsed = _elapsed_str(time.monotonic() - self.started_at)
 
         lines = [
             "DeadZone Factory",
@@ -607,8 +724,10 @@ class TelegramLiveStatus:
             lines.append("Progress:")
             lines.append(_progress_bar(progress))
             lines.append("")
-        lines.append(f"⏳ Working... last update: {_now_hhmm()}")
-        lines.append("Do not stop this run while building/flashing assets.")
+        lines.append(f"Runtime: {elapsed}")
+        lines.append(f"Last update: {_now_utc()}")
+        lines.append("")
+        lines.append("Warning: Do not start another build for the same device until this finishes.")
         return "\n".join(lines)
 
     def _render_success(
@@ -640,6 +759,7 @@ class TelegramLiveStatus:
         failed_stage: str,
         error_summary: str,
         elapsed: str,
+        hint: Optional[str] = None,
     ) -> str:
         canonical   = _STAGE_ALIAS.get(failed_stage, failed_stage)
         stage_label = ""
@@ -656,15 +776,16 @@ class TelegramLiveStatus:
             "Status: ❌ FAILED",
         ]
         lines.extend(self._device_block())
-        lines.extend(["", "Failed at:", display_stage])
+        lines.extend(["", "Stage:", display_stage])
         if error_summary:
-            lines.extend(["", "Error:", error_summary[:400]])
+            lines.extend(["", "Reason:", error_summary[:400]])
+        if hint:
+            lines.extend(["", "Fix hint:", hint[:200]])
         lines.extend([
             "",
             f"Duration: {elapsed}",
             "",
-            "Reports:",
-            "GitHub artifact contains reports/logs only.",
+            "Check reports artifact for full logs.",
             "",
             "Device remains safe. No flashing was performed.",
         ])

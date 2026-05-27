@@ -76,9 +76,10 @@ def _import(module: str) -> Any:
 class _Heartbeat:
     """Daemon thread that logs a one-liner every `interval` seconds."""
 
-    def __init__(self, stage: str, interval: int = 60):
+    def __init__(self, stage: str, interval: int = 60, notifier: Optional[Any] = None):
         self._stage = stage
         self._interval = interval
+        self._notifier = notifier
         self._stop = threading.Event()
         self._t0 = time.monotonic()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -97,6 +98,11 @@ class _Heartbeat:
             tick += 1
             elapsed = int(time.monotonic() - self._t0)
             print(f"[heartbeat] stage={self._stage} elapsed={elapsed}s tick={tick}", flush=True)
+            if self._notifier is not None:
+                try:
+                    self._notifier.heartbeat()
+                except Exception:
+                    pass
 
 
 def _write_runtime_guard_report(
@@ -258,6 +264,20 @@ def run_legacy_engine(
     _timed_out_stage: Optional[str] = None
     _stage_durations: dict[str, float] = {}
     _input_rom_exists_before_detect: Optional[bool] = None
+    _failed_stage: Optional[str] = None  # canonical Telegram stage of failure
+
+    # Map engine stage_id → canonical Telegram stage used in failure messages
+    _STAGE_TO_TELEGRAM: dict[str, str] = {
+        "detect_rom":        "DETECTING_ROM",
+        "unpack_rom":        "UNPACKING_ROM",
+        "collect_images":    "COLLECTING_IMAGES",
+        "super_inputs":      "COLLECTING_IMAGES",
+        "super_rebuild":     "PRESERVING_SUPER",
+        "assemble_images":   "ASSEMBLING_IMAGES",
+        "final_zip":         "PACKAGING_ZIP",
+        "pixeldrain_upload": "UPLOADING_PIXELDRAIN",
+        "cleanup":           "CLEANUP",
+    }
 
     def _notify(stage: str, detail: str, error: Optional[str] = None, force: bool = False) -> None:
         if notifier is not None:
@@ -267,7 +287,7 @@ def run_legacy_engine(
                 pass
 
     def _run(stage_id: str, fn: Any, *, critical: bool = False) -> bool:
-        nonlocal ok, _timed_out_stage
+        nonlocal ok, _timed_out_stage, _failed_stage
         timeout_min = STAGE_TIMEOUTS_MINUTES.get(stage_id, 60)
         use_heartbeat = stage_id in _HEARTBEAT_STAGES
 
@@ -284,7 +304,7 @@ def run_legacy_engine(
                 exc_box[0] = exc
 
         thread = threading.Thread(target=_worker, daemon=True)
-        ctx_mgr = _Heartbeat(stage_id) if use_heartbeat else _NullCtx()
+        ctx_mgr = _Heartbeat(stage_id, notifier=notifier) if use_heartbeat else _NullCtx()
 
         with ctx_mgr:
             thread.start()
@@ -319,6 +339,8 @@ def run_legacy_engine(
 
         if critical and status == "FAILED":
             ok = False
+            if _failed_stage is None:
+                _failed_stage = _STAGE_TO_TELEGRAM.get(stage_id, stage_id.upper())
             return False
         return True
 
@@ -360,6 +382,12 @@ def run_legacy_engine(
                 nonlocal _detection
                 res = detect_rom_format(ctx.rom_path)
                 _detection = res
+                # Propagate detected format to Telegram live message
+                if notifier is not None:
+                    try:
+                        notifier.update_fields(rom_format=res.rom_format)
+                    except Exception:
+                        pass
                 if res.rom_format == FORMAT_UNKNOWN:
                     return {
                         "status": "FAILED",
@@ -408,7 +436,7 @@ def run_legacy_engine(
 
     # ── Stage 3: Collect source images ────────────────────────────────────────
     source_images_out = output_dir / "images" / "source"
-    _notify("COLLECTING_IMAGES", f"Edition: {edition_title} | Engine: Legacy | Collecting Images")
+    _notify("COLLECTING_IMAGES", f"Edition: {edition_title} | Collecting images from ROM")
 
     if ok and ctx.execute:
         from factory.images.source_image_collector import collect_source_images
@@ -481,10 +509,21 @@ def run_legacy_engine(
         else:
             _super_strategy = "rebuild_with_lpmake"
 
-        _notify(
-            "BUILDING_SUPER",
-            f"Edition: {edition_title} | Engine: Legacy | Super: {_super_strategy}",
+        _tg_super_stage = (
+            "PRESERVING_SUPER"
+            if _super_strategy in ("preserve_original_super", "preserve_merged_super")
+            else "BUILDING_SUPER"
         )
+        _notify(
+            _tg_super_stage,
+            f"Edition: {edition_title} | Super strategy: {_super_strategy}",
+        )
+        # Let notifier know the super strategy for display in the live message
+        if notifier is not None:
+            try:
+                notifier.update_fields(super_strategy=_super_strategy)
+            except Exception:
+                pass
 
         if _super_strategy in ("preserve_original_super", "preserve_merged_super"):
             def _do_preserve() -> dict:
@@ -526,6 +565,7 @@ def run_legacy_engine(
         ctx.stage_reports["super_rebuild"] = {"status": "DRY_RUN", "warnings": [], "errors": []}
 
     # ── Stage 6: Assemble final images ────────────────────────────────────────
+    _notify("ASSEMBLING_IMAGES", f"Edition: {edition_title} | Assembling final images")
     if ok and ctx.execute:
         from factory.images.final_image_assembler import assemble_final_images, write_intake_report
 
@@ -563,7 +603,7 @@ def run_legacy_engine(
                 original_super_exists=_original_super_existed,
                 split_super_merged=bool(_unpack and _unpack.get("split_super_merged")),
                 super_rebuilt=ok,
-                final_image_list=list(asm.get("final_images", [])),
+                final_image_list=list(asm.get("final_manifest") or asm.get("final_images") or []),
                 cleanup_status="PENDING",
             )
         except Exception as exc:
@@ -648,11 +688,17 @@ def run_legacy_engine(
     if notifier is not None:
         try:
             if final_status == "FAILED":
-                first_error = ctx.errors[0][:300] if ctx.errors else None
+                from factory.pipeline.error_summary import summarize_error
+                raw_err = ctx.errors[0] if ctx.errors else ""
+                tg_stage = _failed_stage or getattr(notifier, "current_stage", "unknown")
+                summary = summarize_error(raw_err, tg_stage)
                 notifier.fail(
-                    stage=getattr(notifier, "current_stage", "unknown"),
-                    error_summary=first_error,
+                    stage=tg_stage,
+                    error_summary=summary["reason"],
                     duration=_duration,
+                    reason=summary["reason"],
+                    hint=summary["hint"],
+                    raw_error=summary["raw_error"],
                 )
             else:
                 zip_name = Path(ctx.final_zip).name if ctx.final_zip else None
@@ -680,7 +726,17 @@ def run_legacy_engine(
     telegram_section = (
         notifier.report_section() if notifier is not None and hasattr(notifier, "report_section") else None
     )
-    report_files = write_pipeline_report(ctx, output_dir, telegram=telegram_section, build_id=build_id)
+    # Include failure details in pipeline report
+    _failure_summary: Optional[dict] = None
+    if final_status == "FAILED" and ctx.errors:
+        from factory.pipeline.error_summary import summarize_error
+        _failure_summary = summarize_error(ctx.errors[0], _failed_stage or "")
+    report_files = write_pipeline_report(
+        ctx, output_dir,
+        telegram=telegram_section,
+        build_id=build_id,
+        failure_summary=_failure_summary,
+    )
 
     print(f"[legacy_engine] final_status={final_status}")
     if ctx.errors:
@@ -716,6 +772,8 @@ def run_legacy_engine(
         "_assemble":                  _assemble,
         "_stage_durations":           _stage_durations,
         "_timed_out_stage":           _timed_out_stage,
+        "_failed_stage":              _failed_stage,
+        "_failure_summary":           _failure_summary,
     }
 
 

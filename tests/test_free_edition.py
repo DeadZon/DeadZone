@@ -1591,6 +1591,199 @@ class TestCleanupOrderPreservesDownloadedRom:
         assert result["cleanup_phase"] == "pre_download"
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 17. SAME-FILE SUPER.IMG COPY — preserve_original_super path
+# ═══════════════════════════════════════════════════════════════════
+
+class TestSameFileSuperCopy:
+    """
+    Covers the zorn bug where preserve_original_super placed super.img in
+    output/images/final/ and then assemble_final_images tried to copy the
+    same file onto itself, raising "are the same file".
+    """
+
+    def test_same_file_copy_is_skipped_not_failed(self):
+        """assemble_final_images must skip same-file super.img copy without error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            final_dir = Path(tmp) / "output" / "images" / "final"
+            final_dir.mkdir(parents=True)
+            # Simulate preserve_original_super: super.img already in final_dir
+            super_img = final_dir / "super.img"
+            super_img.write_bytes(b"PRESERVED_SUPER")
+
+            source_dir = Path(tmp) / "source_images"
+            _write(source_dir / "boot.img")
+
+            result = assemble_final_images(
+                super_img=super_img,
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        assert result["status"] == "APPLIED", (
+            f"Same-file copy must be treated as APPLIED, not FAILED. Got: {result['status']}\n"
+            f"Errors: {result.get('errors')}"
+        )
+        assert not result["errors"], f"No errors expected for same-file skip: {result['errors']}"
+        any_same_file_warn = any("same-file" in w.lower() or "skipping" in w.lower() for w in result.get("warnings", []))
+        assert any_same_file_warn, (
+            "A warning about skipping same-file copy must appear in warnings"
+        )
+
+    def test_same_file_copy_super_img_still_in_final_manifest(self):
+        """After a same-file skip, super.img must appear in final_manifest."""
+        with tempfile.TemporaryDirectory() as tmp:
+            final_dir = Path(tmp) / "final"
+            final_dir.mkdir()
+            super_img = final_dir / "super.img"
+            super_img.write_bytes(b"SUPER")
+
+            result = assemble_final_images(
+                super_img=super_img,
+                source_images_dir=Path(tmp) / "source",
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        assert "super.img" in (result.get("final_manifest") or []), (
+            "super.img must appear in final_manifest after same-file skip"
+        )
+        assert "super.img" in (result.get("final_images") or []), (
+            "super.img must appear in final_images after same-file skip"
+        )
+
+    def test_same_file_copy_warning_not_error(self):
+        """Same-file copy must produce a warning, not an error."""
+        with tempfile.TemporaryDirectory() as tmp:
+            final_dir = Path(tmp) / "final"
+            final_dir.mkdir()
+            super_img = final_dir / "super.img"
+            super_img.write_bytes(b"SUPER")
+
+            result = assemble_final_images(
+                super_img=super_img,
+                source_images_dir=Path(tmp) / "source",
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        assert not result["errors"], f"Errors must be empty for same-file skip: {result['errors']}"
+        assert result["warnings"], "At least one warning must be present for same-file skip"
+
+    def test_zorn_preserve_super_then_assemble_no_failure(self):
+        """Full zorn scenario: super_rebuilder preserves super into final/, then assembler skips same-file."""
+        from factory.super.super_rebuilder import rebuild_super
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "source_images" / "super.img"
+            original_super.parent.mkdir(parents=True)
+            original_super.write_bytes(b"ZORN_SUPER_CONTENT")
+
+            final_dir = Path(tmp) / "output" / "images" / "final"
+            final_dir.mkdir(parents=True)
+            reports_dir = Path(tmp) / "reports"
+            super_parts = Path(tmp) / "super_parts"
+            super_parts.mkdir()
+
+            # super_rebuilder places super.img in final_dir
+            output_super = final_dir / "super.img"
+            sr = rebuild_super(
+                super_parts_dir=super_parts,
+                output_super=output_super,
+                reports_dir=reports_dir,
+                original_super_img=original_super,
+                execute=True,
+                preserve_original_super=True,
+            )
+            assert sr["status"] == "APPLIED", f"super_rebuilder must succeed: {sr['errors']}"
+            assert output_super.is_file()
+
+            # Now assemble — source path is the same as destination
+            source_dir = Path(tmp) / "source_images"
+            _write(source_dir / "boot.img")
+
+            result = assemble_final_images(
+                super_img=output_super,
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        assert result["status"] == "APPLIED", (
+            f"Full zorn path must succeed. Status={result['status']}, Errors={result['errors']}"
+        )
+        assert "super.img" in (result.get("final_manifest") or [])
+
+    def test_normal_copy_still_works_when_src_differs(self):
+        """When source != destination, shutil.copy2 must still run normally."""
+        with tempfile.TemporaryDirectory() as tmp:
+            src_super = Path(tmp) / "source" / "super.img"
+            src_super.parent.mkdir()
+            src_super.write_bytes(b"SOURCE_SUPER")
+
+            final_dir = Path(tmp) / "final"
+            final_dir.mkdir()
+
+            result = assemble_final_images(
+                super_img=src_super,
+                source_images_dir=Path(tmp) / "source_images",
+                final_dir=final_dir,
+                execute=True,
+            )
+
+            assert result["status"] == "APPLIED"
+            assert (final_dir / "super.img").read_bytes() == b"SOURCE_SUPER"
+            # No same-file warning for a genuine copy
+            same_file_warnings = [w for w in result.get("warnings", []) if "same-file" in w.lower()]
+            assert not same_file_warnings, f"No same-file warning expected for genuine copy: {same_file_warnings}"
+
+    def test_final_zip_staging_includes_super_img(self):
+        """final_manifest must list super.img when already present in final dir."""
+        with tempfile.TemporaryDirectory() as tmp:
+            final_dir = Path(tmp) / "final"
+            final_dir.mkdir()
+            # super.img was placed by preserve_original_super
+            super_img = final_dir / "super.img"
+            super_img.write_bytes(b"SUPER")
+            _write(final_dir / "boot.img")
+
+            result = assemble_final_images(
+                super_img=super_img,
+                source_images_dir=Path(tmp) / "empty_source",
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        manifest = result.get("final_manifest") or []
+        assert "super.img" in manifest
+        assert "boot.img" in manifest
+
+    def test_final_zip_does_not_include_dynamic_partition_images(self):
+        """Dynamic partition images must never appear in final assembled dir."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "source"
+            for name in ["system.img", "vendor.img", "product.img", "odm.img"]:
+                _write(source_dir / name)
+            _write(source_dir / "boot.img")
+
+            final_dir = Path(tmp) / "final"
+            final_dir.mkdir()
+            super_img = final_dir / "super.img"
+            super_img.write_bytes(b"SUPER")
+
+            result = assemble_final_images(
+                super_img=super_img,
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        manifest = set(result.get("final_manifest") or [])
+        for dyn in ["system.img", "vendor.img", "product.img", "odm.img"]:
+            assert dyn not in manifest, f"{dyn} must not be in final assembled dir"
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

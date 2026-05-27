@@ -59,6 +59,11 @@ def _write_telegram_status(
             status["final_status"]      = notifier.final_status
             last_err = getattr(notifier, "last_error", None)
             status["last_error"] = str(last_err)[:500] if last_err else None
+            status["current_stage"]     = getattr(notifier, "current_stage", None)
+            status["failure_stage"]     = getattr(notifier, "failure_stage", None)
+            status["failure_reason"]    = getattr(notifier, "failure_reason", None)
+            status["failure_hint"]      = getattr(notifier, "failure_hint", None)
+            status["raw_error"]         = getattr(notifier, "raw_error", None)
         except Exception:
             pass
 
@@ -83,6 +88,7 @@ def _write_free_build_report(
     unpack: Optional[dict] = None,
     super_strategy: str = "unknown",
     original_super_existed: bool = False,
+    result: Optional[dict] = None,
 ) -> None:
     try:
         det = detection
@@ -142,7 +148,7 @@ def _write_free_build_report(
             f"    Dynamic parts    : {len(si.get('found_dynamic_partitions', []))}",
         ]
 
-        final_imgs = asm.get("final_images", [])
+        final_imgs = asm.get("final_manifest") or asm.get("final_images") or []
         if final_imgs:
             lines.append("  Final Images:")
             for img in sorted(final_imgs):
@@ -163,6 +169,17 @@ def _write_free_build_report(
             f"  Final ZIP : {final_zip or 'N/A'}",
             f"  Cleanup   : {'DONE' if ctx.stage_reports.get('cleanup') else 'PENDING'}",
         ]
+
+        # Include failure summary if available
+        failure_summary = result.get("_failure_summary") if result else None
+        if failure_summary:
+            lines += [
+                "=" * 60,
+                "  Failure:",
+                f"    Stage  : {failure_summary.get('stage', 'unknown')}",
+                f"    Reason : {failure_summary.get('reason', '')}",
+                f"    Hint   : {failure_summary.get('hint', '')}",
+            ]
 
         if ctx.errors:
             lines.append("  Errors:")
@@ -243,6 +260,7 @@ def run_free_pipeline(
         unpack=result.get("_unpack"),
         super_strategy=result.get("_super_strategy", "unknown"),
         original_super_existed=bool(result.get("_original_super_existed")),
+        result=result,
     )
     _write_free_engine_report(reports_dir, ctx, result)
     _write_telegram_status(notifier, ctx.notify_telegram, soc or "", source, output_dir)
