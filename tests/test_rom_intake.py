@@ -143,6 +143,55 @@ class TestDetectFastbootTgz:
             result = detect_rom_format(rom)
         assert result.rom_format == FORMAT_FASTBOOT_TAR
 
+    def test_tgz_with_images_dir_AND_super_img_is_fastboot_tgz(self):
+        """Zorn fix: fastboot TGZ containing images/*.img AND images/super.img
+        must be detected as fastboot_tgz — NOT as raw_super_zip."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_tgz(
+                Path(tmp) / "zorn.tgz",
+                {
+                    "images/boot.img":        b"boot",
+                    "images/vendor_boot.img": b"vboot",
+                    "images/init_boot.img":   b"ib",
+                    "images/vbmeta.img":      b"vbmeta",
+                    "images/dtbo.img":        b"dtbo",
+                    "images/super.img":       b"SUPER_DATA",
+                },
+            )
+            result = detect_rom_format(rom)
+        assert result.rom_format == FORMAT_FASTBOOT_TGZ, (
+            f"Expected fastboot_tgz but got {result.rom_format!r}. "
+            "A fastboot TGZ that contains super.img must still be classified "
+            "as fastboot_tgz — not raw_super_zip."
+        )
+        assert result.has_images_dir is True
+
+    def test_tar_with_images_dir_AND_super_img_is_fastboot_tar(self):
+        """Same fix for plain TAR archives."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_tar(
+                Path(tmp) / "fastboot.tar",
+                {
+                    "images/boot.img":  b"boot",
+                    "images/super.img": b"SUPER",
+                    "images/vbmeta.img": b"vm",
+                },
+            )
+            result = detect_rom_format(rom)
+        assert result.rom_format == FORMAT_FASTBOOT_TAR, (
+            f"Expected fastboot_tar but got {result.rom_format!r}"
+        )
+
+    def test_zip_with_super_img_only_is_raw_super_zip(self):
+        """A plain ZIP where super.img is the only meaningful content stays raw_super_zip."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "super_only.zip",
+                {"super.img": b"SUPER_DATA"},
+            )
+            result = detect_rom_format(rom)
+        assert result.rom_format == FORMAT_RAW_SUPER_ZIP
+
 
 class TestDetectImagesZip:
     def test_zip_with_images_directory(self):

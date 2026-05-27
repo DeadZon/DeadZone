@@ -50,6 +50,10 @@ on:
         type: boolean
         default: true
 
+concurrency:
+  group: deadzone-${{ github.workflow }}-${{ inputs.codename }}-${{ inputs.edition }}
+  cancel-in-progress: true
+
 jobs:
   trigger-fly:
     name: "MTK Fly | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"

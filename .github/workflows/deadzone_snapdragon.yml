@@ -145,11 +145,15 @@ on:
         type: boolean
         default: true
 
+concurrency:
+  group: deadzone-${{ github.workflow }}-${{ inputs.select_device }}-${{ inputs.edition }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: "Snapdragon | ${{ inputs.custom_device || inputs.select_device }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 120
 
     steps:
       - name: Validate inputs
@@ -383,6 +387,10 @@ jobs:
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
           DEADZONE_EDITION: "${{ inputs.edition }}"
           DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
+          DEADZONE_FAST_MODE: "true"
+          DEADZONE_ZIP_LEVEL: "${{ inputs.edition == 'free' && '0' || '9' }}"
+          DEADZONE_MAX_WORKERS: ""
+          DEADZONE_EXTRACT_THREADS: ""
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""
@@ -420,6 +428,8 @@ jobs:
           TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
           DEADZONE_EDITION: "${{ inputs.edition }}"
           DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
+          DEADZONE_FAST_MODE: "true"
+          DEADZONE_ZIP_LEVEL: "${{ inputs.edition == 'free' && '0' || '9' }}"
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""

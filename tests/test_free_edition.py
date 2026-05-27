@@ -26,8 +26,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from factory.input.rom_detector import (
+    FORMAT_FASTBOOT_TAR,
+    FORMAT_FASTBOOT_TGZ,
     FORMAT_IMAGES_ZIP,
     FORMAT_PAYLOAD_OTA,
+    FORMAT_RAW_SUPER_ZIP,
     FORMAT_SPLIT_SUPER_ZIP,
     FORMAT_UNKNOWN,
     detect_rom_format,
@@ -870,6 +873,436 @@ class TestPayloadOtaFreePipeline:
             content = report_path.read_text(encoding="utf-8")
             assert "Payload Dump" in content, "free_build_report.txt must contain Payload Dump section"
             assert "OK" in content
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 12. ZORN FIX — fastboot TGZ + preserve_original_super
+# ═══════════════════════════════════════════════════════════════════
+
+class TestZornFastbootTgzPreserveSuperImg:
+    """
+    Covers the zorn bug:
+      - fastboot TGZ with super.img detected correctly
+      - Free edition with original super.img preserves it (no lpmake)
+      - preserve_original_super does not require dynamic partitions
+      - super_rebuild_report records the correct strategy
+    """
+
+    def test_fastboot_tgz_with_super_img_detected_as_fastboot_tgz(self):
+        """Zorn ROM (fastboot TGZ with images/super.img) must be fastboot_tgz."""
+        import io
+        import tarfile as _tarfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tgz_path = Path(tmp) / "zorn.tgz"
+            with _tarfile.open(str(tgz_path), "w:gz") as tf:
+                for name, content in {
+                    "images/boot.img":        b"boot",
+                    "images/vendor_boot.img": b"vb",
+                    "images/init_boot.img":   b"ib",
+                    "images/vbmeta.img":      b"vm",
+                    "images/dtbo.img":        b"dtbo",
+                    "images/super.img":       b"SUPER",
+                }.items():
+                    info = _tarfile.TarInfo(name=name)
+                    info.size = len(content)
+                    tf.addfile(info, io.BytesIO(content))
+            result = detect_rom_format(tgz_path)
+
+        assert result.rom_format == FORMAT_FASTBOOT_TGZ, (
+            f"Expected fastboot_tgz but got {result.rom_format!r}. "
+            "fastboot TGZ containing super.img must not be raw_super_zip."
+        )
+
+    def test_preserve_original_super_does_not_call_lpmake(self):
+        """rebuild_super(preserve_original_super=True) must copy the file without calling lpmake."""
+        from factory.super.super_rebuilder import rebuild_super
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "source_images" / "super.img"
+            original_super.parent.mkdir(parents=True)
+            original_super.write_bytes(b"ORIGINAL_SUPER_CONTENT")
+
+            super_parts = Path(tmp) / "super_parts"
+            super_parts.mkdir()
+            # No dynamic partition images in super_parts — this is the zorn scenario
+
+            output_super = Path(tmp) / "final" / "super.img"
+            output_super.parent.mkdir(parents=True)
+            reports_dir = Path(tmp) / "reports"
+
+            result = rebuild_super(
+                super_parts_dir=super_parts,
+                output_super=output_super,
+                reports_dir=reports_dir,
+                original_super_img=original_super,
+                execute=True,
+                preserve_original_super=True,
+            )
+
+            assert result["status"] == "APPLIED", f"Expected APPLIED but got {result['status']}: {result['errors']}"
+            assert result["lpmake_executed"] is False, "lpmake must NOT be executed for preserve strategy"
+            assert output_super.is_file(), "output super.img must exist after preserve"
+            assert output_super.read_bytes() == b"ORIGINAL_SUPER_CONTENT"
+
+    def test_preserve_original_super_does_not_require_dynamic_partitions(self):
+        """preserve_original_super must succeed even when super_parts_dir is empty."""
+        from factory.super.super_rebuilder import rebuild_super
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "super.img"
+            original_super.write_bytes(b"STOCK_SUPER")
+
+            super_parts = Path(tmp) / "super_parts"
+            super_parts.mkdir()
+            # Deliberately empty — no .img files
+
+            result = rebuild_super(
+                super_parts_dir=super_parts,
+                output_super=Path(tmp) / "final" / "super.img",
+                reports_dir=Path(tmp) / "reports",
+                original_super_img=original_super,
+                execute=True,
+                preserve_original_super=True,
+            )
+
+        assert result["status"] == "APPLIED"
+        assert not result["errors"], f"Unexpected errors: {result['errors']}"
+
+    def test_preserve_original_super_copies_to_final(self):
+        """The copied super.img must match the original byte-for-byte."""
+        from factory.super.super_rebuilder import rebuild_super
+
+        original_bytes = b"FAKE_SPARSE_SUPER_" + b"\x00" * 64
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "super_orig.img"
+            original_super.write_bytes(original_bytes)
+            output_super = Path(tmp) / "final" / "super.img"
+            output_super.parent.mkdir()
+
+            rebuild_super(
+                super_parts_dir=Path(tmp) / "parts",
+                output_super=output_super,
+                reports_dir=Path(tmp) / "reports",
+                original_super_img=original_super,
+                execute=True,
+                preserve_original_super=True,
+            )
+
+            assert output_super.read_bytes() == original_bytes
+
+    def test_super_rebuild_report_says_preserve_original_super(self):
+        """super_rebuild_report.txt must record strategy=preserve_original_super."""
+        from factory.super.super_rebuilder import rebuild_super
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "super.img"
+            original_super.write_bytes(b"SUPER")
+            reports_dir = Path(tmp) / "reports"
+
+            rebuild_super(
+                super_parts_dir=Path(tmp) / "parts",
+                output_super=Path(tmp) / "final" / "super.img",
+                reports_dir=reports_dir,
+                original_super_img=original_super,
+                execute=True,
+                preserve_original_super=True,
+            )
+
+            report_path = reports_dir / "super_rebuild_report.txt"
+            assert report_path.is_file(), "super_rebuild_report.txt must be written"
+            content = report_path.read_text(encoding="utf-8")
+
+        assert "preserve_original_super" in content, (
+            "super_rebuild_report.txt must contain 'preserve_original_super' strategy"
+        )
+        assert "lpmake executed        : False" in content
+
+    def test_free_pipeline_uses_legacy_engine_runner(self):
+        """run_free_pipeline must call run_legacy_engine from legacy_engine_runner."""
+        from factory.pipeline.legacy_engine_runner import run_legacy_engine as _real_engine
+        import factory.pipeline.legacy_engine_runner as engine_mod
+
+        called_with = []
+        original = engine_mod.run_legacy_engine
+
+        def _spy(context, notifier, output_dir, template_zip, pipeline_start,
+                 edition="free", apply_mods=False, fast_mode=True,
+                 use_universal_detector=True):
+            called_with.append({
+                "edition": edition,
+                "apply_mods": apply_mods,
+                "fast_mode": fast_mode,
+            })
+            return {
+                "final_status": "DRY_RUN",
+                "build_id": None,
+                "build_name": f"DeadZone_{context.codename}_V1",
+                "codename": context.codename,
+                "edition": edition,
+                "soc": context.soc,
+                "final_zip": None,
+                "pixeldrain_link": None,
+                "telegram_message_id": None,
+                "warnings": [],
+                "errors": [],
+                "stage_reports": {},
+                "report_files": {},
+            }
+
+        engine_mod.run_legacy_engine = _spy
+        try:
+            from factory.pipeline.free_pipeline import run_free_pipeline
+            from factory.pipeline.context import BuildContext
+            import time
+
+            with tempfile.TemporaryDirectory() as tmp:
+                output_dir = Path(tmp) / "output"
+                ctx = BuildContext(
+                    codename="zorn",
+                    edition="free",
+                    mode="dry_run",
+                    soc="snapdragon",
+                    output_dir=output_dir,
+                )
+                run_free_pipeline(
+                    ctx=ctx,
+                    notifier=None,
+                    soc="snapdragon",
+                    source="test",
+                    output_dir=output_dir,
+                    template_zip=None,
+                    pipeline_start=time.monotonic(),
+                )
+        finally:
+            engine_mod.run_legacy_engine = original
+
+        assert called_with, "run_legacy_engine must be called by run_free_pipeline"
+        assert called_with[0]["edition"] == "free"
+        assert called_with[0]["apply_mods"] is False, (
+            "Free pipeline must pass apply_mods=False to the engine"
+        )
+
+    def test_free_pipeline_passes_apply_mods_false(self):
+        """run_free_pipeline must always pass apply_mods=False."""
+        import factory.pipeline.legacy_engine_runner as engine_mod
+
+        apply_mods_values = []
+        original = engine_mod.run_legacy_engine
+
+        def _spy(context, notifier, output_dir, template_zip, pipeline_start,
+                 edition="free", apply_mods=False, **kw):
+            apply_mods_values.append(apply_mods)
+            return {
+                "final_status": "DRY_RUN", "build_id": None,
+                "build_name": f"DZ_{context.codename}",
+                "codename": context.codename, "edition": edition,
+                "soc": context.soc, "final_zip": None,
+                "pixeldrain_link": None, "telegram_message_id": None,
+                "warnings": [], "errors": [],
+                "stage_reports": {}, "report_files": {},
+            }
+
+        engine_mod.run_legacy_engine = _spy
+        try:
+            from factory.pipeline.free_pipeline import run_free_pipeline
+            from factory.pipeline.context import BuildContext
+            import time
+
+            with tempfile.TemporaryDirectory() as tmp:
+                ctx = BuildContext(
+                    codename="zorn", edition="free", mode="dry_run",
+                    soc="snapdragon", output_dir=Path(tmp) / "output",
+                )
+                run_free_pipeline(ctx=ctx, notifier=None, soc="snapdragon",
+                                  source="test", output_dir=Path(tmp) / "output",
+                                  template_zip=None, pipeline_start=time.monotonic())
+        finally:
+            engine_mod.run_legacy_engine = original
+
+        assert apply_mods_values, "run_legacy_engine was not called"
+        assert all(v is False for v in apply_mods_values), (
+            f"apply_mods must always be False for Free, got: {apply_mods_values}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 13. WORKFLOW CONCURRENCY & TIMEOUT GUARDS
+# ═══════════════════════════════════════════════════════════════════
+
+class TestWorkflowConcurrencyAndTimeout:
+    """Workflow files must include concurrency group and ≤120min timeout."""
+
+    _MTK  = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "deadzone_mtk.yml"
+    _SNAP = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "deadzone_snapdragon.yml"
+
+    def _text(self, path: Path) -> str:
+        return path.read_text(encoding="utf-8")
+
+    def test_mtk_workflow_has_concurrency(self):
+        assert "concurrency:" in self._text(self._MTK), \
+            "deadzone_mtk.yml must define a concurrency group"
+
+    def test_snapdragon_workflow_has_concurrency(self):
+        assert "concurrency:" in self._text(self._SNAP), \
+            "deadzone_snapdragon.yml must define a concurrency group"
+
+    def test_mtk_workflow_timeout_at_most_120(self):
+        import re
+        text = self._text(self._MTK)
+        m = re.search(r"timeout-minutes:\s*(\d+)", text)
+        assert m, "deadzone_mtk.yml must define timeout-minutes"
+        assert int(m.group(1)) <= 120, (
+            f"timeout-minutes must be ≤120 but found {m.group(1)}"
+        )
+
+    def test_snapdragon_workflow_timeout_at_most_120(self):
+        import re
+        text = self._text(self._SNAP)
+        m = re.search(r"timeout-minutes:\s*(\d+)", text)
+        assert m, "deadzone_snapdragon.yml must define timeout-minutes"
+        assert int(m.group(1)) <= 120, (
+            f"timeout-minutes must be ≤120 but found {m.group(1)}"
+        )
+
+    def test_mtk_workflow_sets_deadzone_fast_mode(self):
+        assert "DEADZONE_FAST_MODE" in self._text(self._MTK), \
+            "deadzone_mtk.yml execute step must set DEADZONE_FAST_MODE"
+
+    def test_snapdragon_workflow_sets_deadzone_fast_mode(self):
+        assert "DEADZONE_FAST_MODE" in self._text(self._SNAP), \
+            "deadzone_snapdragon.yml execute step must set DEADZONE_FAST_MODE"
+
+    def test_mtk_workflow_sets_deadzone_zip_level(self):
+        assert "DEADZONE_ZIP_LEVEL" in self._text(self._MTK), \
+            "deadzone_mtk.yml execute step must set DEADZONE_ZIP_LEVEL"
+
+    def test_snapdragon_workflow_sets_deadzone_zip_level(self):
+        assert "DEADZONE_ZIP_LEVEL" in self._text(self._SNAP), \
+            "deadzone_snapdragon.yml execute step must set DEADZONE_ZIP_LEVEL"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 14. PREFLIGHT CLEANUP
+# ═══════════════════════════════════════════════════════════════════
+
+class TestPreflightCleanup:
+    def test_preflight_cleanup_removes_work(self):
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            work = out / "work"
+            work.mkdir(parents=True)
+            (work / "source_images").mkdir()
+            (work / "source_images" / "super.img").write_bytes(b"old")
+
+            preflight_cleanup(out)
+        assert not work.exists()
+
+    def test_preflight_cleanup_removes_images_final(self):
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            img_final = out / "images" / "final"
+            img_final.mkdir(parents=True)
+            (img_final / "super.img").write_bytes(b"old_super")
+
+            preflight_cleanup(out)
+        assert not img_final.exists()
+
+    def test_preflight_cleanup_removes_input_roms(self):
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            out.mkdir()
+            input_roms = Path(tmp) / "_input_roms"
+            input_roms.mkdir()
+            (input_roms / "source_rom.tgz").write_bytes(b"big_rom")
+
+            preflight_cleanup(out, project_root=Path(tmp))
+        assert not input_roms.exists()
+
+    def test_preflight_cleanup_preserves_reports(self):
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            reports = out / "reports"
+            reports.mkdir(parents=True)
+            report_file = reports / "previous_build_report.txt"
+            report_file.write_bytes(b"old report")
+            (out / "work").mkdir()
+
+            preflight_cleanup(out)
+            assert report_file.is_file(), "output/reports/ must be preserved by preflight_cleanup"
+
+    def test_preflight_cleanup_writes_report(self):
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            out.mkdir()
+            preflight_cleanup(out)
+            assert (out / "reports" / "preflight_cleanup_report.txt").is_file()
+
+    def test_preflight_cleanup_returns_status_applied(self):
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = preflight_cleanup(Path(tmp) / "output")
+        assert result["status"] == "APPLIED"
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 15. RUNTIME GUARD — stage timeout config exists
+# ═══════════════════════════════════════════════════════════════════
+
+class TestRuntimeGuardConfig:
+    def test_stage_timeout_config_exists(self):
+        from factory.pipeline.legacy_engine_runner import STAGE_TIMEOUTS_MINUTES
+        assert isinstance(STAGE_TIMEOUTS_MINUTES, dict)
+        assert len(STAGE_TIMEOUTS_MINUTES) > 0
+        for stage, minutes in STAGE_TIMEOUTS_MINUTES.items():
+            assert isinstance(minutes, int) and minutes > 0, (
+                f"Timeout for {stage!r} must be a positive int, got {minutes}"
+            )
+
+    def test_required_stages_have_timeouts(self):
+        from factory.pipeline.legacy_engine_runner import STAGE_TIMEOUTS_MINUTES
+        for required in ["detect_rom", "unpack_rom", "super_rebuild", "final_zip"]:
+            assert required in STAGE_TIMEOUTS_MINUTES, (
+                f"Stage {required!r} must have a timeout configured"
+            )
+
+    def test_runtime_guard_report_written_on_dry_run(self):
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
+            ctx = BuildContext(
+                codename="zorn",
+                edition="free",
+                mode="dry_run",
+                soc="snapdragon",
+                output_dir=output_dir,
+            )
+            run_free_pipeline(
+                ctx=ctx,
+                notifier=None,
+                soc="snapdragon",
+                source="test",
+                output_dir=output_dir,
+                template_zip=None,
+                pipeline_start=time.monotonic(),
+            )
+            assert (output_dir / "reports" / "runtime_guard_report.txt").is_file(), (
+                "runtime_guard_report.txt must be written after every pipeline run"
+            )
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────

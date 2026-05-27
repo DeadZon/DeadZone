@@ -214,7 +214,7 @@ def _report_base(
         "validation_status": "NOT_RUN",
         "warnings": [],
         "errors": [],
-        "compression_mode": "ZIP_DEFLATED compresslevel=9",
+        "compression_mode": f"ZIP_DEFLATED compresslevel={os.environ.get('DEADZONE_ZIP_LEVEL', '9')}",
         "super_img_detected": False,
         "super_img_source": None,
         "bootchain_images_required": REQUIRED_BOOTCHAIN_IMAGES,
@@ -354,7 +354,7 @@ def build_final_fastboot_zip(
         return report
 
     print(f"[final_zip] super_img_detected={has_super}")
-    print(f"[final_zip] compression_mode=ZIP_DEFLATED compresslevel=9")
+    print(f"[final_zip] compression_mode={report['compression_mode']}")
     print(f"[final_zip] final_zip_image_list={[p.name for p in image_files]}")
     print(f"[final_zip] images_included ({len(image_files)}): {', '.join(p.name for p in image_files)}")
     if excluded_dynamic:
@@ -455,9 +455,15 @@ def build_final_fastboot_zip(
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
+    # Honour DEADZONE_ZIP_LEVEL env var (default 9; Free builds set it to 0 for speed).
+    _zip_level = int(os.environ.get("DEADZONE_ZIP_LEVEL", "9"))
+    _zip_compression = zipfile.ZIP_STORED if _zip_level == 0 else zipfile.ZIP_DEFLATED
+    report["compression_mode"] = f"ZIP_{'STORED' if _zip_level == 0 else 'DEFLATED'} compresslevel={_zip_level}"
+    print(f"[final_zip] compression_mode={report['compression_mode']}")
+
     if final_zip.exists():
         final_zip.unlink()
-    with zipfile.ZipFile(final_zip, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+    with zipfile.ZipFile(final_zip, "w", _zip_compression, compresslevel=_zip_level if _zip_level > 0 else None) as zf:
         for path in _iter_staging_files(staging_dir):
             arcname = _normalize_entry(str(path.relative_to(staging_dir)))
             zf.write(path, arcname)

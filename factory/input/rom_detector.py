@@ -300,6 +300,13 @@ def detect_rom_format(rom_path: Path) -> RomDetectionResult:
         result.warnings.append(f"metadata extraction failed: {exc}")
 
     # ── Classification (priority order) ───────────────────────────────────────
+    #
+    # IMPORTANT: For TAR/TGZ archives, fastboot_tgz/tar is checked BEFORE
+    # raw_super_zip.  Real fastboot packages (e.g. zorn) contain images/super.img
+    # alongside all other partition images — they must never be classified as
+    # raw_super_zip just because super.img is present.
+    # raw_super_zip is reserved for ZIP-like archives where super.img is the
+    # primary content and there is no proper images/ fastboot directory.
 
     if signals["has_payload_bin"]:
         result.rom_format = FORMAT_PAYLOAD_OTA
@@ -312,6 +319,20 @@ def detect_rom_format(rom_path: Path) -> RomDetectionResult:
         result.confidence = 0.95
         result.reason = f"split super.img detected ({signals['split_super_count']} parts)"
         return result
+
+    # For TAR/TGZ: fastboot classification takes priority over raw_super_zip.
+    # A fastboot package naturally includes super.img — don't misclassify it.
+    if result.archive_type in (ARCHIVE_TYPE_TGZ, ARCHIVE_TYPE_TAR):
+        if signals["has_images_dir"] or signals["img_count"] >= 3:
+            if result.archive_type == ARCHIVE_TYPE_TGZ:
+                result.rom_format = FORMAT_FASTBOOT_TGZ
+                result.confidence = 0.90
+                result.reason = "TGZ archive with image files"
+            else:
+                result.rom_format = FORMAT_FASTBOOT_TAR
+                result.confidence = 0.90
+                result.reason = "TAR archive with image files"
+            return result
 
     if signals["is_eu"] and signals["has_super_img"]:
         result.rom_format = FORMAT_XIAOMI_EU_ZIP
@@ -332,18 +353,9 @@ def detect_rom_format(rom_path: Path) -> RomDetectionResult:
         return result
 
     if signals["has_images_dir"] or signals["img_count"] >= 3:
-        if result.archive_type == ARCHIVE_TYPE_TGZ:
-            result.rom_format = FORMAT_FASTBOOT_TGZ
-            result.confidence = 0.80
-            result.reason = "TGZ archive with image files"
-        elif result.archive_type == ARCHIVE_TYPE_TAR:
-            result.rom_format = FORMAT_FASTBOOT_TAR
-            result.confidence = 0.80
-            result.reason = "TAR archive with image files"
-        else:
-            result.rom_format = FORMAT_IMAGES_ZIP
-            result.confidence = 0.80
-            result.reason = "ZIP archive with images directory"
+        result.rom_format = FORMAT_IMAGES_ZIP
+        result.confidence = 0.80
+        result.reason = "ZIP archive with images directory"
         return result
 
     result.rom_format = FORMAT_UNKNOWN

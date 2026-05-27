@@ -279,8 +279,9 @@ def rebuild_super(
     original_super_img: Path | None = None,
     original_partition_sizes: dict[str, int] | None = None,
     execute: bool = False,
+    preserve_original_super: bool = False,
 ) -> dict[str, Any]:
-    """Rebuild final super.img from collected dynamic partition images.
+    """Rebuild or preserve final super.img.
 
     Parameters
     ----------
@@ -296,13 +297,21 @@ def rebuild_super(
         {base_name: lp_allocation_bytes} — used when no original super.img.
     execute:
         False → dry-run (command built but not executed).
+    preserve_original_super:
+        True → copy original_super_img directly to output_super without
+        calling lpmake.  Used by Free edition when no mods are applied so the
+        stock super.img is kept intact.  Does not require dynamic partition
+        images in super_parts_dir.
     """
+    import shutil as _shutil
+
     super_parts_dir = Path(super_parts_dir)
     output_super = Path(output_super)
     reports_dir = Path(reports_dir)
 
     result: dict[str, Any] = {
         "status": "DRY_RUN" if not execute else "FAILED",
+        "strategy": "preserve_original_super" if preserve_original_super else "rebuild_with_lpmake",
         "super_parts_dir": str(super_parts_dir),
         "output_super": str(output_super),
         "original_super_img": str(original_super_img) if original_super_img else None,
@@ -319,6 +328,61 @@ def rebuild_super(
         "warnings": [],
         "errors": [],
     }
+
+    # ── Preserve strategy: just copy the original super.img, no lpmake ───────
+    if preserve_original_super:
+        if original_super_img is None or not Path(original_super_img).is_file():
+            result["errors"].append(
+                "preserve_original_super requested but original_super_img is missing or not a file"
+            )
+            _write_report(result, reports_dir)
+            return result
+
+        if not execute:
+            result["status"] = "DRY_RUN"
+            _write_report(result, reports_dir)
+            return result
+
+        output_super.parent.mkdir(parents=True, exist_ok=True)
+        if output_super.exists():
+            output_super.unlink()
+
+        print(f"[super_rebuilder] preserve_original_super: {original_super_img} → {output_super}")
+        _shutil.copy2(original_super_img, output_super)
+
+        result["super_img_created"] = output_super.is_file()
+        if result["super_img_created"]:
+            result["super_img_size"] = output_super.stat().st_size
+            result["super_metadata_source"] = "original_super_img_preserved"
+            print(f"[super_rebuilder] super.img preserved: {result['super_img_size']} bytes")
+
+            # Best-effort LP metadata validation (non-fatal if lpunpack unavailable)
+            if _lpunpack_get_info is not None:
+                try:
+                    info = _lpunpack_get_info(str(output_super))
+                    if info:
+                        result["validation_status"] = "PASSED"
+                        result["partitions_in_final"] = sorted(
+                            str(p.get("name", ""))
+                            for p in (info.get("partition_table") or [])
+                            if isinstance(p, dict)
+                        )
+                    else:
+                        result["warnings"].append("lpdump returned empty result — super.img may be a sparse image")
+                        result["validation_status"] = "SKIPPED"
+                except Exception as exc:
+                    result["warnings"].append(f"lpdump validation skipped: {exc}")
+                    result["validation_status"] = "SKIPPED"
+            else:
+                result["warnings"].append("lpunpack not available — skipping LP metadata validation")
+                result["validation_status"] = "SKIPPED"
+
+            result["status"] = "APPLIED"
+        else:
+            result["errors"].append("copy of original super.img failed — output file not found")
+
+        _write_report(result, reports_dir)
+        return result
 
     # ── Load super metadata ───────────────────────────────────────────────────
     super_info: dict[str, Any] = {}
@@ -460,9 +524,12 @@ def _write_report(result: dict, reports_dir: Path) -> None:
         "  DeadZone Factory — Super Rebuild Report",
         "═══════════════════════════════════════════════════════",
         f"  Status                 : {result.get('status')}",
+        f"  Strategy               : {result.get('strategy', 'rebuild_with_lpmake')}",
         f"  Metadata source        : {result.get('super_metadata_source') or '(none)'}",
         f"  super.img created      : {result.get('super_img_created')}",
         f"  super.img size         : {result.get('super_img_size')}",
+        f"  original super path    : {result.get('original_super_img') or '(none)'}",
+        f"  final super path       : {result.get('output_super') or '(none)'}",
         f"  lpmake executed        : {result.get('lpmake_executed')}",
         f"  lpmake return code     : {result.get('lpmake_return_code')}",
         f"  Validation status      : {result.get('validation_status')}",
