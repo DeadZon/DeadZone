@@ -9,7 +9,19 @@ def cleanup(
     output_dir: Path | str,
     keep_final_zip: bool = True,
 ) -> dict:
-    """Remove build intermediates; optionally remove the final ZIP."""
+    """Remove build intermediates; optionally remove the final ZIP.
+
+    Cleaned paths
+    -------------
+    - output/work/              (includes super_parts/, super_workspace/,
+                                 unpacked_rom/, source_images/, eu_adapter/)
+    - output/tmp/
+    - Any *_unpacked/ or super_partitions/ directories found recursively
+    - *.unsparse.img files
+    - output/images/            (contents are in the ZIP)
+    - output/images/final/      (after ZIP creation)
+    - Final ZIP (when keep_final_zip=False, after PixelDrain upload)
+    """
     output_dir = Path(output_dir)
     removed: list[str] = []
     errors: list[str] = []
@@ -26,17 +38,28 @@ def cleanup(
         except Exception as exc:
             errors.append(f"remove {path}: {exc}")
 
-    # Remove unpacked ROM work dirs
+    # ── ROM intake: new universal intake directories ──────────────────────────
+    work_dir = output_dir / "work"
+    for sub in [
+        "super_parts",
+        "super_workspace",
+        "unpacked_rom",
+        "source_images",
+        "eu_adapter",
+    ]:
+        _rm(work_dir / sub)
+
+    # Remove unpacked ROM work dirs (legacy patterns)
     for pattern in ["*_unpacked", "super_partitions"]:
         for p in output_dir.rglob(pattern):
             if p.is_dir():
                 _rm(p)
 
-    # Remove work and tmp dirs
-    _rm(output_dir / "work")
+    # Remove work and tmp dirs (removes any remaining work subdirs)
+    _rm(work_dir)
     _rm(output_dir / "tmp")
 
-    # Remove super.unsparse.img if present
+    # Remove sparse intermediates
     for p in output_dir.rglob("*.unsparse.img"):
         _rm(p)
 
