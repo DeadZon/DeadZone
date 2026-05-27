@@ -106,11 +106,18 @@ def _write_runtime_guard_report(
     edition: str,
     stage_durations: dict[str, float],
     timed_out_stage: Optional[str],
+    input_rom_path: Optional[Path] = None,
+    input_rom_exists_before_detect: Optional[bool] = None,
+    cleanup_ran_before_download: Optional[bool] = None,
 ) -> None:
     reports_dir.mkdir(parents=True, exist_ok=True)
     path = reports_dir / "runtime_guard_report.txt"
     longest_stage = max(stage_durations, key=stage_durations.get) if stage_durations else "(none)"
     longest_dur = stage_durations.get(longest_stage, 0)
+
+    def _bool(v: Optional[bool]) -> str:
+        return "true" if v is True else ("false" if v is False else "N/A")
+
     lines = [
         "═══════════════════════════════════════════════════════",
         "  DeadZone Factory — Runtime Guard Report",
@@ -122,6 +129,11 @@ def _write_runtime_guard_report(
         f"  Timed-out stage       : {timed_out_stage or '(none)'}",
         f"  Heartbeat enabled     : True",
         f"  Longest stage         : {longest_stage} ({longest_dur:.1f}s)",
+        "",
+        "  ROM integrity checks:",
+        f"    cleanup ran before download   : {_bool(cleanup_ran_before_download)}",
+        f"    input ROM exists before detect: {_bool(input_rom_exists_before_detect)}",
+        f"    input ROM path                : {input_rom_path or '(none)'}",
         "",
         "  Stage timeout config (minutes):",
     ]
@@ -148,6 +160,8 @@ def _write_free_engine_report(
     asm = result.get("_assemble") or {}
     sr = ctx.stage_reports.get("super_rebuild") or {}
 
+    input_rom_path = getattr(ctx, "rom_path", None)
+    input_rom_exists = input_rom_path is not None and Path(input_rom_path).exists()
     lines = [
         "═══════════════════════════════════════════════════════",
         "  DeadZone Factory — Free Engine Report",
@@ -156,6 +170,8 @@ def _write_free_engine_report(
         f"  Edition               : {ctx.edition}",
         f"  apply_mods            : False",
         f"  fast_mode             : True",
+        f"  Input ROM path        : {input_rom_path or '(none)'}",
+        f"  Input ROM exists      : {input_rom_exists}",
         f"  ROM format            : {det.rom_format if det else 'N/A'}",
         f"  Super strategy        : {result.get('_super_strategy', 'unknown')}",
         f"  Original super exists : {bool(result.get('_original_super_existed'))}",
@@ -241,6 +257,7 @@ def run_legacy_engine(
     _original_super_existed: bool = False
     _timed_out_stage: Optional[str] = None
     _stage_durations: dict[str, float] = {}
+    _input_rom_exists_before_detect: Optional[bool] = None
 
     def _notify(stage: str, detail: str, error: Optional[str] = None, force: bool = False) -> None:
         if notifier is not None:
@@ -318,34 +335,55 @@ def run_legacy_engine(
             detect_rom_format, FORMAT_UNKNOWN, check_codename_match,
         )
 
-        def _detect() -> dict:
-            nonlocal _detection
-            res = detect_rom_format(ctx.rom_path)
-            _detection = res
-            if res.rom_format == FORMAT_UNKNOWN:
+        # Guard: verify the ROM file exists before attempting detection.
+        # If preflight_cleanup deleted _input_roms/ after the workflow had
+        # already downloaded the ROM there, detect_rom would silently receive
+        # FORMAT_UNKNOWN with reason "file not found".  Catching this early
+        # gives a clear, actionable error message.
+        _input_rom_exists_before_detect = Path(ctx.rom_path).exists()
+        if not _input_rom_exists_before_detect:
+            ctx.errors.append(
+                f"Downloaded ROM path is missing after cleanup: {ctx.rom_path}. "
+                "Cleanup must run before download or must preserve the active ROM path. "
+                "Ensure preflight_cleanup is called with preserve_paths=[rom_path] when "
+                "the workflow downloads the ROM before the pipeline starts."
+            )
+            ctx.stage_reports["detect_rom"] = {
+                "status": "FAILED",
+                "errors": ctx.errors[-1:],
+                "warnings": [],
+            }
+            ok = False
+
+        if ok:
+            def _detect() -> dict:
+                nonlocal _detection
+                res = detect_rom_format(ctx.rom_path)
+                _detection = res
+                if res.rom_format == FORMAT_UNKNOWN:
+                    return {
+                        "status": "FAILED",
+                        "errors": [
+                            f"Unknown ROM format: {res.reason}. "
+                            "Supported: payload_ota, fastboot_tgz/tar, images_zip, "
+                            "xiaomi_eu_zip, split_super_zip, new_dat_br_zip, raw_super_zip."
+                        ],
+                        "warnings": res.warnings,
+                    }
+                codename_ok, codename_msg = check_codename_match(
+                    res.detected_device_codename, ctx.codename
+                )
+                errs = [] if codename_ok else [codename_msg]
                 return {
-                    "status": "FAILED",
-                    "errors": [
-                        f"Unknown ROM format: {res.reason}. "
-                        "Supported: payload_ota, fastboot_tgz/tar, images_zip, "
-                        "xiaomi_eu_zip, split_super_zip, new_dat_br_zip, raw_super_zip."
-                    ],
+                    "status": "FAILED" if errs else "APPLIED",
+                    "rom_format": res.rom_format,
+                    "confidence": res.confidence,
+                    "detected_codename": res.detected_device_codename,
+                    "errors": errs,
                     "warnings": res.warnings,
                 }
-            codename_ok, codename_msg = check_codename_match(
-                res.detected_device_codename, ctx.codename
-            )
-            errs = [] if codename_ok else [codename_msg]
-            return {
-                "status": "FAILED" if errs else "APPLIED",
-                "rom_format": res.rom_format,
-                "confidence": res.confidence,
-                "detected_codename": res.detected_device_codename,
-                "errors": errs,
-                "warnings": res.warnings,
-            }
 
-        ok = _run("detect_rom", _detect, critical=True)
+            ok = _run("detect_rom", _detect, critical=True)
     else:
         ctx.stage_reports["detect_rom"] = {
             "status": "DRY_RUN" if not ctx.execute else "SKIPPED_NO_ROM",
@@ -595,6 +633,9 @@ def run_legacy_engine(
         edition=edition,
         stage_durations=_stage_durations,
         timed_out_stage=_timed_out_stage,
+        input_rom_path=getattr(ctx, "rom_path", None),
+        input_rom_exists_before_detect=_input_rom_exists_before_detect,
+        cleanup_ran_before_download=True,  # preflight_cleanup always runs first in free_pipeline
     )
 
     # ── Finalize Telegram ─────────────────────────────────────────────────────

@@ -1305,6 +1305,292 @@ class TestRuntimeGuardConfig:
             )
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 16. CLEANUP ORDER — ROM PRESERVED WHEN DOWNLOADED BEFORE PIPELINE
+# ═══════════════════════════════════════════════════════════════════
+
+class TestCleanupOrderPreservesDownloadedRom:
+    """
+    Covers the zorn bug: preflight_cleanup deleted _input_roms/ after the
+    workflow had already downloaded the ROM there, so detect_rom received a
+    missing file and reported FORMAT_UNKNOWN / "file not found".
+
+    Fix: free_pipeline passes preserve_paths=[ctx.rom_path] to preflight_cleanup
+    so that _input_roms/ is kept when the active ROM lives there.
+    """
+
+    def test_preflight_cleanup_before_download_deletes_input_roms(self):
+        """Without preserve_paths, preflight_cleanup removes _input_roms/ (pre-download case)."""
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            out.mkdir()
+            input_roms = Path(tmp) / "_input_roms"
+            input_roms.mkdir()
+            (input_roms / "old_rom.tgz").write_bytes(b"stale")
+
+            result = preflight_cleanup(out, project_root=Path(tmp))
+
+        assert not input_roms.exists(), "_input_roms must be deleted in pre-download mode"
+        assert result["input_roms_preserved"] is False
+        assert result["cleanup_phase"] == "pre_download"
+
+    def test_preflight_cleanup_after_download_preserves_active_rom_path(self):
+        """When preserve_paths contains a path inside _input_roms/, that dir is kept."""
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            out.mkdir()
+            input_roms = Path(tmp) / "_input_roms"
+            input_roms.mkdir()
+            rom_file = input_roms / "source_rom.tgz"
+            rom_file.write_bytes(b"big_rom_data")
+
+            result = preflight_cleanup(
+                out,
+                project_root=Path(tmp),
+                preserve_paths=[rom_file],
+            )
+
+            assert input_roms.exists(), "_input_roms must be preserved when ROM is inside it"
+            assert rom_file.is_file(), "active ROM file must still exist after cleanup"
+            assert result["input_roms_preserved"] is True
+            assert result["cleanup_phase"] == "post_download"
+
+    def test_preflight_cleanup_report_shows_preserved_active_rom_path(self):
+        """preflight_cleanup_report.txt must record the active ROM path and preservation status."""
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            out.mkdir()
+            input_roms = Path(tmp) / "_input_roms"
+            input_roms.mkdir()
+            rom_file = input_roms / "source_rom.tgz"
+            rom_file.write_bytes(b"data")
+
+            preflight_cleanup(out, project_root=Path(tmp), preserve_paths=[rom_file])
+
+            report = (out / "reports" / "preflight_cleanup_report.txt").read_text(encoding="utf-8")
+
+        assert "source_rom.tgz" in report, "report must include active ROM path"
+        assert "_input_roms preserved: True" in report
+        assert "post_download" in report
+
+    def test_detect_rom_fails_with_clear_error_when_rom_path_missing(self):
+        """legacy_engine detect stage must fail with a clear message when ROM file is gone."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.legacy_engine_runner import run_legacy_engine
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_rom = Path(tmp) / "_input_roms" / "source_rom.tgz"
+            # Deliberately do NOT create the file — simulate cleanup having deleted it
+            output_dir = Path(tmp) / "output"
+
+            ctx = BuildContext(
+                codename="zorn",
+                edition="free",
+                mode="execute",
+                soc="snapdragon",
+                rom_path=missing_rom,
+                output_dir=output_dir,
+            )
+
+            result = run_legacy_engine(
+                context=ctx,
+                notifier=None,
+                output_dir=output_dir,
+                template_zip=None,
+                pipeline_start=time.monotonic(),
+                edition="free",
+                apply_mods=False,
+            )
+
+        assert result["final_status"] == "FAILED"
+        errors_text = " ".join(result["errors"])
+        assert "missing after cleanup" in errors_text or "Cleanup must run before" in errors_text, (
+            f"Error must explain the cleanup ordering problem. Got: {errors_text}"
+        )
+
+    def test_free_pipeline_does_not_call_detect_rom_after_deleting_input_rom(self):
+        """run_free_pipeline must not reach detect_rom with a deleted input ROM.
+
+        This test simulates the zorn failure: ROM downloaded to _input_roms/ before
+        the pipeline starts.  free_pipeline must preserve the ROM so detect_rom sees it.
+        """
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Simulate workflow: ROM already downloaded
+            input_roms = Path(tmp) / "_input_roms"
+            input_roms.mkdir()
+            rom_file = input_roms / "source_rom.tgz"
+            # Write a real TGZ so detect_rom can parse it if we reach that stage
+            import tarfile as _tarfile
+            import io as _io
+            with _tarfile.open(str(rom_file), "w:gz") as tf:
+                for name, content in {
+                    "images/boot.img": b"boot",
+                    "images/vbmeta.img": b"vm",
+                    "images/dtbo.img": b"dtbo",
+                }.items():
+                    info = _tarfile.TarInfo(name=name)
+                    info.size = len(content)
+                    tf.addfile(info, _io.BytesIO(content))
+
+            output_dir = Path(tmp) / "output"
+            ctx = BuildContext(
+                codename="zorn",
+                edition="free",
+                mode="execute",
+                soc="snapdragon",
+                rom_path=rom_file,
+                output_dir=output_dir,
+            )
+
+            # Run free pipeline — it must NOT delete rom_file via preflight_cleanup
+            # (detect_rom may still fail for other reasons since we have no super.img,
+            # but the ROM file itself must still exist when detect_rom is called)
+            detect_called_with_existing_file: list[bool] = []
+
+            from factory.input import rom_detector as _rd
+            _orig_detect = _rd.detect_rom_format
+
+            def _spy_detect(path):
+                detect_called_with_existing_file.append(Path(path).exists())
+                return _orig_detect(path)
+
+            _rd.detect_rom_format = _spy_detect
+            try:
+                run_free_pipeline(
+                    ctx=ctx,
+                    notifier=None,
+                    soc="snapdragon",
+                    source="test",
+                    output_dir=output_dir,
+                    template_zip=None,
+                    pipeline_start=time.monotonic(),
+                )
+            finally:
+                _rd.detect_rom_format = _orig_detect
+
+        assert detect_called_with_existing_file, "detect_rom_format must have been called"
+        assert detect_called_with_existing_file[0] is True, (
+            "ROM file must exist when detect_rom_format is called. "
+            "preflight_cleanup must not have deleted _input_roms/ before detection."
+        )
+
+    def test_zorn_fastboot_tgz_path_exists_before_detect(self):
+        """Simulate the exact zorn failure: ROM in _input_roms, pipeline preserves it."""
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Workflow step: download ROM to _input_roms/
+            input_roms = Path(tmp) / "_input_roms"
+            input_roms.mkdir()
+            rom_file = input_roms / "source_rom.tgz"
+            rom_file.write_bytes(b"zorn_fastboot_tgz_content")
+
+            # Stale leftovers from a previous build that cleanup SHOULD delete
+            out = Path(tmp) / "output"
+            (out / "work" / "source_images").mkdir(parents=True)
+            (out / "work" / "source_images" / "old_boot.img").write_bytes(b"old")
+
+            # Run preflight_cleanup with the active ROM preserved
+            result = preflight_cleanup(out, project_root=Path(tmp), preserve_paths=[rom_file])
+
+            # ROM must survive
+            assert rom_file.is_file(), "zorn ROM must exist after preflight_cleanup"
+            # Stale work/ must be gone
+            assert not (out / "work").exists(), "stale work/ must be removed"
+            # Report must be clear
+            assert result["input_roms_preserved"] is True
+
+    def test_runtime_guard_report_contains_rom_integrity_fields(self):
+        """runtime_guard_report.txt must include ROM integrity check fields."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
+            ctx = BuildContext(
+                codename="zorn",
+                edition="free",
+                mode="dry_run",
+                soc="snapdragon",
+                output_dir=output_dir,
+            )
+            run_free_pipeline(
+                ctx=ctx,
+                notifier=None,
+                soc="snapdragon",
+                source="test",
+                output_dir=output_dir,
+                template_zip=None,
+                pipeline_start=time.monotonic(),
+            )
+
+            report = (output_dir / "reports" / "runtime_guard_report.txt").read_text(
+                encoding="utf-8"
+            )
+
+        assert "cleanup ran before download" in report
+        assert "input ROM exists before detect" in report
+        assert "input ROM path" in report
+
+    def test_free_engine_report_contains_input_rom_fields(self):
+        """free_engine_report.txt must include Input ROM path and exists fields."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
+            ctx = BuildContext(
+                codename="zorn",
+                edition="free",
+                mode="dry_run",
+                soc="snapdragon",
+                output_dir=output_dir,
+            )
+            run_free_pipeline(
+                ctx=ctx,
+                notifier=None,
+                soc="snapdragon",
+                source="test",
+                output_dir=output_dir,
+                template_zip=None,
+                pipeline_start=time.monotonic(),
+            )
+
+            report = (output_dir / "reports" / "free_engine_report.txt").read_text(
+                encoding="utf-8"
+            )
+
+        assert "Input ROM path" in report
+        assert "Input ROM exists" in report
+
+    def test_workflow_cleanup_before_download_does_not_need_preserve(self):
+        """If cleanup ran before the download, no preserve_paths needed — _input_roms is empty."""
+        from factory.cleanup.preflight_cleanup import preflight_cleanup
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "output"
+            out.mkdir()
+            # _input_roms does NOT exist yet — this is pre-download
+            result = preflight_cleanup(out, project_root=Path(tmp))
+
+        assert result["status"] == "APPLIED"
+        assert result["input_roms_preserved"] is False
+        assert result["cleanup_phase"] == "pre_download"
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

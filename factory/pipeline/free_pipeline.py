@@ -200,12 +200,18 @@ def run_free_pipeline(
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Preflight cleanup ────────────────────────────────────────────────────
+    # Pass the active ROM path so preflight_cleanup does NOT delete _input_roms/
+    # when the workflow has already downloaded the ROM there.  The cleanup must
+    # always run before detect_rom; preserving the ROM directory is the safe way
+    # to achieve that without changing the download-then-pipeline workflow order.
     preflight_status = "SKIPPED"
     try:
         from factory.cleanup.preflight_cleanup import preflight_cleanup
-        preflight_result = preflight_cleanup(output_dir)
+        _preserve = [ctx.rom_path] if getattr(ctx, "rom_path", None) else None
+        preflight_result = preflight_cleanup(output_dir, preserve_paths=_preserve)
         preflight_status = preflight_result.get("status", "APPLIED")
-        print(f"[free_pipeline] preflight_cleanup: {preflight_status}")
+        _phase = preflight_result.get("cleanup_phase", "unknown")
+        print(f"[free_pipeline] preflight_cleanup: {preflight_status} (phase={_phase})")
     except Exception as exc:
         print(f"[free_pipeline] Warning: preflight_cleanup failed (non-fatal): {exc}")
 
