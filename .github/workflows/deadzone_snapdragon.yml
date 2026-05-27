@@ -9,10 +9,15 @@ on:
         type: choice
         options:
           # AUTO-GENERATED DEVICE OPTIONS START
+          - gauguin | Mi 10T / Mi 10T Pro
+          - opal | POCO X4 Pro 5G
           - moonstone | POCO X5 5G
           - sky | Redmi 12 5G / Redmi Note 12R / POCO M6 Pro 5G
           - breeze | Redmi 13 5G / Redmi Note 13R / POCO M6 Plus 5G
           - flame | Redmi 14R 5G / Redmi 14C 5G / POCO M7 5G
+          - lmi | Redmi K30 Pro / POCO F2 Pro
+          - apollo | Redmi K30S Ultra
+          - alioth | Redmi K40 / POCO F3
           - haydn | Redmi K40 Pro / K40 Pro+ / Mi 11i
           - munch | Redmi K40S / POCO F4
           - ingres | Redmi K50 Gaming / POCO F4 GT
@@ -22,6 +27,8 @@ on:
           - zorn | Redmi K80 / POCO F7 Pro
           - miro | Redmi K80 Pro / POCO F7 Ultra
           - myron | Redmi K90 Pro Max / POCO F8 Ultra
+          - sweet | Redmi Note 10 Pro
+          - curtana | Redmi Note 11 Pro (India)
           - tapas | Redmi Note 12 4G
           - topaz | Redmi Note 12 4G NFC
           - sunstone | Redmi Note 12 5G / Redmi Note 12R Pro
@@ -37,6 +44,7 @@ on:
           - peridot | Redmi Turbo 3 / POCO F6
           - onyx | Redmi Turbo 4 Pro / POCO F7
           - lisa | Xiaomi 11 Lite 5G NE
+          - peux | Xiaomi 11 Pro
           - vili | Xiaomi 11T Pro
           - cupid | Xiaomi 12
           - taoyao | Xiaomi 12 Lite 5G
@@ -45,6 +53,7 @@ on:
           - unicorn | Xiaomi 12S Pro
           - thor | Xiaomi 12S Ultra
           - diting | Xiaomi 12T Pro / Redmi K50 Ultra
+          - psyche | Xiaomi 12X
           - fuxi | Xiaomi 13
           - ziyi | Xiaomi 13 Lite / Xiaomi Civi 2
           - nuwa | Xiaomi 13 Pro
@@ -61,13 +70,20 @@ on:
           - nezha | Xiaomi 17 Ultra
           - zijin | Xiaomi Civi 1S
           - chenfeng | Xiaomi Civi 4 Pro
+          - umi | Xiaomi Mi 10
+          - cmi | Xiaomi Mi 10 Pro
+          - cas | Xiaomi Mi 10 Ultra
+          - thyme | Xiaomi Mi 10S
           - venus | Xiaomi Mi 11
           - star | Xiaomi Mi 11 Ultra
           - odin | Xiaomi MIX 4
           - zizhan | Xiaomi MIX Fold 2
           - babylon | Xiaomi MIX Fold 3
           - goku | Xiaomi MIX Fold 4
+          - nabu | Xiaomi Pad 5
+          - elish | Xiaomi Pad 5 Pro
           - dagu | Xiaomi Pad 5 Pro 12.4
+          - enuma | Xiaomi Pad 5 Pro 5G
           - pipa | Xiaomi Pad 6
           - yudi | Xiaomi Pad 6 Max 14
           - liuqin | Xiaomi Pad 6 Pro

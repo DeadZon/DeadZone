@@ -8,41 +8,33 @@
     "enabled": true
   },
   {
-    "codename": "aristotle",
-    "display_name": "Xiaomi 13T",
-    "soc": "mtk",
-    "source": "deadzone",
+    "codename": "alioth",
+    "display_name": "Redmi K40 / POCO F3",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
-    "enabled": true
-  },
-  {
-    "codename": "daumier",
-    "display_name": "Xiaomi 12 Pro Dimensity Edition",
-    "soc": "mtk",
-    "source": "deadzone",
-    "support_level": "metadata",
-    "enabled": true
-  },
-  {
-    "codename": "plato",
-    "display_name": "Xiaomi 12T",
-    "soc": "mtk",
-    "source": "deadzone",
-    "support_level": "metadata",
-    "enabled": true
-  },
-  {
-    "codename": "zircon",
-    "display_name": "Redmi Note 13 Pro+ 5G",
-    "soc": "mtk",
-    "source": "deadzone",
-    "support_level": "official",
     "enabled": true
   },
   {
     "codename": "amethyst",
     "display_name": "Redmi Note 14 Pro+ 5G",
     "soc": "snapdragon",
+    "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "apollo",
+    "display_name": "Redmi K30S Ultra",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "aristotle",
+    "display_name": "Xiaomi 13T",
+    "soc": "mtk",
     "source": "deadzone",
     "support_level": "metadata",
     "enabled": true
@@ -64,10 +56,50 @@
     "enabled": true
   },
   {
+    "codename": "biloba",
+    "display_name": "Redmi Note 11S",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "bomb",
+    "display_name": "Xiaomi 11i / Xiaomi 11i HyperCharge",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "breeze",
     "display_name": "Redmi 13 5G / Redmi Note 13R / POCO M6 Plus 5G",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "cannon",
+    "display_name": "Redmi Note 10 Pro",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "cas",
+    "display_name": "Xiaomi Mi 10 Ultra",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "cezanne",
+    "display_name": "Redmi K40",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -80,10 +112,34 @@
     "enabled": true
   },
   {
+    "codename": "cmi",
+    "display_name": "Xiaomi Mi 10 Pro",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "corot",
+    "display_name": "Xiaomi 14T",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "cupid",
     "display_name": "Xiaomi 12",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "curtana",
+    "display_name": "Redmi Note 11 Pro (India)",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -99,6 +155,14 @@
     "codename": "dagu",
     "display_name": "Xiaomi Pad 5 Pro 12.4",
     "soc": "snapdragon",
+    "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "daumier",
+    "display_name": "Xiaomi 12 Pro Dimensity Edition",
+    "soc": "mtk",
     "source": "deadzone",
     "support_level": "metadata",
     "enabled": true
@@ -120,10 +184,34 @@
     "enabled": true
   },
   {
+    "codename": "elish",
+    "display_name": "Xiaomi Pad 5 Pro",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "enuma",
+    "display_name": "Xiaomi Pad 5 Pro 5G",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "flame",
     "display_name": "Redmi 14R 5G / Redmi 14C 5G / POCO M7 5G",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "fleur",
+    "display_name": "Redmi Note 11 Pro",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -141,6 +229,14 @@
     "soc": "snapdragon",
     "source": "deadzone",
     "support_level": "official",
+    "enabled": true
+  },
+  {
+    "codename": "gauguin",
+    "display_name": "Mi 10T / Mi 10T Pro",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
     "enabled": true
   },
   {
@@ -192,6 +288,14 @@
     "enabled": true
   },
   {
+    "codename": "light",
+    "display_name": "Redmi Note 11",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "lisa",
     "display_name": "Xiaomi 11 Lite 5G NE",
     "soc": "snapdragon",
@@ -204,6 +308,14 @@
     "display_name": "Xiaomi Pad 6 Pro",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "lmi",
+    "display_name": "Redmi K30 Pro / POCO F2 Pro",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -224,10 +336,26 @@
     "enabled": true
   },
   {
+    "codename": "miel",
+    "display_name": "Redmi Note 11 Pro+ 5G",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "miro",
     "display_name": "Redmi K80 Pro / POCO F7 Ultra",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "mondeo",
+    "display_name": "Redmi Note 11 5G",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -272,6 +400,14 @@
     "enabled": true
   },
   {
+    "codename": "nabu",
+    "display_name": "Xiaomi Pad 5",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "nezha",
     "display_name": "Xiaomi 17 Ultra",
     "soc": "snapdragon",
@@ -304,6 +440,14 @@
     "enabled": true
   },
   {
+    "codename": "opal",
+    "display_name": "POCO X4 Pro 5G",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "pandora",
     "display_name": "Xiaomi 17 Pro",
     "soc": "snapdragon",
@@ -312,10 +456,26 @@
     "enabled": true
   },
   {
+    "codename": "pantah",
+    "display_name": "Xiaomi 14T Pro",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "peridot",
     "display_name": "Redmi Turbo 3 / POCO F6",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "peux",
+    "display_name": "Xiaomi 11 Pro",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -336,10 +496,34 @@
     "enabled": true
   },
   {
+    "codename": "pissaro",
+    "display_name": "Redmi Note 12 Pro / Xiaomi 12i",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "plato",
+    "display_name": "Xiaomi 12T",
+    "soc": "mtk",
+    "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "popsicle",
     "display_name": "Xiaomi 17 Pro Max",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "psyche",
+    "display_name": "Xiaomi 12X",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -360,10 +544,26 @@
     "enabled": true
   },
   {
+    "codename": "renoir",
+    "display_name": "Redmi K30 Ultra",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "ruan",
     "display_name": "Redmi Pad Pro 5G / POCO Pad 5G",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "rubens",
+    "display_name": "Xiaomi 13T Pro",
+    "soc": "mtk",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -432,6 +632,14 @@
     "enabled": true
   },
   {
+    "codename": "sweet",
+    "display_name": "Redmi Note 10 Pro",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "taoyao",
     "display_name": "Xiaomi 12 Lite 5G",
     "soc": "snapdragon",
@@ -456,6 +664,14 @@
     "enabled": true
   },
   {
+    "codename": "thyme",
+    "display_name": "Xiaomi Mi 10S",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
     "codename": "topaz",
     "display_name": "Redmi Note 12 4G NFC",
     "soc": "snapdragon",
@@ -468,6 +684,14 @@
     "display_name": "Xiaomi Pad 7",
     "soc": "snapdragon",
     "source": "deadzone",
+    "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "umi",
+    "display_name": "Xiaomi Mi 10",
+    "soc": "snapdragon",
+    "source": "xiaomi_eu",
     "support_level": "metadata",
     "enabled": true
   },
@@ -549,6 +773,14 @@
     "soc": "snapdragon",
     "source": "deadzone",
     "support_level": "metadata",
+    "enabled": true
+  },
+  {
+    "codename": "zircon",
+    "display_name": "Redmi Note 13 Pro+ 5G",
+    "soc": "mtk",
+    "source": "deadzone",
+    "support_level": "official",
     "enabled": true
   },
   {

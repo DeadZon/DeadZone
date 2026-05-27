@@ -9,11 +9,24 @@ on:
         type: choice
         options:
           # AUTO-GENERATED DEVICE OPTIONS START
+          - renoir | Redmi K30 Ultra
+          - cezanne | Redmi K40
+          - cannon | Redmi Note 10 Pro
+          - light | Redmi Note 11
+          - mondeo | Redmi Note 11 5G
+          - fleur | Redmi Note 11 Pro
+          - miel | Redmi Note 11 Pro+ 5G
+          - biloba | Redmi Note 11S
+          - pissaro | Redmi Note 12 Pro / Xiaomi 12i
           - zircon | Redmi Note 13 Pro+ 5G
+          - bomb | Xiaomi 11i / Xiaomi 11i HyperCharge
           - agate | Xiaomi 11T
           - daumier | Xiaomi 12 Pro Dimensity Edition
           - plato | Xiaomi 12T
           - aristotle | Xiaomi 13T
+          - rubens | Xiaomi 13T Pro
+          - corot | Xiaomi 14T
+          - pantah | Xiaomi 14T Pro
           # AUTO-GENERATED DEVICE OPTIONS END
 
       custom_device:

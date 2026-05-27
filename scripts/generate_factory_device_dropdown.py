@@ -38,6 +38,8 @@ def load_devices(json_path: pathlib.Path) -> list[dict]:
 
 
 def filter_devices(devices: list[dict], soc: str) -> list[dict]:
+    # soc must be an exact match ("mtk" or "snapdragon").
+    # Devices with soc="auto" are intentionally excluded from both workflows.
     return [d for d in devices if d.get("soc") == soc and d.get("enabled", True)]
 
 
