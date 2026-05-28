@@ -3,35 +3,9 @@ name: DeadZone MTK GitHub Build
 on:
   workflow_dispatch:
     inputs:
-      select_device:
-        description: "Select target device"
+      codename:
+        description: "Device codename (e.g. zircon, garnet, cannon)"
         required: true
-        type: choice
-        options:
-          # AUTO-GENERATED DEVICE OPTIONS START
-          - renoir | Redmi K30 Ultra
-          - cezanne | Redmi K40
-          - cannon | Redmi Note 10 Pro
-          - light | Redmi Note 11
-          - mondeo | Redmi Note 11 5G
-          - fleur | Redmi Note 11 Pro
-          - miel | Redmi Note 11 Pro+ 5G
-          - biloba | Redmi Note 11S
-          - pissaro | Redmi Note 12 Pro / Xiaomi 12i
-          - zircon | Redmi Note 13 Pro+ 5G
-          - bomb | Xiaomi 11i / Xiaomi 11i HyperCharge
-          - agate | Xiaomi 11T
-          - daumier | Xiaomi 12 Pro Dimensity Edition
-          - plato | Xiaomi 12T
-          - aristotle | Xiaomi 13T
-          - rubens | Xiaomi 13T Pro
-          - corot | Xiaomi 14T
-          - pantah | Xiaomi 14T Pro
-          # AUTO-GENERATED DEVICE OPTIONS END
-
-      custom_device:
-        description: "Optional custom codename override (leave blank to use dropdown)"
-        required: false
         type: string
 
       edition:
@@ -96,12 +70,12 @@ on:
           - execute
 
 concurrency:
-  group: deadzone-${{ github.workflow }}-${{ inputs.select_device }}-${{ inputs.edition }}
+  group: deadzone-${{ github.workflow }}-${{ inputs.codename }}-${{ inputs.edition }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: "MTK | ${{ inputs.custom_device || inputs.select_device }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
+    name: "MTK | ${{ inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -133,39 +107,18 @@ jobs:
           echo "[OK] rom_source = $ROM_SOURCE"
           echo "[OK] Basic inputs validated."
 
-      - name: Resolve selected device
+      - name: Resolve device codename
         run: |
           set -euo pipefail
 
-          SELECTED="${{ inputs.select_device }}"
-          CUSTOM="${{ inputs.custom_device }}"
-
-          if [ -z "$SELECTED" ]; then
-            echo "[ERROR] select_device is required."
-            exit 1
-          fi
-
-          # Parse codename (left of " | ")
-          CODENAME="${SELECTED%% | *}"
+          CODENAME="${{ inputs.codename }}"
           CODENAME="$(echo "$CODENAME" | xargs)"
 
-          if [ -z "$CODENAME" ] || [ "$CODENAME" = "$SELECTED" ]; then
-            echo "[ERROR] Could not parse codename from: $SELECTED"
-            echo "[ERROR] Expected format: codename | Display Name"
+          if [ -z "$CODENAME" ]; then
+            echo "[ERROR] codename is required. Enter a device codename like zircon or garnet."
             exit 1
           fi
 
-          # Parse display name (right of " | ")
-          DISPLAY_NAME="${SELECTED#*| }"
-          DISPLAY_NAME="$(echo "$DISPLAY_NAME" | xargs)"
-
-          # Override codename with custom_device if set
-          if [ -n "$CUSTOM" ]; then
-            echo "[DEVICE] Overriding dropdown codename '$CODENAME' with custom_device='$CUSTOM'"
-            CODENAME="$(echo "$CUSTOM" | xargs)"
-          fi
-
-          # Guard against placeholder values
           for BAD in select_device_codename select_device device none null default; do
             if [ "$CODENAME" = "$BAD" ]; then
               echo "[ERROR] Invalid device codename: $CODENAME"
@@ -173,7 +126,6 @@ jobs:
             fi
           done
 
-          # Resolve ROM URL based on rom_source
           ROM_SOURCE="${{ inputs.rom_source }}"
           ROM_URL="${{ inputs.rom_url }}"
           DEADZONE_ROM_URL=""
@@ -194,18 +146,16 @@ jobs:
             exit 1
           fi
 
-          # Write resolved values to GITHUB_ENV
           {
             echo "DEADZONE_DEVICE_CODENAME=$CODENAME"
-            echo "DEADZONE_DEVICE_DISPLAY_NAME=$DISPLAY_NAME"
+            echo "DEADZONE_DEVICE_DISPLAY_NAME=$CODENAME"
             echo "DEADZONE_ROM_URL=$DEADZONE_ROM_URL"
             echo "DEADZONE_ROM_SOURCE=$ROM_SOURCE"
           } >> "$GITHUB_ENV"
 
-          echo "[DEVICE] codename     = $CODENAME"
-          echo "[DEVICE] display_name = $DISPLAY_NAME"
-          echo "[DEVICE] rom_source   = $ROM_SOURCE"
-          echo "[DEVICE] rom_url      = $DEADZONE_ROM_URL"
+          echo "[DEVICE] codename   = $CODENAME"
+          echo "[DEVICE] rom_source = $ROM_SOURCE"
+          echo "[DEVICE] rom_url    = $DEADZONE_ROM_URL"
 
       - name: Normalize inputs
         id: norm
@@ -419,8 +369,8 @@ jobs:
           set +e
           python scripts/write_device_selection_report.py \
             --codename      "$DEADZONE_DEVICE_CODENAME" \
-            --display-name  "$DEADZONE_DEVICE_DISPLAY_NAME" \
-            --select-device "${{ inputs.select_device }}" \
+            --display-name  "$DEADZONE_DEVICE_CODENAME" \
+            --select-device "${{ inputs.codename }}" \
             --rom-source    "$DEADZONE_ROM_SOURCE" \
             --rom-url       "$DEADZONE_ROM_URL" \
             --mode          "${{ steps.norm.outputs.mode }}" \

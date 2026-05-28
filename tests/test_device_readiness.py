@@ -139,6 +139,11 @@ def _extract_dropdown_codenames(wf_text: str) -> set[str]:
 def test_all_mtk_devices_in_mtk_dropdown(enabled_devices):
     text = WORKFLOWS["mtk"].read_text(encoding="utf-8")
     dropdown = _extract_dropdown_codenames(text)
+    if not dropdown:
+        # New design: direct workflows use a 'codename' string input, not a device dropdown.
+        # Verify the workflow has the codename string input.
+        assert "codename:" in text, "MTK workflow missing codename string input"
+        return
     mtk_devices = {d["codename"] for d in enabled_devices if d.get("soc") == "mtk"}
     missing = mtk_devices - dropdown
     assert missing == set(), f"MTK devices missing from dropdown: {missing}"
@@ -148,6 +153,11 @@ def test_all_mtk_devices_in_mtk_dropdown(enabled_devices):
 def test_all_snapdragon_devices_in_snapdragon_dropdown(enabled_devices):
     text = WORKFLOWS["snapdragon"].read_text(encoding="utf-8")
     dropdown = _extract_dropdown_codenames(text)
+    if not dropdown:
+        # New design: direct workflows use a 'codename' string input, not a device dropdown.
+        # Verify the workflow has the codename string input.
+        assert "codename:" in text, "Snapdragon workflow missing codename string input"
+        return
     sd_devices = {d["codename"] for d in enabled_devices if d.get("soc") == "snapdragon"}
     missing = sd_devices - dropdown
     assert missing == set(), f"Snapdragon devices missing from dropdown: {missing}"

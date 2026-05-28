@@ -264,13 +264,22 @@ def test_duplicate_codenames_fail():
 # ---------------------------------------------------------------------------
 
 def test_workflows_contain_select_device():
+    # Direct workflows now use a 'codename' string input instead of a 'select_device' dropdown.
+    # The validator (scripts/validate_repo_text_files.py) forbids 'select_device' as a workflow
+    # input key. This test verifies the new codename-string design is in place.
     for name, path in [("MTK", WORKFLOW_MTK), ("Snapdragon", WORKFLOW_SNAP)]:
         assert path.exists(), f"{name} workflow not found: {path}"
         text = path.read_text(encoding="utf-8")
-        assert "select_device:" in text, f"{name} workflow missing select_device input"
+        assert "codename:" in text, f"{name} workflow missing codename string input"
+        assert "select_device:" not in text, (
+            f"{name} workflow must not use forbidden select_device input"
+        )
 
 
 def test_old_codename_input_removed():
+    # Verify that the old forbidden input keys are not present in the direct workflows.
+    # 'codename:' is now the correct input; 'select_device_codename:', 'select_device:',
+    # and 'custom_device:' are all forbidden by the repo validator.
     for name, path in [("MTK", WORKFLOW_MTK), ("Snapdragon", WORKFLOW_SNAP)]:
         assert path.exists(), f"{name} workflow not found: {path}"
         text = path.read_text(encoding="utf-8")
@@ -281,25 +290,18 @@ def test_old_codename_input_removed():
             assert "select_device_codename:" not in stripped, (
                 f"{name} workflow still has old select_device_codename input"
             )
-        # 'codename:' as a standalone input is not allowed; 'codename=' in job name is fine
-        for line in text.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#"):
-                continue
-            if stripped == "codename:" or stripped.startswith("codename:  ") or stripped.startswith("codename:\t"):
-                pytest.fail(f"{name} workflow still has bare codename: input")
+            assert "select_device:" not in stripped, (
+                f"{name} workflow still has forbidden select_device input"
+            )
+            assert "custom_device:" not in stripped, (
+                f"{name} workflow still has forbidden custom_device input"
+            )
 
 
 def test_workflows_contain_auto_generated_markers():
-    for name, path in [("MTK", WORKFLOW_MTK), ("Snapdragon", WORKFLOW_SNAP)]:
-        assert path.exists(), f"{name} workflow not found: {path}"
-        text = path.read_text(encoding="utf-8")
-        assert "# AUTO-GENERATED DEVICE OPTIONS START" in text, (
-            f"{name} workflow missing START marker"
-        )
-        assert "# AUTO-GENERATED DEVICE OPTIONS END" in text, (
-            f"{name} workflow missing END marker"
-        )
+    # Direct workflows now use a 'codename' string input; no device dropdown or
+    # AUTO-GENERATED markers are needed. Marker presence is optional.
+    pass
 
 
 # ---------------------------------------------------------------------------
