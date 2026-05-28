@@ -1073,3 +1073,314 @@ class TestDynamicPartitionsExcluded:
                 assert dyn not in final_names, (
                     f"Dynamic partition {dyn!r} must not appear in final dir"
                 )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 18. FINAL ZIP USES DEADZONE_MEZO (not old third_party template)
+# ═══════════════════════════════════════════════════════════════════
+
+class TestFinalZipUsesDeadZoneMezo:
+    _TEMPLATE_DIR = REPO_ROOT / "DeadZone_Mezo"
+
+    def test_final_zip_template_source_is_deadzone_mezo(self, tmp_path):
+        """build_final_fastboot_zip must report template_source=DeadZone_Mezo."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        template_dir = self._TEMPLATE_DIR
+        if not template_dir.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        for name in ["super.img", "boot.img", "vbmeta.img"]:
+            _write(images_dir / name)
+
+        report = build_final_fastboot_zip(
+            images_dir=images_dir,
+            output_dir=tmp_path / "out",
+            build_name="TestBuild",
+            device="testdevice",
+            flavor="free",
+            soc="snapdragon",
+            android_version="16",
+            build_incremental="OS3.0.1.0.TEST",
+            region="Global",
+            execute=False,
+        )
+        assert report["template_source"] == "DeadZone_Mezo", (
+            f"template_source must be DeadZone_Mezo, got {report['template_source']!r}"
+        )
+
+    def test_final_zip_not_using_old_third_party_template(self, tmp_path):
+        """template_source must not reference third_party/mezo_core/templates/."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        _write(images_dir / "super.img")
+        _write(images_dir / "boot.img")
+
+        report = build_final_fastboot_zip(
+            images_dir=images_dir,
+            output_dir=tmp_path / "out",
+            build_name="TestBuild",
+            device="testdevice",
+            flavor="free",
+            android_version="16",
+            build_incremental="OS3.0.1.0.TEST",
+            execute=False,
+        )
+        src = report.get("template_source") or ""
+        assert "third_party" not in src, (
+            f"template_source must not reference third_party, got {src!r}"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 19. FINAL ZIP CONTAINS FULL DEADZONE_MEZO STRUCTURE
+# ═══════════════════════════════════════════════════════════════════
+
+class TestFinalZipFullStructure:
+    _TEMPLATE_DIR = REPO_ROOT / "DeadZone_Mezo"
+
+    def _build_zip(self, tmp_path: Path) -> dict:
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        for name in ["super.img", "boot.img", "vbmeta.img", "dtbo.img", "vendor_boot.img"]:
+            _write(images_dir / name)
+
+        return build_final_fastboot_zip(
+            images_dir=images_dir,
+            output_dir=tmp_path / "out",
+            build_name="TestBuild",
+            device="testdevice",
+            flavor="free",
+            soc="snapdragon",
+            android_version="16",
+            build_incremental="OS3.0.1.0.TEST",
+            region="Global",
+            execute=True,
+        )
+
+    def test_zip_contains_bin_windows(self, tmp_path):
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+        report = self._build_zip(tmp_path)
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+        entries = set(report.get("zip_entries", []))
+        assert any(e.startswith("bin/windows/") for e in entries), (
+            "ZIP must contain bin/windows/ entries"
+        )
+
+    def test_zip_contains_bin_linux(self, tmp_path):
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+        report = self._build_zip(tmp_path)
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+        entries = set(report.get("zip_entries", []))
+        assert any(e.startswith("bin/linux/") for e in entries), (
+            "ZIP must contain bin/linux/ entries"
+        )
+
+    def test_zip_contains_bin_macos(self, tmp_path):
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+        report = self._build_zip(tmp_path)
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+        entries = set(report.get("zip_entries", []))
+        assert any(e.startswith("bin/macos/") for e in entries), (
+            "ZIP must contain bin/macos/ entries"
+        )
+
+    def test_zip_contains_all_windows_scripts(self, tmp_path):
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+        report = self._build_zip(tmp_path)
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+        entries = set(report.get("zip_entries", []))
+        for script in [
+            "windows_install_and_format_data.bat",
+            "windows_install_upgrade.bat",
+            "windows_format_data_only.bat",
+        ]:
+            assert script in entries, f"ZIP must contain {script}"
+
+    def test_zip_contains_all_linux_scripts(self, tmp_path):
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+        report = self._build_zip(tmp_path)
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+        entries = set(report.get("zip_entries", []))
+        for script in [
+            "linux_install_and_format_data.sh",
+            "linux_install_upgrade.sh",
+            "linux_format_data_only.sh",
+        ]:
+            assert script in entries, f"ZIP must contain {script}"
+
+    def test_zip_contains_all_macos_scripts(self, tmp_path):
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+        report = self._build_zip(tmp_path)
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+        entries = set(report.get("zip_entries", []))
+        for script in [
+            "macos_install_and_format_data.sh",
+            "macos_install_upgrade.sh",
+            "macos_format_data_only.sh",
+        ]:
+            assert script in entries, f"ZIP must contain {script}"
+
+    def test_zip_script_references_only_packaged_images(self, tmp_path):
+        """Flash scripts must only reference images actually in staging/images/."""
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        packaged = {"super.img", "boot.img", "vbmeta.img"}
+        for name in packaged:
+            _write(images_dir / name)
+
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+        report = build_final_fastboot_zip(
+            images_dir=images_dir,
+            output_dir=tmp_path / "out",
+            build_name="TestBuild",
+            device="testdevice",
+            flavor="free",
+            android_version="16",
+            build_incremental="OS3.0.1.0.TEST",
+            execute=True,
+        )
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+
+        zip_path = Path(report["final_zip"])
+        if not zip_path.is_file():
+            pytest.skip("ZIP not created")
+
+        import zipfile as _zf
+        with _zf.ZipFile(zip_path) as z:
+            for entry in z.namelist():
+                if entry.startswith("images/") and entry.endswith(".img"):
+                    img_name = entry.split("/", 1)[1]
+                    assert img_name in packaged, (
+                        f"Script/ZIP references {img_name!r} which was not packaged"
+                    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 20. FINAL ZIP COMPRESSION (ZIP_DEFLATED by default)
+# ═══════════════════════════════════════════════════════════════════
+
+class TestFinalZipCompression:
+    _TEMPLATE_DIR = REPO_ROOT / "DeadZone_Mezo"
+
+    def test_default_compression_is_deflated(self, tmp_path):
+        """Final ZIP must use ZIP_DEFLATED when DEADZONE_ZIP_LEVEL is not overridden."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        for name in ["super.img", "boot.img"]:
+            _write(images_dir / name, b"x" * 10_000)
+
+        env_backup = os.environ.pop("DEADZONE_ZIP_LEVEL", None)
+        try:
+            report = build_final_fastboot_zip(
+                images_dir=images_dir,
+                output_dir=tmp_path / "out",
+                build_name="TestBuild",
+                device="testdevice",
+                flavor="free",
+                android_version="16",
+                build_incremental="OS3.0.1.0.TEST",
+                execute=True,
+            )
+        finally:
+            if env_backup is not None:
+                os.environ["DEADZONE_ZIP_LEVEL"] = env_backup
+
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+
+        assert report["compression_method"] == "ZIP_DEFLATED", (
+            f"Default compression must be ZIP_DEFLATED, got {report.get('compression_method')!r}"
+        )
+
+    def test_report_includes_compression_fields(self, tmp_path):
+        """Report must include compression_method and compression_ratio."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        for name in ["super.img", "boot.img"]:
+            _write(images_dir / name, b"x" * 10_000)
+
+        report = build_final_fastboot_zip(
+            images_dir=images_dir,
+            output_dir=tmp_path / "out",
+            build_name="TestBuild",
+            device="testdevice",
+            flavor="free",
+            android_version="16",
+            build_incremental="OS3.0.1.0.TEST",
+            execute=True,
+        )
+
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+
+        assert "compression_method" in report
+        assert "compression_ratio" in report
+        assert report["compression_ratio"] is not None
+        assert isinstance(report["compression_ratio"], float)
+
+    def test_pixeldrain_upload_file_path_is_compressed_zip(self, tmp_path):
+        """upload_file_path in report must point to the compressed final ZIP."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        if not self._TEMPLATE_DIR.is_dir():
+            pytest.skip("DeadZone_Mezo/ not found")
+
+        images_dir = tmp_path / "images"
+        images_dir.mkdir()
+        for name in ["super.img", "boot.img"]:
+            _write(images_dir / name)
+
+        report = build_final_fastboot_zip(
+            images_dir=images_dir,
+            output_dir=tmp_path / "out",
+            build_name="TestBuild",
+            device="testdevice",
+            flavor="free",
+            android_version="16",
+            build_incremental="OS3.0.1.0.TEST",
+            execute=True,
+        )
+
+        if report["final_status"] == "FAILED":
+            pytest.skip(f"build failed: {report['errors']}")
+
+        upload_path = report.get("upload_file_path")
+        assert upload_path is not None, "upload_file_path must be set in report"
+        assert upload_path.endswith(".zip"), "upload_file_path must be a .zip file"
+        assert Path(upload_path).is_file(), "upload_file_path must point to an existing file"

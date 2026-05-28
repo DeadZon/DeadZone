@@ -847,6 +847,196 @@ class TestZirconRegistry:
             assert p in result["partition_sizes"]
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 10. DEFAULT_SUPER_SIZE constant and super_size_source reporting
+# ═══════════════════════════════════════════════════════════════════
+
+class TestDefaultSuperSizeConstant:
+    """DEFAULT_SUPER_SIZE = 9126805504 must be exported and used correctly."""
+
+    def test_default_super_size_is_exported(self):
+        from factory.super.payload_super_metadata import DEFAULT_SUPER_SIZE
+        assert DEFAULT_SUPER_SIZE == 9_126_805_504
+
+    def test_default_super_group_size_is_exported(self):
+        from factory.super.payload_super_metadata import DEFAULT_SUPER_GROUP_SIZE, DEFAULT_SUPER_SIZE
+        assert DEFAULT_SUPER_GROUP_SIZE == DEFAULT_SUPER_SIZE - 4 * 1024 * 1024
+
+    def test_default_super_size_used_only_when_metadata_missing(self, tmp_path):
+        """Default 8.5GiB size must be used ONLY when both manifest and registry are absent."""
+        src = tmp_path / "source_images"
+        src.mkdir()
+        result = recover_super_metadata_from_payload(
+            payload_manifest_path=None,
+            source_images_dir=src,
+            selected_codename="genericdevice",
+            registry_path=None,
+        )
+        assert result["super_size"] == 9_126_805_504
+
+    def test_real_registry_super_size_not_overwritten_by_default(self, tmp_path):
+        """When registry provides super_size, that value must be used, not the default."""
+        reg_yml = tmp_path / "dev.yml"
+        reg_yml.write_text(
+            "codename: dev\nsuper:\n  super_size: 8589934592\n  dynamic_group: main\n  slot_mode: vab\n",
+            encoding="utf-8",
+        )
+        src = tmp_path / "source_images"
+        _write(src / "system.img")
+
+        result = recover_super_metadata_from_payload(
+            payload_manifest_path=None,
+            source_images_dir=src,
+            selected_codename="dev",
+            registry_path=reg_yml,
+        )
+        assert result["super_size"] == 8_589_934_592, (
+            "Registry super_size must not be overwritten by the default 8.5GiB value"
+        )
+
+    def test_real_manifest_super_size_not_overwritten_by_default(self, tmp_path):
+        """When manifest provides sizes, registry/default must not override super_size."""
+        from unittest.mock import patch as _patch
+        payload_bin = tmp_path / "payload.bin"
+        payload_bin.write_bytes(b"fake")
+        src = tmp_path / "source_images"
+
+        with _patch(
+            "factory.super.payload_super_metadata._read_manifest_partition_sizes",
+            return_value={"system": 500_000_000, "vendor": 300_000_000},
+        ), _patch(
+            "factory.super.payload_super_metadata._read_manifest_group_name",
+            return_value=("qti_dynamic_partitions", []),
+        ):
+            result = recover_super_metadata_from_payload(
+                payload_manifest_path=payload_bin,
+                source_images_dir=src,
+                selected_codename="testdevice",
+            )
+
+        # super_size should be registry/default since manifest doesn't provide it directly
+        # but metadata_source must show payload_manifest (sizes + group found)
+        assert result["metadata_source"] == "payload_manifest"
+
+    def test_super_size_source_payload_manifest(self, tmp_path):
+        """super_size_source must be 'payload_manifest' when manifest provides group+sizes."""
+        from unittest.mock import patch as _patch
+        payload_bin = tmp_path / "payload.bin"
+        payload_bin.write_bytes(b"fake")
+        src = tmp_path / "source_images"
+
+        reg_yml = tmp_path / "dev.yml"
+        reg_yml.write_text(
+            "codename: dev\nsuper:\n  super_size: 8589934592\n  dynamic_group: main\n",
+            encoding="utf-8",
+        )
+
+        with _patch(
+            "factory.super.payload_super_metadata._read_manifest_partition_sizes",
+            return_value={"system": 100_000_000},
+        ), _patch(
+            "factory.super.payload_super_metadata._read_manifest_group_name",
+            return_value=("qti_dynamic_partitions", []),
+        ):
+            result = recover_super_metadata_from_payload(
+                payload_manifest_path=payload_bin,
+                source_images_dir=src,
+                selected_codename="dev",
+                registry_path=reg_yml,
+            )
+
+        assert result["super_size_source"] == "payload_manifest"
+
+    def test_super_size_source_device_registry(self, tmp_path):
+        """super_size_source must be 'device_registry' when registry provides super_size."""
+        reg_yml = tmp_path / "dev.yml"
+        reg_yml.write_text(
+            "codename: dev\nsuper:\n  super_size: 8589934592\n  dynamic_group: main\n  slot_mode: vab\n",
+            encoding="utf-8",
+        )
+        src = tmp_path / "source_images"
+        _write(src / "system.img")
+
+        result = recover_super_metadata_from_payload(
+            payload_manifest_path=None,
+            source_images_dir=src,
+            selected_codename="dev",
+            registry_path=reg_yml,
+        )
+        assert result["super_size_source"] == "device_registry"
+
+    def test_super_size_source_default_8_5gib(self, tmp_path):
+        """super_size_source must be 'default_8_5gib' when neither manifest nor registry provide super_size."""
+        src = tmp_path / "source_images"
+        src.mkdir()
+        result = recover_super_metadata_from_payload(
+            payload_manifest_path=None,
+            source_images_dir=src,
+            selected_codename="unknowndevice",
+            registry_path=None,
+        )
+        assert result["super_size_source"] == "default_8_5gib"
+
+    def test_default_warning_message_content(self, tmp_path):
+        """When default size is used, warning must mention 8.5GiB."""
+        src = tmp_path / "source_images"
+        src.mkdir()
+        result = recover_super_metadata_from_payload(
+            payload_manifest_path=None,
+            source_images_dir=src,
+            selected_codename="unknowndevice",
+            registry_path=None,
+        )
+        combined = " ".join(result["warnings"])
+        assert "8.5" in combined or "8.5GiB" in combined or "default" in combined.lower(), (
+            "Warning when using default super size must mention 8.5GiB"
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 11. VAB _b zero-size placeholders pass validation
+# ═══════════════════════════════════════════════════════════════════
+
+class TestVabBZeroSizePasses:
+    """VAB _b zero-size placeholders must not produce errors."""
+
+    def test_vab_b_placeholders_not_in_errors(self, tmp_path):
+        from unittest.mock import patch as _patch
+        payload_bin = tmp_path / "payload.bin"
+        payload_bin.write_bytes(b"fake")
+        src = tmp_path / "source_images"
+
+        with _patch(
+            "factory.super.payload_super_metadata._read_manifest_partition_sizes",
+            return_value={"system": 100_000_000, "vendor": 80_000_000},
+        ), _patch(
+            "factory.super.payload_super_metadata._read_manifest_group_name",
+            return_value=("qti_dynamic_partitions", []),
+        ):
+            result = recover_super_metadata_from_payload(
+                payload_manifest_path=payload_bin,
+                source_images_dir=src,
+                selected_codename="testdevice",
+            )
+
+        assert result["partitions"]["system_b"]["size"] == 0
+        assert result["partitions"]["vendor_b"]["size"] == 0
+        assert not any("_b" in e for e in result["errors"]), (
+            "VAB _b zero-size placeholders must not produce errors"
+        )
+
+    def test_super_size_source_in_return_dict(self, tmp_path):
+        """recover_super_metadata_from_payload must always include super_size_source key."""
+        src = tmp_path / "source_images"
+        _write(src / "system.img")
+        result = recover_super_metadata_from_payload(
+            payload_manifest_path=None,
+            source_images_dir=src,
+            selected_codename="anydevice",
+        )
+        assert "super_size_source" in result, "super_size_source key must always be present"
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

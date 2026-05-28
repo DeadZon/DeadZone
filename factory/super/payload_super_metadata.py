@@ -42,8 +42,14 @@ if str(_LEGACY_SRC) not in sys.path:
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 _LP_METADATA_OVERHEAD: int = 4 * 1024 * 1024        # 4 MiB geometry overhead
-_DEFAULT_SUPER_SIZE: int   = 9_126_805_504            # ~8.5 GiB
-_DEFAULT_GROUP_NAME: str   = "qti_dynamic_partitions"
+
+# Public constants — importable by callers and tests.
+DEFAULT_SUPER_SIZE: int      = 9_126_805_504          # ~8.5 GiB
+DEFAULT_SUPER_GROUP_SIZE: int = DEFAULT_SUPER_SIZE - _LP_METADATA_OVERHEAD
+
+# Private aliases for internal use.
+_DEFAULT_SUPER_SIZE: int     = DEFAULT_SUPER_SIZE
+_DEFAULT_GROUP_NAME: str     = "qti_dynamic_partitions"
 _DEFAULT_METADATA_SLOTS: int = 3
 
 _DYNAMIC_BASES: frozenset[str] = frozenset([
@@ -277,6 +283,7 @@ def recover_super_metadata_from_payload(
     )
 
     super_size_raw: int = registry_profile.get("super_size", 0)
+    _used_default_super_size = False
 
     if super_size_raw <= 0:
         # Estimate from partition sizes if both manifest and registry are silent
@@ -286,10 +293,13 @@ def recover_super_metadata_from_payload(
             warnings.append(
                 f"super_size unknown — estimated as max(2×partitions, default): {super_size_raw}"
             )
+            if super_size_raw == _DEFAULT_SUPER_SIZE:
+                _used_default_super_size = True
         else:
             super_size_raw = _DEFAULT_SUPER_SIZE
+            _used_default_super_size = True
             warnings.append(
-                f"super_size unknown and no partition sizes available — using default: {super_size_raw}"
+                "Using default 8.5GiB super size because source metadata was incomplete."
             )
 
     metadata_slots: int = registry_profile.get("metadata_slots", _DEFAULT_METADATA_SLOTS)
@@ -299,8 +309,12 @@ def recover_super_metadata_from_payload(
     # ── Determine metadata_source ─────────────────────────────────────────────
     if manifest_sizes and (manifest_group or registry_profile.get("group_name")):
         metadata_source = "payload_manifest"
+        super_size_source = "payload_manifest"
     elif registry_profile:
         metadata_source = "device_registry"
+        super_size_source = "device_registry" if registry_profile.get("super_size") else "default_8_5gib"
+        if _used_default_super_size:
+            super_size_source = "default_8_5gib"
         if not partition_sizes:
             errors.append(
                 f"Cannot rebuild super.img: no partition sizes in payload manifest "
@@ -311,6 +325,7 @@ def recover_super_metadata_from_payload(
             )
     else:
         metadata_source = "calculated_fallback"
+        super_size_source = "default_8_5gib"
         attempted.append("calculated_fallback")
         if not partition_sizes:
             errors.append(
@@ -355,6 +370,7 @@ def recover_super_metadata_from_payload(
 
     return {
         "metadata_source":   metadata_source,
+        "super_size_source": super_size_source,
         "super_size":        super_size_raw,
         "group_name":        group_name,
         "group_size":        group_size,

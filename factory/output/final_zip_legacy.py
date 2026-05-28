@@ -18,12 +18,28 @@ from .flash_scripts import (
 )
 from .report import write_final_fastboot_zip_report
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# All 9 scripts in the DeadZone_Mezo final package.
+_ALL_SCRIPT_NAMES: list[str] = [
+    "windows_install_and_format_data.bat",
+    "windows_install_upgrade.bat",
+    "windows_format_data_only.bat",
+    "linux_install_and_format_data.sh",
+    "linux_install_upgrade.sh",
+    "linux_format_data_only.sh",
+    "macos_install_and_format_data.sh",
+    "macos_install_upgrade.sh",
+    "macos_format_data_only.sh",
+]
 
 REQUIRED_PUBLIC_FILES = [
     "bin/windows/fastboot.exe",
     "bin/windows/AdbWinApi.dll",
     "bin/windows/AdbWinUsbApi.dll",
-    *SCRIPT_NAMES,
+    "bin/linux/fastboot",
+    "bin/macos/fastboot",
+    *_ALL_SCRIPT_NAMES,
 ]
 
 # Images packed inside super.img — excluded from the public ZIP when super.img is present.
@@ -155,7 +171,15 @@ def _is_allowed_entry(name: str) -> bool:
     normalized = _normalize_entry(name)
     if normalized in REQUIRED_PUBLIC_FILES:
         return True
-    return normalized.startswith("images/") and normalized.endswith(".img") and normalized.count("/") == 1
+    if normalized.startswith("images/") and normalized.endswith(".img") and normalized.count("/") == 1:
+        return True
+    # Allow all META-INF entries from the DeadZone_Mezo template
+    if normalized.lower().startswith("meta-inf/"):
+        return True
+    # Allow linux/macos binaries under bin/
+    if normalized.startswith("bin/linux/") or normalized.startswith("bin/macos/"):
+        return True
+    return False
 
 
 def _forbidden_reason(name: str) -> str | None:
@@ -291,7 +315,18 @@ def _report_base(
         "validation_status": "NOT_RUN",
         "warnings": [],
         "errors": [],
-        "compression_mode": f"ZIP_DEFLATED compresslevel={os.environ.get('DEADZONE_ZIP_LEVEL', '9')}",
+        "compression_mode": f"ZIP_DEFLATED compresslevel={os.environ.get('DEADZONE_ZIP_LEVEL', '6')}",
+        "compression_method": "ZIP_DEFLATED",
+        "compression_level": int(os.environ.get("DEADZONE_ZIP_LEVEL", "6")),
+        "uncompressed_size_mib": None,
+        "compressed_zip_size_mib": None,
+        "compression_ratio": None,
+        "upload_file_path": None,
+        "template_source": "DeadZone_Mezo",
+        "flash_method_changed": False,
+        "dynamic_flash_commands": True,
+        "scripts_patched": [],
+        "final_structure": "DeadZone_Mezo",
         "super_img_detected": False,
         "super_img_source": None,
         "bootchain_images_required": REQUIRED_BOOTCHAIN_IMAGES,
@@ -333,6 +368,17 @@ def _write_github_summary_missing(missing: list[str], device: str) -> None:
         fh.write("\n".join(lines) + "\n")
 
 
+def _find_deadzone_mezo_dir() -> Path | None:
+    candidates = [
+        _REPO_ROOT / "DeadZone_Mezo",
+        Path("DeadZone_Mezo"),
+    ]
+    for cand in candidates:
+        if cand.is_dir() and (cand / "bin" / "windows").is_dir():
+            return cand
+    return None
+
+
 def build_final_fastboot_zip(
     images_dir: Path,
     output_dir: Path,
@@ -342,11 +388,12 @@ def build_final_fastboot_zip(
     soc: str | None = None,
     template_zip: Path | None = None,
     execute: bool = False,
-    # Optional ROM metadata forwarded to the BAT header generator
+    # Optional ROM metadata forwarded to the script banner generator
     device_model: str | None = None,
     android_version: str | None = None,
     build_incremental: str | None = None,
     platform: str | None = None,
+    region: str | None = None,
 ) -> dict:
     images_dir = Path(images_dir)
     output_dir = Path(output_dir)
@@ -475,44 +522,51 @@ def build_final_fastboot_zip(
     else:
         print("[final_zip] dynamic_images_excluded_from_final_zip=(none)")
 
-    template_result = prepare_fastboot_template(staging_dir, template_zip=template_zip, execute=False)
-    report["template_source"] = template_result.get("template_source")
-    report["files_copied"].extend(template_result.get("files_copied", []))
-    report["warnings"].extend(template_result.get("warnings", []))
-    report["errors"].extend(template_result.get("errors", []))
-    if template_result.get("status") in {"FAILED", "SKIPPED_MISSING_TEMPLATE"}:
+    # Locate DeadZone_Mezo directory (template_zip ignored; we use the directory template)
+    dz_mezo_dir = _find_deadzone_mezo_dir()
+    if dz_mezo_dir is None:
+        report["errors"].append(
+            "SKIPPED_MISSING_TEMPLATE: DeadZone_Mezo/ template directory not found"
+        )
         report["validation_status"] = "FAILED"
         report["final_status"] = "FAILED"
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
+    report["template_source"] = "DeadZone_Mezo"
 
     if not execute:
+        from .deadzone_template_patcher import patch_deadzone_template as _patch
+        dry_patch = _patch(
+            template_dir=dz_mezo_dir,
+            staging_dir=staging_dir / "_dry_run_check",
+            images_dir=images_dir,
+            selected_codename=device,
+            edition=(flavor or "free").title(),
+            android_version=android_version or "",
+            build_incremental=build_incremental or "",
+            region=region or "",
+            execute=False,
+            reports_dir=reports_dir,
+        )
+        if dry_patch.get("errors"):
+            report["errors"].extend(dry_patch["errors"])
+        report["warnings"].extend(dry_patch.get("warnings", []))
+        report["scripts_generated"] = dry_patch.get("scripts_patched") or list(_ALL_SCRIPT_NAMES)
+        report["scripts_patched"] = report["scripts_generated"]
+        report["dynamic_flash_commands"] = True
+
         planned_entries = [
             *(f"bin/windows/{name}" for name in REQUIRED_BIN_FILES),
+            "bin/linux/fastboot",
+            "bin/macos/fastboot",
             *(f"images/{path.name}" for path in image_files),
-            *SCRIPT_NAMES,
+            *_ALL_SCRIPT_NAMES,
         ]
         validation_status, forbidden = _validate_entries(planned_entries)
-        script_result = generate_windows_flash_scripts(
-            staging_dir, images_dir,
-            device=device, soc=soc, platform=platform, flavor=flavor,
-            device_model=device_model, android_version=android_version,
-            build_incremental=build_incremental,
-            execute=False,
-        )
-        if script_result.get("status") == "FAILED":
-            report["errors"].append(
-                f"flash script generation failed: {script_result.get('error', 'unknown error')}"
-            )
-            report["validation_status"] = "FAILED"
-            report["final_status"] = "FAILED"
-            report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
-            return report
-        report["scripts_generated"] = script_result["scripts_generated"]
         report["zip_entries"] = planned_entries
         report["forbidden_entries"] = forbidden
         report["validation_status"] = validation_status
-        report["final_status"] = "DRY_RUN" if validation_status == "PASSED" else "FAILED"
+        report["final_status"] = "DRY_RUN" if (validation_status == "PASSED" and not report["errors"]) else "FAILED"
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
@@ -521,39 +575,44 @@ def build_final_fastboot_zip(
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    template_result = prepare_fastboot_template(staging_dir, template_zip=template_zip, execute=True)
-    report["files_copied"] = template_result.get("files_copied", [])
-    report["template_source"] = template_result.get("template_source")
-    report["warnings"].extend(template_result.get("warnings", []))
-    report["errors"].extend(template_result.get("errors", []))
-    if template_result.get("status") != "APPLIED":
+
+    # Use patch_deadzone_template: copies full DeadZone_Mezo tree to staging,
+    # patches all 9 scripts with banner + dynamic flash commands, clears staging/images/.
+    from .deadzone_template_patcher import patch_deadzone_template as _patch
+    patch_result = _patch(
+        template_dir=dz_mezo_dir,
+        staging_dir=staging_dir,
+        images_dir=images_dir,
+        selected_codename=device,
+        edition=(flavor or "free").title(),
+        android_version=android_version or "",
+        build_incremental=build_incremental or "",
+        region=region or "",
+        execute=True,
+        reports_dir=reports_dir,
+    )
+    if patch_result.get("status") == "FAILED":
+        report["errors"].extend(patch_result.get("errors", []))
+        report["warnings"].extend(patch_result.get("warnings", []))
         report["validation_status"] = "FAILED"
         report["final_status"] = "FAILED"
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
+
+    report["files_copied"] = list(patch_result.get("scripts_patched", []))
+    report["template_source"] = "DeadZone_Mezo"
+    report["scripts_generated"] = patch_result.get("scripts_patched") or []
+    report["scripts_patched"] = report["scripts_generated"]
+    report["flash_method_changed"] = False
+    report["dynamic_flash_commands"] = True
+    report["final_structure"] = "DeadZone_Mezo"
+    report["warnings"].extend(patch_result.get("warnings", []))
 
     staged_images = staging_dir / "images"
     staged_images.mkdir(parents=True, exist_ok=True)
     for image in image_files:
         shutil.copy2(image, staged_images / image.name)
         report["files_copied"].append(f"images/{image.name}")
-
-    script_result = generate_windows_flash_scripts(
-        staging_dir, staged_images,
-        device=device, soc=soc, platform=platform, flavor=flavor,
-        device_model=device_model, android_version=android_version,
-        build_incremental=build_incremental,
-        execute=True,
-    )
-    if script_result.get("status") == "FAILED":
-        report["errors"].append(
-            f"flash script generation failed: {script_result.get('error', 'unknown error')}"
-        )
-        report["validation_status"] = "FAILED"
-        report["final_status"] = "FAILED"
-        report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
-        return report
-    report["scripts_generated"] = script_result["scripts_generated"]
 
     staging_entries = [_normalize_entry(str(path.relative_to(staging_dir))) for path in _iter_staging_files(staging_dir)]
     validation_status, forbidden = _validate_entries(staging_entries)
@@ -565,25 +624,52 @@ def build_final_fastboot_zip(
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
-    # Honour DEADZONE_ZIP_LEVEL env var (default 9; Free builds set it to 0 for speed).
-    _zip_level = int(os.environ.get("DEADZONE_ZIP_LEVEL", "9"))
+    # Honour DEADZONE_ZIP_LEVEL env var (default 6; set to 0 for uncompressed).
+    _zip_level = int(os.environ.get("DEADZONE_ZIP_LEVEL", "6"))
     _zip_compression = zipfile.ZIP_STORED if _zip_level == 0 else zipfile.ZIP_DEFLATED
-    report["compression_mode"] = f"ZIP_{'STORED' if _zip_level == 0 else 'DEFLATED'} compresslevel={_zip_level}"
+    _method_name = "ZIP_STORED" if _zip_level == 0 else "ZIP_DEFLATED"
+    report["compression_mode"] = f"{_method_name} compresslevel={_zip_level}"
+    report["compression_method"] = _method_name
+    report["compression_level"] = _zip_level
     print(f"[final_zip] compression_mode={report['compression_mode']}")
+
+    # Compute uncompressed total size before writing ZIP
+    _uncompressed_bytes = sum(p.stat().st_size for p in _iter_staging_files(staging_dir))
+    _uncompressed_mib = _uncompressed_bytes / (1024 * 1024)
+    report["uncompressed_size_mib"] = round(_uncompressed_mib, 1)
 
     if final_zip.exists():
         final_zip.unlink()
-    with zipfile.ZipFile(final_zip, "w", _zip_compression, compresslevel=_zip_level if _zip_level > 0 else None) as zf:
-        for path in _iter_staging_files(staging_dir):
-            arcname = _normalize_entry(str(path.relative_to(staging_dir)))
-            zf.write(path, arcname)
+    try:
+        with zipfile.ZipFile(final_zip, "w", _zip_compression, compresslevel=_zip_level if _zip_level > 0 else None) as zf:
+            for path in _iter_staging_files(staging_dir):
+                arcname = _normalize_entry(str(path.relative_to(staging_dir)))
+                zf.write(path, arcname)
+    except Exception as _zip_exc:
+        report["warnings"].append(
+            f"Compressed ZIP failed ({_zip_exc}); falling back to ZIP_STORED"
+        )
+        with zipfile.ZipFile(final_zip, "w", zipfile.ZIP_STORED) as zf:
+            for path in _iter_staging_files(staging_dir):
+                arcname = _normalize_entry(str(path.relative_to(staging_dir)))
+                zf.write(path, arcname)
+        report["compression_method"] = "ZIP_STORED"
+        report["compression_level"] = 0
+        report["compression_mode"] = "ZIP_STORED compresslevel=0 (fallback)"
 
     zip_size_bytes = final_zip.stat().st_size
     zip_size_mib = zip_size_bytes / (1024 * 1024)
     report["zip_size_mib"] = round(zip_size_mib, 1)
     report["final_zip_size_mib"] = report["zip_size_mib"]
+    report["compressed_zip_size_mib"] = report["zip_size_mib"]
+    report["upload_file_path"] = str(final_zip)
+    if _uncompressed_bytes > 0:
+        report["compression_ratio"] = round(zip_size_bytes / _uncompressed_bytes, 4)
+    else:
+        report["compression_ratio"] = 1.0
     print(f"[final_zip] zip_size_mib={zip_size_mib:.1f}")
     print(f"[final_zip] final_zip_size_mib={zip_size_mib:.1f}")
+    print(f"[final_zip] compression_ratio={report['compression_ratio']}")
     if zip_size_mib > 6000:
         msg = f"Final ZIP size {zip_size_mib:.1f} MiB exceeds 6000 MiB — verify no duplicate images were included"
         report["warnings"].append(msg)
@@ -623,6 +709,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--android-version", default=None)
     parser.add_argument("--build-incremental", default=None)
     parser.add_argument("--platform", default=None)
+    parser.add_argument("--region", default=None)
     return parser
 
 
@@ -641,6 +728,7 @@ def main(argv: list[str] | None = None) -> int:
         android_version=args.android_version,
         build_incremental=args.build_incremental,
         platform=args.platform,
+        region=getattr(args, "region", None),
     )
     print(f"final_status={report['final_status']}")
     print(f"validation_status={report['validation_status']}")

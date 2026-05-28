@@ -920,6 +920,7 @@ def run_smart_base_engine(
                     device_model=ctx.device_model,
                     android_version=ctx.android_version,
                     build_incremental=ctx.mi_incremental,
+                    region=getattr(ctx, "region", None) or "",
                     execute=True,
                 )
 

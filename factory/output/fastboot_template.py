@@ -19,6 +19,7 @@ def _repo_root() -> Path:
 def _find_default_template_dir() -> Path | None:
     root = _repo_root()
     candidates = [
+        root / "DeadZone_Mezo",
         root / "third_party" / "mezo_core" / "templates" / "deadzone_fastboot",
     ]
     for candidate in candidates:
