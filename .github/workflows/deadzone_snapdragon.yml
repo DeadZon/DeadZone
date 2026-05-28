@@ -4,8 +4,99 @@ on:
   workflow_dispatch:
     inputs:
       codename:
-        description: "Device codename (e.g. garnet, fuxi, aurora)"
+        description: "Select target device"
         required: true
+        type: choice
+        options:
+          # AUTO-GENERATED DEVICE OPTIONS START
+          - gauguin | Mi 10T / Mi 10T Pro
+          - opal | POCO X4 Pro 5G
+          - moonstone | POCO X5 5G
+          - sky | Redmi 12 5G / Redmi Note 12R / POCO M6 Pro 5G
+          - breeze | Redmi 13 5G / Redmi Note 13R / POCO M6 Plus 5G
+          - flame | Redmi 14R 5G / Redmi 14C 5G / POCO M7 5G
+          - lmi | Redmi K30 Pro / POCO F2 Pro
+          - apollo | Redmi K30S Ultra
+          - alioth | Redmi K40 / POCO F3
+          - haydn | Redmi K40 Pro / K40 Pro+ / Mi 11i
+          - munch | Redmi K40S / POCO F4
+          - ingres | Redmi K50 Gaming / POCO F4 GT
+          - mondrian | Redmi K60 / POCO F5 Pro
+          - socrates | Redmi K60 Pro
+          - vermeer | Redmi K70
+          - zorn | Redmi K80 / POCO F7 Pro
+          - miro | Redmi K80 Pro / POCO F7 Ultra
+          - myron | Redmi K90 Pro Max / POCO F8 Ultra
+          - sweet | Redmi Note 10 Pro
+          - curtana | Redmi Note 11 Pro (India)
+          - tapas | Redmi Note 12 4G
+          - topaz | Redmi Note 12 4G NFC
+          - sunstone | Redmi Note 12 5G / Redmi Note 12R Pro
+          - redwood | Redmi Note 12 Pro Speed / POCO X5 Pro 5G
+          - marble | Redmi Note 12 Turbo / POCO F5
+          - sapphire | Redmi Note 13 4G
+          - sapphiren | Redmi Note 13 4G NFC
+          - garnet | Redmi Note 13 Pro 5G / POCO X6 5G
+          - amethyst | Redmi Note 14 Pro+ 5G
+          - dizi | Redmi Pad Pro
+          - ruan | Redmi Pad Pro 5G / POCO Pad 5G
+          - xun | Redmi Pad SE
+          - peridot | Redmi Turbo 3 / POCO F6
+          - onyx | Redmi Turbo 4 Pro / POCO F7
+          - lisa | Xiaomi 11 Lite 5G NE
+          - peux | Xiaomi 11 Pro
+          - vili | Xiaomi 11T Pro
+          - cupid | Xiaomi 12
+          - taoyao | Xiaomi 12 Lite 5G
+          - zeus | Xiaomi 12 Pro
+          - mayfly | Xiaomi 12S
+          - unicorn | Xiaomi 12S Pro
+          - thor | Xiaomi 12S Ultra
+          - diting | Xiaomi 12T Pro / Redmi K50 Ultra
+          - psyche | Xiaomi 12X
+          - fuxi | Xiaomi 13
+          - ziyi | Xiaomi 13 Lite / Xiaomi Civi 2
+          - nuwa | Xiaomi 13 Pro
+          - ishtar | Xiaomi 13 Ultra
+          - houji | Xiaomi 14
+          - shennong | Xiaomi 14 Pro
+          - aurora | Xiaomi 14 Ultra
+          - dada | Xiaomi 15
+          - haotian | Xiaomi 15 Pro
+          - xuanyuan | Xiaomi 15 Ultra
+          - pudding | Xiaomi 17
+          - pandora | Xiaomi 17 Pro
+          - popsicle | Xiaomi 17 Pro Max
+          - nezha | Xiaomi 17 Ultra
+          - zijin | Xiaomi Civi 1S
+          - chenfeng | Xiaomi Civi 4 Pro
+          - umi | Xiaomi Mi 10
+          - cmi | Xiaomi Mi 10 Pro
+          - cas | Xiaomi Mi 10 Ultra
+          - thyme | Xiaomi Mi 10S
+          - venus | Xiaomi Mi 11
+          - star | Xiaomi Mi 11 Ultra
+          - odin | Xiaomi MIX 4
+          - zizhan | Xiaomi MIX Fold 2
+          - babylon | Xiaomi MIX Fold 3
+          - goku | Xiaomi MIX Fold 4
+          - nabu | Xiaomi Pad 5
+          - elish | Xiaomi Pad 5 Pro
+          - dagu | Xiaomi Pad 5 Pro 12.4
+          - enuma | Xiaomi Pad 5 Pro 5G
+          - pipa | Xiaomi Pad 6
+          - yudi | Xiaomi Pad 6 Max 14
+          - liuqin | Xiaomi Pad 6 Pro
+          - sheng | Xiaomi Pad 6S Pro 12.4
+          - uke | Xiaomi Pad 7
+          - muyu | Xiaomi Pad 7 Pro
+          - yupei | Xiaomi Pad 8
+          - piano | Xiaomi Pad 8 Pro
+          # AUTO-GENERATED DEVICE OPTIONS END
+
+      codename_override:
+        description: "Optional codename override (leave blank to use dropdown)"
+        required: false
         type: string
 
       edition:
@@ -75,7 +166,7 @@ concurrency:
 
 jobs:
   build:
-    name: "Snapdragon | ${{ inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
+    name: "Snapdragon | ${{ inputs.codename_override || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
@@ -107,18 +198,39 @@ jobs:
           echo "[OK] rom_source = $ROM_SOURCE"
           echo "[OK] Basic inputs validated."
 
-      - name: Resolve device codename
+      - name: Resolve selected device
         run: |
           set -euo pipefail
 
-          CODENAME="${{ inputs.codename }}"
-          CODENAME="$(echo "$CODENAME" | xargs)"
+          SELECTED="${{ inputs.codename }}"
+          CUSTOM="${{ inputs.codename_override }}"
 
-          if [ -z "$CODENAME" ]; then
-            echo "[ERROR] codename is required. Enter a device codename like zircon or garnet."
+          if [ -z "$SELECTED" ]; then
+            echo "[ERROR] select_device is required."
             exit 1
           fi
 
+          # Parse codename (left of " | ")
+          CODENAME="${SELECTED%% | *}"
+          CODENAME="$(echo "$CODENAME" | xargs)"
+
+          if [ -z "$CODENAME" ] || [ "$CODENAME" = "$SELECTED" ]; then
+            echo "[ERROR] Could not parse codename from: $SELECTED"
+            echo "[ERROR] Expected format: codename | Display Name"
+            exit 1
+          fi
+
+          # Parse display name (right of " | ")
+          DISPLAY_NAME="${SELECTED#*| }"
+          DISPLAY_NAME="$(echo "$DISPLAY_NAME" | xargs)"
+
+          # Override codename with custom_device if set
+          if [ -n "$CUSTOM" ]; then
+            echo "[DEVICE] Overriding dropdown codename '$CODENAME' with custom_device='$CUSTOM'"
+            CODENAME="$(echo "$CUSTOM" | xargs)"
+          fi
+
+          # Guard against placeholder values
           for BAD in select_device_codename select_device device none null default; do
             if [ "$CODENAME" = "$BAD" ]; then
               echo "[ERROR] Invalid device codename: $CODENAME"
@@ -126,6 +238,7 @@ jobs:
             fi
           done
 
+          # Resolve ROM URL based on rom_source
           ROM_SOURCE="${{ inputs.rom_source }}"
           ROM_URL="${{ inputs.rom_url }}"
           DEADZONE_ROM_URL=""
@@ -146,16 +259,18 @@ jobs:
             exit 1
           fi
 
+          # Write resolved values to GITHUB_ENV
           {
             echo "DEADZONE_DEVICE_CODENAME=$CODENAME"
-            echo "DEADZONE_DEVICE_DISPLAY_NAME=$CODENAME"
+            echo "DEADZONE_DEVICE_DISPLAY_NAME=$DISPLAY_NAME"
             echo "DEADZONE_ROM_URL=$DEADZONE_ROM_URL"
             echo "DEADZONE_ROM_SOURCE=$ROM_SOURCE"
           } >> "$GITHUB_ENV"
 
-          echo "[DEVICE] codename   = $CODENAME"
-          echo "[DEVICE] rom_source = $ROM_SOURCE"
-          echo "[DEVICE] rom_url    = $DEADZONE_ROM_URL"
+          echo "[DEVICE] codename     = $CODENAME"
+          echo "[DEVICE] display_name = $DISPLAY_NAME"
+          echo "[DEVICE] rom_source   = $ROM_SOURCE"
+          echo "[DEVICE] rom_url      = $DEADZONE_ROM_URL"
 
       - name: Normalize inputs
         id: norm
@@ -278,7 +393,7 @@ jobs:
           echo "[DL] ROM download validated OK."
           echo "rom_path=$ROM_FILE" >> "$GITHUB_OUTPUT"
 
-      - name: Run factory pipeline (SNAPDRAGON local — execute)
+      - name: Run factory pipeline (Snapdragon local — execute)
         if: steps.norm.outputs.mode == 'execute'
         env:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
@@ -324,7 +439,7 @@ jobs:
               exit 1
             }
 
-      - name: Run factory pipeline (SNAPDRAGON local — dry_run)
+      - name: Run factory pipeline (Snapdragon local — dry_run)
         if: steps.norm.outputs.mode != 'execute'
         env:
           TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
@@ -369,7 +484,7 @@ jobs:
           set +e
           python scripts/write_device_selection_report.py \
             --codename      "$DEADZONE_DEVICE_CODENAME" \
-            --display-name  "$DEADZONE_DEVICE_CODENAME" \
+            --display-name  "$DEADZONE_DEVICE_DISPLAY_NAME" \
             --select-device "${{ inputs.codename }}" \
             --rom-source    "$DEADZONE_ROM_SOURCE" \
             --rom-url       "$DEADZONE_ROM_URL" \
