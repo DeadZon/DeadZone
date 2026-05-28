@@ -1018,21 +1018,17 @@ class TestZornFastbootTgzPreserveSuperImg:
         )
         assert "lpmake executed        : False" in content
 
-    def test_free_pipeline_uses_legacy_engine_runner(self):
-        """run_free_pipeline must call run_legacy_engine from legacy_engine_runner."""
-        from factory.pipeline.legacy_engine_runner import run_legacy_engine as _real_engine
-        import factory.pipeline.legacy_engine_runner as engine_mod
+    def test_free_pipeline_uses_smart_base_engine(self):
+        """run_free_pipeline must call run_smart_base_engine with edition='free'."""
+        import factory.engine.smart_base_engine as engine_mod
 
         called_with = []
-        original = engine_mod.run_legacy_engine
+        original = engine_mod.run_smart_base_engine
 
-        def _spy(context, notifier, output_dir, template_zip, pipeline_start,
-                 edition="free", apply_mods=False, fast_mode=True,
-                 use_universal_detector=True):
+        def _spy(context, edition="free", apply_mods=False, force_codename=False, **kw):
             called_with.append({
                 "edition": edition,
                 "apply_mods": apply_mods,
-                "fast_mode": fast_mode,
             })
             return {
                 "final_status": "DRY_RUN",
@@ -1050,7 +1046,7 @@ class TestZornFastbootTgzPreserveSuperImg:
                 "report_files": {},
             }
 
-        engine_mod.run_legacy_engine = _spy
+        engine_mod.run_smart_base_engine = _spy
         try:
             from factory.pipeline.free_pipeline import run_free_pipeline
             from factory.pipeline.context import BuildContext
@@ -1075,23 +1071,22 @@ class TestZornFastbootTgzPreserveSuperImg:
                     pipeline_start=time.monotonic(),
                 )
         finally:
-            engine_mod.run_legacy_engine = original
+            engine_mod.run_smart_base_engine = original
 
-        assert called_with, "run_legacy_engine must be called by run_free_pipeline"
+        assert called_with, "run_smart_base_engine must be called by run_free_pipeline"
         assert called_with[0]["edition"] == "free"
         assert called_with[0]["apply_mods"] is False, (
-            "Free pipeline must pass apply_mods=False to the engine"
+            "Free pipeline must pass apply_mods=False to the smart engine"
         )
 
     def test_free_pipeline_passes_apply_mods_false(self):
-        """run_free_pipeline must always pass apply_mods=False."""
-        import factory.pipeline.legacy_engine_runner as engine_mod
+        """run_free_pipeline must always pass apply_mods=False to smart engine."""
+        import factory.engine.smart_base_engine as engine_mod
 
         apply_mods_values = []
-        original = engine_mod.run_legacy_engine
+        original = engine_mod.run_smart_base_engine
 
-        def _spy(context, notifier, output_dir, template_zip, pipeline_start,
-                 edition="free", apply_mods=False, **kw):
+        def _spy(context, edition="free", apply_mods=False, **kw):
             apply_mods_values.append(apply_mods)
             return {
                 "final_status": "DRY_RUN", "build_id": None,
@@ -1103,7 +1098,7 @@ class TestZornFastbootTgzPreserveSuperImg:
                 "stage_reports": {}, "report_files": {},
             }
 
-        engine_mod.run_legacy_engine = _spy
+        engine_mod.run_smart_base_engine = _spy
         try:
             from factory.pipeline.free_pipeline import run_free_pipeline
             from factory.pipeline.context import BuildContext
@@ -1118,9 +1113,9 @@ class TestZornFastbootTgzPreserveSuperImg:
                                   source="test", output_dir=Path(tmp) / "output",
                                   template_zip=None, pipeline_start=time.monotonic())
         finally:
-            engine_mod.run_legacy_engine = original
+            engine_mod.run_smart_base_engine = original
 
-        assert apply_mods_values, "run_legacy_engine was not called"
+        assert apply_mods_values, "run_smart_base_engine was not called"
         assert all(v is False for v in apply_mods_values), (
             f"apply_mods must always be False for Free, got: {apply_mods_values}"
         )
@@ -1416,13 +1411,14 @@ class TestCleanupOrderPreservesDownloadedRom:
         )
 
     def test_free_pipeline_does_not_call_detect_rom_after_deleting_input_rom(self):
-        """run_free_pipeline must not reach detect_rom with a deleted input ROM.
+        """run_free_pipeline must not delete the input ROM before analysis.
 
-        This test simulates the zorn failure: ROM downloaded to _input_roms/ before
-        the pipeline starts.  free_pipeline must preserve the ROM so detect_rom sees it.
+        Simulates the zorn failure: ROM downloaded to _input_roms/ before the pipeline
+        starts.  Smart Base Engine must preserve the ROM so analyze_rom sees it.
         """
         from factory.pipeline.context import BuildContext
         from factory.pipeline.free_pipeline import run_free_pipeline
+        import factory.input.universal_rom_intake as _intake_mod
         import time
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1430,7 +1426,6 @@ class TestCleanupOrderPreservesDownloadedRom:
             input_roms = Path(tmp) / "_input_roms"
             input_roms.mkdir()
             rom_file = input_roms / "source_rom.tgz"
-            # Write a real TGZ so detect_rom can parse it if we reach that stage
             import tarfile as _tarfile
             import io as _io
             with _tarfile.open(str(rom_file), "w:gz") as tf:
@@ -1453,19 +1448,17 @@ class TestCleanupOrderPreservesDownloadedRom:
                 output_dir=output_dir,
             )
 
-            # Run free pipeline — it must NOT delete rom_file via preflight_cleanup
-            # (detect_rom may still fail for other reasons since we have no super.img,
-            # but the ROM file itself must still exist when detect_rom is called)
-            detect_called_with_existing_file: list[bool] = []
+            # Spy on analyze_rom — the smart engine's detection entry point.
+            # Verify the ROM file still exists when analysis is invoked, proving
+            # that preflight_cleanup did NOT delete _input_roms/ before detection.
+            analyze_called_with_existing_file: list[bool] = []
+            _orig_analyze = _intake_mod.analyze_rom
 
-            from factory.input import rom_detector as _rd
-            _orig_detect = _rd.detect_rom_format
+            def _spy_analyze(rom_path, **kw):
+                analyze_called_with_existing_file.append(Path(rom_path).exists())
+                return _orig_analyze(rom_path, **kw)
 
-            def _spy_detect(path):
-                detect_called_with_existing_file.append(Path(path).exists())
-                return _orig_detect(path)
-
-            _rd.detect_rom_format = _spy_detect
+            _intake_mod.analyze_rom = _spy_analyze
             try:
                 run_free_pipeline(
                     ctx=ctx,
@@ -1477,11 +1470,11 @@ class TestCleanupOrderPreservesDownloadedRom:
                     pipeline_start=time.monotonic(),
                 )
             finally:
-                _rd.detect_rom_format = _orig_detect
+                _intake_mod.analyze_rom = _orig_analyze
 
-        assert detect_called_with_existing_file, "detect_rom_format must have been called"
-        assert detect_called_with_existing_file[0] is True, (
-            "ROM file must exist when detect_rom_format is called. "
+        assert analyze_called_with_existing_file, "analyze_rom must have been called"
+        assert analyze_called_with_existing_file[0] is True, (
+            "ROM file must exist when analyze_rom is called. "
             "preflight_cleanup must not have deleted _input_roms/ before detection."
         )
 
@@ -2407,16 +2400,14 @@ class TestEditionEngineUnification:
         assert strategy == STRATEGY_REBUILD_MODIFIED
 
     def test_only_mod_layer_differs_between_free_and_legend(self):
-        """The only difference between Free and Legend in engine output must be
-        the apply_mods flag — not the engine used."""
-        import factory.pipeline.legacy_engine_runner as engine_mod
+        """Free and Legend both route through run_smart_base_engine — only apply_mods differs."""
+        import factory.engine.smart_base_engine as engine_mod
         import time
 
-        calls = []
-        original = engine_mod.run_legacy_engine
+        calls: list[dict] = []
+        original = engine_mod.run_smart_base_engine
 
-        def _spy(context, notifier, output_dir, template_zip, pipeline_start,
-                 edition="free", apply_mods=False, **kw):
+        def _spy(context, edition="free", apply_mods=False, **kw):
             calls.append({"edition": edition, "apply_mods": apply_mods})
             return {
                 "final_status": "DRY_RUN",
@@ -2432,7 +2423,7 @@ class TestEditionEngineUnification:
                 "stage_reports": {}, "report_files": {},
             }
 
-        engine_mod.run_legacy_engine = _spy
+        engine_mod.run_smart_base_engine = _spy
         try:
             from factory.pipeline.free_pipeline import run_free_pipeline
             from factory.pipeline.context import BuildContext
@@ -2449,11 +2440,11 @@ class TestEditionEngineUnification:
                     template_zip=None, pipeline_start=time.monotonic(),
                 )
         finally:
-            engine_mod.run_legacy_engine = original
+            engine_mod.run_smart_base_engine = original
 
-        assert calls, "run_legacy_engine must have been called"
+        assert calls, "run_smart_base_engine must have been called by run_free_pipeline"
         assert calls[0]["apply_mods"] is False, (
-            "Free edition must pass apply_mods=False to run_legacy_engine"
+            "Free edition must pass apply_mods=False to run_smart_base_engine"
         )
 
     def test_free_pipeline_does_not_call_legend_mod_runner(self):

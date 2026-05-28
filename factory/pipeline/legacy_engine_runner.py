@@ -1,8 +1,23 @@
-"""Shared legacy/legend engine runner for DeadZone Factory.
+"""Legacy/legend engine runner for DeadZone Factory.
+
+DEPRECATION NOTICE
+------------------
+This module is the *legacy* engine.  New code should use:
+
+    from factory.engine.smart_base_engine import run_smart_base_engine
+
+run_smart_base_engine() is the canonical single engine for all editions,
+all devices, and all ROM formats.  It delegates to the same underlying
+modules (universal_rom_intake, universal_unpacker, universal_super_engine,
+etc.) with a cleaner stage boundary and better PixelDrain failure handling.
+
+This file remains active only when DEADZONE_LEGACY_ENGINE=true is set in
+the environment.  It is kept for backwards-compatibility with existing
+integration tests and CI jobs that have not yet migrated.
 
 Both Free (apply_mods=False) and Legend/Gaming/EPIC (apply_mods=True) editions
 use the same ROM intake, image collection, super handling, and ZIP packaging
-pipeline.  This module is the canonical implementation of that shared engine.
+pipeline.  This module is that shared legacy implementation.
 
 run_legacy_engine() is called by free_pipeline.py (and optionally by other
 edition pipelines).  All unpack / super / repack logic lives here — not in

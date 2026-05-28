@@ -29,11 +29,19 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+import os
+
 from factory.pipeline.context import BuildContext
 from factory.pipeline.resolver import resolve_device, resolve_super_size
 from factory.pipeline.report import write_pipeline_report
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# When DEADZONE_LEGACY_ENGINE=true the orchestrator falls back to the old
+# edition-specific pipelines.  Default (unset / "false") uses Smart Base Engine.
+_USE_SMART_ENGINE = os.environ.get("DEADZONE_LEGACY_ENGINE", "").lower() not in (
+    "1", "true", "yes"
+)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -250,7 +258,8 @@ def run_factory(
     if device_profile.get("_warning"):
         ctx.warnings.append(device_profile["_warning"])
 
-    # ── Free edition: delegate entirely to Universal ROM Intake pipeline ───────
+    # ── Free edition: always delegates to free_pipeline ──────────────────────
+    # free_pipeline internally selects Smart Base Engine or legacy engine.
     if edition == "free":
         from factory.pipeline.free_pipeline import run_free_pipeline
         return run_free_pipeline(
@@ -263,6 +272,24 @@ def run_factory(
             pipeline_start=_pipeline_start,
         )
 
+    # ── Non-free editions: Smart Base Engine (default) ────────────────────────
+    # Legend / Gaming / EPIC share the same engine; edition mods are the only diff.
+    if _USE_SMART_ENGINE:
+        from factory.engine.smart_base_engine import run_smart_base_engine
+
+        result = run_smart_base_engine(
+            context=ctx,
+            edition=edition,
+            apply_mods=True,
+            notifier=notifier,
+            template_zip=template_zip,
+            pipeline_start=_pipeline_start,
+        )
+        _write_telegram_status(notifier, notify_telegram, soc or "", source, output_dir)
+        # Strip internal _* fields before returning
+        return {k: v for k, v in result.items() if not k.startswith("_")}
+
+    # ── Legacy pipeline path (DEADZONE_LEGACY_ENGINE=true) ───────────────────
     ok = True
 
     # ── Step 4: Download / unpack ROM ─────────────────────────────────────────

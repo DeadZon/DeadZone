@@ -35,8 +35,10 @@ _START_MARKER = "# AUTO-GENERATED DEVICE OPTIONS START"
 _END_MARKER   = "# AUTO-GENERATED DEVICE OPTIONS END"
 
 _PRODUCTION_MODULES = [
+    REPO_ROOT / "factory" / "engine"   / "smart_base_engine.py",
     REPO_ROOT / "factory" / "pipeline" / "legacy_engine_runner.py",
     REPO_ROOT / "factory" / "pipeline" / "free_pipeline.py",
+    REPO_ROOT / "factory" / "pipeline" / "orchestrator.py",
     REPO_ROOT / "factory" / "input"    / "universal_rom_intake.py",
     REPO_ROOT / "factory" / "super"    / "universal_super_engine.py",
     REPO_ROOT / "factory" / "output"   / "deadzone_template_patcher.py",

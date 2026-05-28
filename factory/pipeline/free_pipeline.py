@@ -1,11 +1,18 @@
 """DeadZone Free edition pipeline.
 
-Free = legacy/legend engine + apply_mods=False + preflight cleanup.
+Free = Smart Base Engine with edition="free", apply_mods=False.
 
-All unpack / super / repack / ZIP logic lives in legacy_engine_runner.
-This module is only responsible for:
-  1. Running preflight cleanup before the build.
-  2. Delegating to run_legacy_engine() with edition="free", apply_mods=False.
+Default behaviour (DEADZONE_LEGACY_ENGINE unset or "false"):
+  Delegates to factory.engine.smart_base_engine.run_smart_base_engine().
+
+Legacy fallback (DEADZONE_LEGACY_ENGINE=true):
+  Falls back to the original run_legacy_engine() path so existing tests and
+  CI jobs that depend on the old behaviour are not broken.
+
+This module is responsible for:
+  1. Running preflight cleanup before the build (smart engine handles this
+     internally; the legacy path does it here).
+  2. Delegating to the selected engine.
   3. Writing the Free-specific build report and engine report.
   4. Writing telegram_status.json for the workflow finalize step.
 """
@@ -16,6 +23,8 @@ import os
 import time
 from pathlib import Path
 from typing import Any, Optional
+
+_USE_SMART_ENGINE = os.environ.get("DEADZONE_LEGACY_ENGINE", "").lower() not in ("1", "true", "yes")
 
 
 # ── Report helpers ────────────────────────────────────────────────────────────
@@ -101,7 +110,41 @@ def _write_free_build_report(
         si  = super_input or {}
         asm = assemble or {}
         unp = unpack or {}
-        sr  = ctx.stage_reports.get("super_rebuild") or {}
+        sr  = ctx.stage_reports.get("super_rebuild") or ctx.stage_reports.get("super_execute") or {}
+
+        # Support both legacy DetectionResult (detected_device_codename) and
+        # RomAnalysis (detected_codename) objects from the smart engine.
+        def _det(attr: str, fallback: str = "N/A") -> str:
+            if det is None:
+                return fallback
+            # try smart-engine RomAnalysis field names first, then legacy names
+            for name in [attr, f"detected_{attr}", attr.replace("detected_", "")]:
+                v = getattr(det, name, None)
+                if v is not None:
+                    return str(v)
+            return fallback
+
+        _detected_codename = (
+            getattr(det, "detected_codename", None)
+            or getattr(det, "detected_device_codename", None)
+            or "N/A"
+        ) if det else "N/A"
+        _android = (
+            getattr(det, "android_version", None)
+            or getattr(det, "detected_android_version", None)
+            or "N/A"
+        ) if det else "N/A"
+        _build = (
+            getattr(det, "build_incremental", None)
+            or getattr(det, "detected_hyperos_or_miui_version", None)
+            or "N/A"
+        ) if det else "N/A"
+        _region = (
+            getattr(det, "region", None)
+            or getattr(det, "detected_region", None)
+            or "N/A"
+        ) if det else "N/A"
+        _fmt = getattr(det, "rom_format", "N/A") if det else "N/A"
 
         lines = [
             "=" * 60,
@@ -109,19 +152,19 @@ def _write_free_build_report(
             "=" * 60,
             f"  Device    : {ctx.codename}",
             f"  Edition   : Free",
-            f"  Engine    : Legacy/Legend engine",
+            f"  Engine    : Smart Base Engine",
             f"  Mods      : Disabled",
             f"  ROM URL   : {ctx.rom_url or str(ctx.rom_path or '')}",
             f"  SoC       : {ctx.soc}",
             f"  Mode      : {ctx.mode}",
             "=" * 60,
             "  ROM Detection:",
-            f"    Format    : {det.rom_format if det else 'N/A'}",
-            f"    Codename  : {det.detected_device_codename if det else 'N/A'}",
-            f"    Android   : {det.detected_android_version if det else 'N/A'}",
-            f"    Build     : {det.detected_hyperos_or_miui_version if det else 'N/A'}",
-            f"    Version   : {det.detected_hyperos_or_miui_version if det else 'N/A'}",
-            f"    Region    : {det.detected_region if det else 'N/A'}",
+            f"    Format    : {_fmt}",
+            f"    Codename  : {_detected_codename}",
+            f"    Android   : {_android}",
+            f"    Build     : {_build}",
+            f"    Version   : {_build}",
+            f"    Region    : {_region}",
             f"    Metadata source : {getattr(ctx, 'metadata_source', '') or 'N/A'}",
         ]
 
@@ -207,6 +250,70 @@ def _write_free_build_report(
         print(f"[free_pipeline] Warning: could not write free_build_report.txt: {exc}")
 
 
+def _write_smart_free_engine_report(
+    reports_dir: Path,
+    ctx: Any,
+    result: dict,
+) -> None:
+    """Write free_engine_report.txt for the smart engine path (mirrors legacy format)."""
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    path = reports_dir / "free_engine_report.txt"
+    analysis = result.get("_analysis")
+    unp = result.get("_unpack") or {}
+
+    input_rom_path = getattr(ctx, "rom_path", None)
+    input_rom_exists = input_rom_path is not None and Path(input_rom_path).exists()
+    rom_url = getattr(ctx, "rom_url", "") or ""
+    original_rom_url_filename = ""
+    if rom_url:
+        try:
+            from urllib.parse import unquote, urlparse
+            original_rom_url_filename = Path(unquote(urlparse(rom_url).path)).name
+        except Exception:
+            original_rom_url_filename = ""
+
+    _fmt = getattr(analysis, "rom_format", "N/A") if analysis else "N/A"
+    _strategy = result.get("_super_strategy", "unknown")
+
+    lines = [
+        "═══════════════════════════════════════════════════════",
+        "  DeadZone Factory — Free Engine Report",
+        "═══════════════════════════════════════════════════════",
+        f"  Engine used           : smart_base_engine",
+        f"  Edition               : {ctx.edition}",
+        f"  apply_mods            : False",
+        f"  Input ROM path        : {input_rom_path or '(none)'}",
+        f"  local_rom_name        : {Path(input_rom_path).name if input_rom_path else ''}",
+        f"  original_rom_url_filename: {original_rom_url_filename}",
+        f"  metadata_source       : {getattr(ctx, 'metadata_source', '') or 'N/A'}",
+        f"  Input ROM exists      : {input_rom_exists}",
+        f"  ROM format            : {_fmt}",
+        f"  Super strategy        : {_strategy}",
+        f"  Payload dump method   : {unp.get('payload_dump_tool', 'N/A')}",
+        "",
+        "  Skipped patch stages:",
+        "    - APK patching        (skipped)",
+        "    - JAR patching        (skipped)",
+        "    - smali patching      (skipped)",
+        "    - overlay mods        (skipped)",
+        "    - debloat             (skipped)",
+        "    - build.prop tweaks   (skipped)",
+        "    - Legend/Gaming/EPIC  (skipped)",
+        "",
+        f"  Final ZIP             : {ctx.final_zip or 'N/A'}",
+        f"  PixelDrain link       : {ctx.pixeldrain_link or 'N/A'}",
+    ]
+    if ctx.errors:
+        lines += ["", "  Errors:"]
+        for e in ctx.errors:
+            lines.append(f"    ! {e}")
+    lines.append("═══════════════════════════════════════════════════════")
+    try:
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    except Exception as exc:
+        print(f"[free_pipeline] Warning: could not write free_engine_report.txt: {exc}")
+
+
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 
 def run_free_pipeline(
@@ -218,16 +325,48 @@ def run_free_pipeline(
     template_zip: Optional[Path],
     pipeline_start: float,
 ) -> dict:
-    """Free edition pipeline — delegates to legacy_engine_runner with apply_mods=False."""
+    """Free edition pipeline — delegates to Smart Base Engine (default) or legacy engine."""
     output_dir = Path(output_dir)
     reports_dir = output_dir / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
 
-    # ── Preflight cleanup ────────────────────────────────────────────────────
-    # Pass the active ROM path so preflight_cleanup does NOT delete _input_roms/
-    # when the workflow has already downloaded the ROM there.  The cleanup must
-    # always run before detect_rom; preserving the ROM directory is the safe way
-    # to achieve that without changing the download-then-pipeline workflow order.
+    # ── Smart Base Engine path (default) ──────────────────────────────────────
+    if _USE_SMART_ENGINE:
+        from factory.engine.smart_base_engine import run_smart_base_engine
+
+        result = run_smart_base_engine(
+            context=ctx,
+            edition="free",
+            apply_mods=False,
+            notifier=notifier,
+            template_zip=template_zip,
+            pipeline_start=pipeline_start,
+        )
+        # Write Free-specific surface reports from smart engine result
+        _write_free_build_report(
+            reports_dir=reports_dir,
+            ctx=ctx,
+            detection=result.get("_analysis"),
+            collect=None,
+            super_input=result.get("_super_input"),
+            assemble=result.get("_assemble"),
+            final_zip=ctx.final_zip,
+            unpack=result.get("_unpack"),
+            super_strategy=result.get("_super_strategy", "unknown"),
+            original_super_existed=bool(
+                (result.get("stage_reports") or {})
+                .get("super_strategy", {})
+                .get("original_super_exists")
+            ),
+            result=result,
+        )
+        # Write free_engine_report.txt (compat: tests expect this file)
+        _write_smart_free_engine_report(reports_dir, ctx, result)
+        _write_telegram_status(notifier, ctx.notify_telegram, soc or "", source, output_dir)
+        # Strip internal _* fields before returning
+        return {k: v for k, v in result.items() if not k.startswith("_")}
+
+    # ── Legacy engine fallback (DEADZONE_LEGACY_ENGINE=true) ─────────────────
     preflight_status = "SKIPPED"
     try:
         from factory.cleanup.preflight_cleanup import preflight_cleanup
@@ -239,7 +378,6 @@ def run_free_pipeline(
     except Exception as exc:
         print(f"[free_pipeline] Warning: preflight_cleanup failed (non-fatal): {exc}")
 
-    # ── Delegate to shared legacy engine ─────────────────────────────────────
     from factory.pipeline.legacy_engine_runner import run_legacy_engine, _write_free_engine_report
 
     result = run_legacy_engine(
@@ -255,7 +393,6 @@ def run_free_pipeline(
     )
     result["_preflight_cleanup_status"] = preflight_status
 
-    # ── Write Free-specific reports ───────────────────────────────────────────
     _write_free_build_report(
         reports_dir=reports_dir,
         ctx=ctx,
@@ -272,6 +409,4 @@ def run_free_pipeline(
     _write_free_engine_report(reports_dir, ctx, result)
     _write_telegram_status(notifier, ctx.notify_telegram, soc or "", source, output_dir)
 
-    # Strip internal _* fields before returning
-    public = {k: v for k, v in result.items() if not k.startswith("_")}
-    return public
+    return {k: v for k, v in result.items() if not k.startswith("_")}
