@@ -871,6 +871,496 @@ class TestDynamicImagesNeverInFinalZip:
                 )
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 10. UNIVERSAL ROM INTAKE — analyze_rom() + report writers
+# ═══════════════════════════════════════════════════════════════════
+
+from factory.input.universal_rom_intake import (
+    RomAnalysis,
+    analyze_rom,
+    write_codename_validation_report,
+    write_rom_analysis_report,
+)
+
+
+class TestAnalyzeRomDetection:
+    """analyze_rom() must populate RomAnalysis fields from archive content."""
+
+    def test_analyze_payload_ota_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "ota.zip",
+                {"payload.bin": b"OTA", "payload_properties.txt": b""},
+            )
+            result = analyze_rom(rom, None, "garnet")
+        assert result.rom_format == FORMAT_PAYLOAD_OTA
+        assert result.rom_type == "recovery"
+        assert result.confidence == 1.0
+
+    def test_analyze_fastboot_tgz_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tgz = Path(tmp) / "rom.tgz"
+            _make_tgz(tgz, {
+                "images/boot.img": b"boot",
+                "images/vbmeta.img": b"vm",
+                "images/super.img": b"super",
+            })
+            result = analyze_rom(tgz, None, "zorn")
+        assert result.rom_format == FORMAT_FASTBOOT_TGZ
+        assert result.rom_type == "fastboot"
+
+    def test_analyze_split_super_zip_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "eu.zip",
+                {"super.img.0": b"A", "super.img.1": b"B", "boot.img": b"b"},
+            )
+            result = analyze_rom(rom, None, "garnet")
+        assert result.rom_format == FORMAT_SPLIT_SUPER_ZIP
+        assert result.rom_type == "split_super"
+
+    def test_analyze_xiaomi_eu_zip_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "eu.zip",
+                {
+                    "META-INF/com/miui/update-binary": b"eu",
+                    "super.img": b"super",
+                    "boot.img": b"b",
+                },
+            )
+            result = analyze_rom(rom, None, "garnet")
+        assert result.rom_format == FORMAT_XIAOMI_EU_ZIP
+        assert result.rom_type == "eu"
+
+    def test_analyze_images_zip_format(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "rom.zip",
+                {"images/boot.img": b"b", "images/vbmeta.img": b"v", "images/dtbo.img": b"d"},
+            )
+            result = analyze_rom(rom, None, "garnet")
+        assert result.rom_format == FORMAT_IMAGES_ZIP
+        assert result.rom_type == "images_zip"
+
+    def test_analyze_missing_file_returns_error(self):
+        result = analyze_rom(Path("/nonexistent/rom.zip"), None, "garnet")
+        assert result.errors
+        assert result.rom_format == FORMAT_UNKNOWN
+
+    def test_analyze_unknown_format_returns_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "junk.zip", {"readme.txt": b"hi"})
+            result = analyze_rom(rom, None, "garnet")
+        assert result.rom_format == FORMAT_UNKNOWN
+
+
+class TestAnalyzeRomMetadataFromUrl:
+    """When the local file is renamed (e.g. source_rom.tgz), the original
+    filename embedded in the URL must be used for metadata parsing."""
+
+    def test_url_filename_parsed_when_local_is_source_rom_tgz(self):
+        """Local file is source_rom.tgz but URL carries original Xiaomi filename."""
+        with tempfile.TemporaryDirectory() as tmp:
+            # The ROM is a fastboot TGZ — renamed to source_rom.tgz by the workflow
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {
+                "images/boot.img": b"b",
+                "images/vbmeta.img": b"v",
+                "images/dtbo.img": b"d",
+            })
+            # URL carries the original Xiaomi filename with all metadata
+            original_url = (
+                "https://bn.d.miui.com/OS3.0.303.0.WOKCNXM/"
+                "zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_e6cf5ef711.tgz"
+            )
+            result = analyze_rom(local_path, original_url, "zorn")
+
+        # metadata must come from the URL filename, not the local "source_rom.tgz"
+        assert result.android_version == "16.0", (
+            f"android_version must be parsed from URL filename, got {result.android_version!r}"
+        )
+        assert result.build_incremental and "OS3" in result.build_incremental, (
+            f"build_incremental must be parsed from URL, got {result.build_incremental!r}"
+        )
+        assert result.region == "CN", (
+            f"region must be parsed from URL filename, got {result.region!r}"
+        )
+        assert result.detected_codename == "zorn", (
+            f"codename must be parsed from URL filename, got {result.detected_codename!r}"
+        )
+
+    def test_original_filename_is_url_derived(self):
+        """original_filename must be the URL-derived basename, not the local name."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_abc.tgz"
+            result = analyze_rom(local_path, url, "zorn")
+
+        assert result.original_filename != "source_rom.tgz", (
+            "original_filename must be the URL-derived name, not the local renamed file"
+        )
+        assert "zorn" in result.original_filename
+
+    def test_local_filename_used_when_no_url(self):
+        """When no URL is provided, local filename is used for metadata."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_abc.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            result = analyze_rom(local_path, None, "zorn")
+
+        assert result.android_version == "16.0"
+        assert result.region == "CN"
+
+    def test_metadata_sources_used_recorded(self):
+        """metadata_sources_used must record which sources contributed data."""
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/garnet_images_OS2.0.5.0.TNGMIXM_20240101.0000.00_14.0_global_abc.tgz"
+            result = analyze_rom(local_path, url, "garnet")
+
+        assert result.metadata_sources_used, "metadata_sources_used must not be empty"
+
+
+class TestAnalyzeRomCodename:
+    """Codename validation in analyze_rom()."""
+
+    def test_matching_codename_sets_codename_match_true(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_abc.tgz"
+            result = analyze_rom(local_path, url, "zorn")
+        assert result.codename_match is True
+
+    def test_mismatch_codename_sets_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_abc.tgz"
+            # selected=garnet but URL says zorn
+            result = analyze_rom(local_path, url, "garnet")
+        assert result.codename_match is False
+        assert result.errors, "errors must be non-empty for codename mismatch"
+
+    def test_mismatch_with_force_warns_not_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_abc.tgz"
+            result = analyze_rom(local_path, url, "garnet", force_codename=True)
+        # forced: mismatch is a warning, not a hard error
+        assert not any("mismatch" in e.lower() and "force" not in e.lower()
+                       for e in result.errors), (
+            "With force_codename=True, mismatch must not produce a hard error"
+        )
+
+    def test_no_detected_codename_match_is_true(self):
+        """When codename cannot be detected, codename_match must be True (no mismatch)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "rom.zip",
+                {"images/boot.img": b"b", "images/vbmeta.img": b"v"},
+            )
+            result = analyze_rom(rom, None, "garnet")
+        # No codename parseable from the archive members
+        assert result.codename_match is True, (
+            "codename_match must be True when no codename is detected"
+        )
+
+
+class TestAnalyzeRomChannel:
+    """rom_channel must map region to the correct channel label."""
+
+    def test_cn_region_maps_to_cn_channel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/zorn_images_OS3.0.303.0.WOKCNXM_20260425.0000.00_16.0_cn_abc.tgz"
+            result = analyze_rom(local_path, url, "zorn")
+        assert result.rom_channel == "CN"
+
+    def test_global_region_maps_to_global_channel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            local_path = Path(tmp) / "source_rom.tgz"
+            _make_tgz(local_path, {"images/boot.img": b"b", "images/vbmeta.img": b"v"})
+            url = "https://example.com/garnet_images_OS2.0.5.0.TNGMIXM_20240101.0000.00_14.0_global_abc.tgz"
+            result = analyze_rom(local_path, url, "garnet")
+        assert result.rom_channel == "Global"
+
+    def test_unknown_region_maps_to_unknown_channel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(Path(tmp) / "rom.zip", {"readme.txt": b"x"})
+            result = analyze_rom(rom, None, "garnet")
+        assert result.rom_channel == "Unknown"
+
+
+class TestRomAnalysisReports:
+    """Report writers produce the correct files."""
+
+    def test_write_rom_analysis_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reports_dir = Path(tmp) / "reports"
+            analysis = RomAnalysis(
+                rom_format=FORMAT_FASTBOOT_TGZ,
+                selected_codename="zorn",
+                detected_codename="zorn",
+                codename_match=True,
+                android_version="16.0",
+                build_incremental="OS3.0.303.0.WOKCNXM",
+                region="CN",
+                rom_channel="CN",
+                rom_type="fastboot",
+            )
+            path = write_rom_analysis_report(analysis, reports_dir)
+            assert path.is_file(), "rom_analysis_report.txt must be created"
+            content = path.read_text(encoding="utf-8")
+            assert "zorn" in content
+            assert "fastboot" in content
+            assert "16.0" in content
+            assert "CN" in content
+
+    def test_write_codename_validation_report_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reports_dir = Path(tmp) / "reports"
+            analysis = RomAnalysis(
+                selected_codename="zorn",
+                detected_codename="zorn",
+                codename_match=True,
+            )
+            path = write_codename_validation_report(analysis, reports_dir)
+            assert path.is_file(), "codename_validation_report.txt must be created"
+            content = path.read_text(encoding="utf-8")
+            assert "zorn" in content
+            assert "True" in content or "true" in content
+
+    def test_write_codename_validation_report_mismatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reports_dir = Path(tmp) / "reports"
+            analysis = RomAnalysis(
+                selected_codename="garnet",
+                detected_codename="zorn",
+                codename_match=False,
+                errors=["codename mismatch: detected='zorn' vs selected='garnet'"],
+            )
+            path = write_codename_validation_report(analysis, reports_dir)
+            content = path.read_text(encoding="utf-8")
+            assert "garnet" in content
+            assert "zorn" in content
+            assert "False" in content or "false" in content
+
+    def test_rom_analysis_report_includes_all_required_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            analysis = RomAnalysis(
+                rom_format=FORMAT_PAYLOAD_OTA,
+                source_url="https://example.com/rom.zip",
+                original_filename="zircon-ota.zip",
+                selected_codename="zircon",
+                detected_codename="zircon",
+                codename_match=True,
+                android_version="16.0",
+                build_incremental="OS3.0.303.0.WNOCNXM",
+                region="CN",
+                rom_channel="CN",
+                rom_type="recovery",
+                metadata_sources_used=["build.prop"],
+            )
+            path = write_rom_analysis_report(analysis, Path(tmp) / "reports")
+            content = path.read_text(encoding="utf-8")
+            for field_label in [
+                "ROM format", "Archive type", "ROM type",
+                "Metadata sources", "ROM channel",
+                "Selected codename", "Android version",
+            ]:
+                assert field_label in content, f"Report must include '{field_label}'"
+
+
+class TestUniversalUnpacker:
+    """factory.unpack.universal_unpacker.unpack_with_analysis() basics."""
+
+    def test_dry_run_returns_dry_run_status(self):
+        from factory.unpack.universal_unpacker import unpack_with_analysis
+        with tempfile.TemporaryDirectory() as tmp:
+            analysis = RomAnalysis(
+                rom_format=FORMAT_IMAGES_ZIP,
+                local_path=Path(tmp) / "rom.zip",
+            )
+            result = unpack_with_analysis(analysis, Path(tmp) / "work", execute=False)
+        assert result["status"] == "DRY_RUN"
+
+    def test_unknown_format_returns_unsupported(self):
+        from factory.unpack.universal_unpacker import unpack_with_analysis
+        with tempfile.TemporaryDirectory() as tmp:
+            analysis = RomAnalysis(
+                rom_format=FORMAT_UNKNOWN,
+                local_path=Path(tmp) / "rom.zip",
+                reason="nothing recognised",
+            )
+            result = unpack_with_analysis(analysis, Path(tmp) / "work", execute=True)
+        assert result["status"] == "UNSUPPORTED"
+        assert result["errors"]
+
+    def test_missing_file_returns_failed(self):
+        from factory.unpack.universal_unpacker import unpack_with_analysis
+        with tempfile.TemporaryDirectory() as tmp:
+            analysis = RomAnalysis(
+                rom_format=FORMAT_FASTBOOT_TGZ,
+                local_path=Path(tmp) / "nonexistent.tgz",
+            )
+            result = unpack_with_analysis(analysis, Path(tmp) / "work", execute=True)
+        assert result["status"] == "FAILED"
+        assert result["errors"]
+
+    def test_images_zip_unpacked_successfully(self):
+        from factory.unpack.universal_unpacker import unpack_with_analysis
+        with tempfile.TemporaryDirectory() as tmp:
+            rom = _make_zip(
+                Path(tmp) / "rom.zip",
+                {"images/boot.img": b"b", "images/vbmeta.img": b"v",
+                 "images/dtbo.img": b"d"},
+            )
+            analysis = RomAnalysis(
+                rom_format=FORMAT_IMAGES_ZIP,
+                local_path=rom,
+                selected_codename="garnet",
+            )
+            result = unpack_with_analysis(analysis, Path(tmp) / "work", execute=True)
+        assert result["status"] == "OK", f"Expected OK, got {result['status']}: {result.get('errors')}"
+
+
+class TestUniversalSuperEngine:
+    """factory.super.universal_super_engine strategy selection."""
+
+    def test_free_with_original_super_selects_preserve(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_PRESERVE_ORIGINAL, select_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            strategy = select_super_strategy(
+                original_super_img=super_img,
+                split_super_merged=False,
+                has_dynamic_partitions=False,
+                apply_mods=False,
+            )
+        assert strategy == STRATEGY_PRESERVE_ORIGINAL
+
+    def test_free_with_split_merged_selects_preserve_merged(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_PRESERVE_MERGED, select_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"MERGED")
+            strategy = select_super_strategy(
+                original_super_img=super_img,
+                split_super_merged=True,
+                has_dynamic_partitions=False,
+                apply_mods=False,
+            )
+        assert strategy == STRATEGY_PRESERVE_MERGED
+
+    def test_free_payload_ota_selects_preserve_payload(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_PRESERVE_PAYLOAD, select_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"PAYLOAD_SUPER")
+            strategy = select_super_strategy(
+                original_super_img=super_img,
+                split_super_merged=False,
+                has_dynamic_partitions=True,
+                apply_mods=False,
+                is_payload_ota=True,
+            )
+        assert strategy == STRATEGY_PRESERVE_PAYLOAD
+
+    def test_free_no_super_with_dynamic_selects_rebuild_lpmake(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_REBUILD_LPMAKE, select_super_strategy,
+        )
+        strategy = select_super_strategy(
+            original_super_img=None,
+            split_super_merged=False,
+            has_dynamic_partitions=True,
+            apply_mods=False,
+        )
+        assert strategy == STRATEGY_REBUILD_LPMAKE
+
+    def test_free_no_super_no_dynamic_selects_no_super(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_NO_SUPER, select_super_strategy,
+        )
+        strategy = select_super_strategy(
+            original_super_img=None,
+            split_super_merged=False,
+            has_dynamic_partitions=False,
+            apply_mods=False,
+        )
+        assert strategy == STRATEGY_NO_SUPER
+
+    def test_legend_always_selects_rebuild_modified(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_REBUILD_MODIFIED, select_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            # Even with original super present, Legend rebuilds
+            strategy = select_super_strategy(
+                original_super_img=super_img,
+                split_super_merged=False,
+                has_dynamic_partitions=True,
+                apply_mods=True,   # Legend/Gaming/EPIC
+            )
+        assert strategy == STRATEGY_REBUILD_MODIFIED
+
+    def test_execute_no_super_strategy_writes_metadata_report(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_NO_SUPER, execute_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            reports_dir = Path(tmp) / "reports"
+            result = execute_super_strategy(
+                strategy=STRATEGY_NO_SUPER,
+                original_super_img=None,
+                super_parts_dir=Path(tmp) / "parts",
+                output_super=Path(tmp) / "final" / "super.img",
+                reports_dir=reports_dir,
+                execute=True,
+            )
+            assert result["status"] == "SKIPPED"
+            assert (reports_dir / "super_metadata_report.txt").is_file()
+
+    def test_execute_preserve_original_writes_metadata_report(self):
+        from factory.super.universal_super_engine import (
+            STRATEGY_PRESERVE_ORIGINAL, execute_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "source" / "super.img"
+            original_super.parent.mkdir()
+            original_super.write_bytes(b"ORIG_SUPER")
+            reports_dir = Path(tmp) / "reports"
+            final_super = Path(tmp) / "final" / "super.img"
+            final_super.parent.mkdir()
+
+            result = execute_super_strategy(
+                strategy=STRATEGY_PRESERVE_ORIGINAL,
+                original_super_img=original_super,
+                super_parts_dir=Path(tmp) / "parts",
+                output_super=final_super,
+                reports_dir=reports_dir,
+                execute=True,
+            )
+            assert result["status"] == "APPLIED", f"Expected APPLIED: {result['errors']}"
+            assert (reports_dir / "super_metadata_report.txt").is_file()
+            assert final_super.read_bytes() == b"ORIG_SUPER"
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

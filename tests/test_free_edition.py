@@ -2313,6 +2313,185 @@ class TestSuperUnsparseManagedClean:
         )
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 19. EDITION ENGINE UNIFICATION
+#     Verifies the architecture rule: all editions share the same
+#     legacy engine; only the mod layer (apply_mods flag) differs.
+# ═══════════════════════════════════════════════════════════════════
+
+class TestEditionEngineUnification:
+    """Free uses apply_mods=False; Legend/Gaming/EPIC use apply_mods=True.
+    The same run_legacy_engine() powers all of them."""
+
+    def _run_engine(self, apply_mods: bool, edition: str = "free") -> dict:
+        """Run run_legacy_engine in dry_run mode and return result."""
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.legacy_engine_runner import run_legacy_engine
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
+            ctx = BuildContext(
+                codename="garnet",
+                edition=edition,
+                mode="dry_run",
+                soc="snapdragon",
+                output_dir=output_dir,
+            )
+            return run_legacy_engine(
+                context=ctx,
+                notifier=None,
+                output_dir=output_dir,
+                template_zip=None,
+                pipeline_start=time.monotonic(),
+                edition=edition,
+                apply_mods=apply_mods,
+            )
+
+    def test_free_uses_apply_mods_false_via_engine(self):
+        """run_legacy_engine with apply_mods=False must produce DRY_RUN for Free."""
+        result = self._run_engine(apply_mods=False, edition="free")
+        assert result["final_status"] == "DRY_RUN"
+
+    def test_legend_engine_path_uses_apply_mods_true(self):
+        """run_legacy_engine with apply_mods=True (Legend) must also produce DRY_RUN
+        (same shared engine, only mod flag differs)."""
+        result = self._run_engine(apply_mods=True, edition="legend")
+        assert result["final_status"] == "DRY_RUN", (
+            f"Legend path must reach DRY_RUN through the same engine. Got: {result['final_status']}"
+        )
+
+    def test_gaming_edition_reaches_dry_run_same_engine(self):
+        """Gaming edition uses the same engine and must reach DRY_RUN."""
+        result = self._run_engine(apply_mods=True, edition="gaming")
+        assert result["final_status"] == "DRY_RUN"
+
+    def test_epic_edition_reaches_dry_run_same_engine(self):
+        """EPIC edition uses the same engine and must reach DRY_RUN."""
+        result = self._run_engine(apply_mods=True, edition="epic")
+        assert result["final_status"] == "DRY_RUN"
+
+    def test_apply_mods_false_picks_preserve_super_for_free(self):
+        """With apply_mods=False and an original super.img, strategy must be preserve."""
+        from factory.super.universal_super_engine import (
+            STRATEGY_PRESERVE_ORIGINAL,
+            select_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            strategy = select_super_strategy(
+                original_super_img=super_img,
+                split_super_merged=False,
+                has_dynamic_partitions=False,
+                apply_mods=False,
+            )
+        assert strategy == STRATEGY_PRESERVE_ORIGINAL
+
+    def test_apply_mods_true_always_picks_rebuild_modified(self):
+        """With apply_mods=True, strategy must always be rebuild_modified_super
+        — even when an original super.img is present."""
+        from factory.super.universal_super_engine import (
+            STRATEGY_REBUILD_MODIFIED,
+            select_super_strategy,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            strategy = select_super_strategy(
+                original_super_img=super_img,
+                split_super_merged=False,
+                has_dynamic_partitions=True,
+                apply_mods=True,
+            )
+        assert strategy == STRATEGY_REBUILD_MODIFIED
+
+    def test_only_mod_layer_differs_between_free_and_legend(self):
+        """The only difference between Free and Legend in engine output must be
+        the apply_mods flag — not the engine used."""
+        import factory.pipeline.legacy_engine_runner as engine_mod
+        import time
+
+        calls = []
+        original = engine_mod.run_legacy_engine
+
+        def _spy(context, notifier, output_dir, template_zip, pipeline_start,
+                 edition="free", apply_mods=False, **kw):
+            calls.append({"edition": edition, "apply_mods": apply_mods})
+            return {
+                "final_status": "DRY_RUN",
+                "build_id": None,
+                "build_name": f"DZ_{context.codename}",
+                "codename": context.codename,
+                "edition": edition,
+                "soc": context.soc,
+                "final_zip": None,
+                "pixeldrain_link": None,
+                "telegram_message_id": None,
+                "warnings": [], "errors": [],
+                "stage_reports": {}, "report_files": {},
+            }
+
+        engine_mod.run_legacy_engine = _spy
+        try:
+            from factory.pipeline.free_pipeline import run_free_pipeline
+            from factory.pipeline.context import BuildContext
+
+            with tempfile.TemporaryDirectory() as tmp:
+                output_dir = Path(tmp) / "output"
+                ctx = BuildContext(
+                    codename="garnet", edition="free", mode="dry_run",
+                    soc="snapdragon", output_dir=output_dir,
+                )
+                run_free_pipeline(
+                    ctx=ctx, notifier=None, soc="snapdragon",
+                    source="test", output_dir=output_dir,
+                    template_zip=None, pipeline_start=time.monotonic(),
+                )
+        finally:
+            engine_mod.run_legacy_engine = original
+
+        assert calls, "run_legacy_engine must have been called"
+        assert calls[0]["apply_mods"] is False, (
+            "Free edition must pass apply_mods=False to run_legacy_engine"
+        )
+
+    def test_free_pipeline_does_not_call_legend_mod_runner(self):
+        """Free edition must never invoke legend/gaming/epic mod runners."""
+        import importlib
+        mod_runners_called: list[str] = []
+
+        for mod_name in ["legend", "gaming", "epic"]:
+            try:
+                mod = importlib.import_module(f"factory.patch.mods.{mod_name}.runner")
+                if hasattr(mod, "run_mod"):
+                    def _spy(name=mod_name, *a, **kw):
+                        mod_runners_called.append(name)
+                        return {"status": "APPLIED"}
+                    mod.run_mod = _spy
+            except ImportError:
+                pass
+
+        from factory.pipeline.context import BuildContext
+        from factory.pipeline.free_pipeline import run_free_pipeline
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp) / "output"
+            ctx = BuildContext(
+                codename="garnet", edition="free",
+                mode="dry_run", soc="snapdragon", output_dir=output_dir,
+            )
+            run_free_pipeline(
+                ctx=ctx, notifier=None, soc="snapdragon", source="test",
+                output_dir=output_dir, template_zip=None, pipeline_start=time.monotonic(),
+            )
+
+        assert not mod_runners_called, (
+            f"Free edition must not invoke any mod runner. Called: {mod_runners_called}"
+        )
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
