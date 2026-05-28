@@ -24,7 +24,7 @@ primary_region = "iad"
 [[mounts]]
   source = "factory_data"
   destination = "/data"
-  initial_size = "50gb"
+  initial_size = "250gb"
 
 [env]
   PORT = "8080"
