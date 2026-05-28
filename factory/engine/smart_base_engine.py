@@ -62,6 +62,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 # ── Stage timeout configuration (minutes) ────────────────────────────────────
 
@@ -688,6 +690,65 @@ def run_smart_base_engine(
             except Exception:
                 pass
 
+        # ── Recover payload super metadata when rebuilding without original super.img ──
+        # For payload OTA ROMs that have dynamic partition images but no super.img,
+        # recover partition allocation sizes + group/device profile before calling lpmake.
+        _payload_super_meta: Optional[dict] = None
+        if is_payload_ota and _super_strategy in (
+            "rebuild_with_lpmake", "rebuild_modified_super"
+        ) and original_super is None:
+            try:
+                from factory.super.payload_super_metadata import (  # noqa: PLC0415
+                    recover_super_metadata_from_payload,
+                )
+                # Find payload.bin under work_dir (left behind after unpack)
+                _payload_bin: Optional[Path] = None
+                for _pb in work_dir.rglob("payload.bin"):
+                    if _pb.is_file():
+                        _payload_bin = _pb
+                        break
+
+                # Locate device registry YAML
+                _soc_lc = (getattr(ctx, "soc", None) or "").lower()
+                _reg_yml: Optional[Path] = None
+                if _soc_lc and ctx.codename:
+                    _reg_cand = (
+                        Path("registry") / "devices" / _soc_lc / f"{ctx.codename}.yml"
+                    )
+                    if _reg_cand.is_file():
+                        _reg_yml = _reg_cand
+                    else:
+                        # Try absolute path relative to repo root
+                        _reg_abs = _REPO_ROOT / "registry" / "devices" / _soc_lc / f"{ctx.codename}.yml"
+                        if _reg_abs.is_file():
+                            _reg_yml = _reg_abs
+
+                _payload_super_meta = recover_super_metadata_from_payload(
+                    payload_manifest_path=_payload_bin,
+                    source_images_dir=work_dir / "source_images",
+                    selected_codename=ctx.codename,
+                    registry_path=_reg_yml,
+                )
+                ctx.warnings.extend(_payload_super_meta.get("warnings") or [])
+                _psm_errors = _payload_super_meta.get("errors") or []
+                if _psm_errors:
+                    # Errors here are non-fatal; lpmake will fail with a clear message
+                    ctx.warnings.extend(
+                        [f"[payload_super_metadata] {e}" for e in _psm_errors]
+                    )
+                print(
+                    f"[smart_base_engine] payload_super_metadata: "
+                    f"source={_payload_super_meta.get('metadata_source')} "
+                    f"super_size={_payload_super_meta.get('super_size')} "
+                    f"group={_payload_super_meta.get('group_name')} "
+                    f"partitions={sorted((_payload_super_meta.get('partition_sizes') or {}).keys())}"
+                )
+            except Exception as _psm_exc:
+                print(
+                    f"[smart_base_engine] Warning: payload super metadata recovery failed "
+                    f"(non-fatal — lpmake will report missing data): {_psm_exc}"
+                )
+
         if _super_strategy == "no_super_available":
             ctx.stage_reports["super_execute"] = {
                 "status": "SKIPPED",
@@ -706,6 +767,7 @@ def run_smart_base_engine(
                     output_super=super_img,
                     reports_dir=reports_dir,
                     execute=True,
+                    payload_super_metadata=_payload_super_meta,
                 )
 
             ok = _run("super_execute", _do_super_execute, critical=True)

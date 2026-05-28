@@ -90,6 +90,7 @@ def execute_super_strategy(
     reports_dir: Path,
     original_partition_sizes: Optional[dict] = None,
     execute: bool = False,
+    payload_super_metadata: Optional[dict] = None,
 ) -> dict:
     """Execute the selected super strategy.
 
@@ -114,6 +115,13 @@ def execute_super_strategy(
         is present.
     execute:
         False → dry-run.
+    payload_super_metadata:
+        Dict returned by
+        ``factory.super.payload_super_metadata.recover_super_metadata_from_payload``.
+        When provided, its ``partition_sizes`` and profile fields (group_name,
+        super_size, virtual_ab, metadata_slots) are used to drive lpmake when
+        no original super.img is available.  Allows payload OTA ROMs to rebuild
+        super.img without a pre-existing super.img.
     """
     from factory.super.super_rebuilder import rebuild_super
 
@@ -132,19 +140,35 @@ def execute_super_strategy(
             original_super_img=original_super_img,
             output_super=output_super,
             rebuild_result=result,
+            payload_super_metadata=payload_super_metadata,
         )
         return result
 
     preserve = strategy in _PRESERVE_STRATEGIES
+
+    # Merge partition sizes from payload_super_metadata when not already supplied
+    _part_sizes = original_partition_sizes
+    _super_profile: Optional[dict] = None
+    if payload_super_metadata and isinstance(payload_super_metadata, dict):
+        if not _part_sizes:
+            _part_sizes = payload_super_metadata.get("partition_sizes") or None
+        _super_profile = {
+            "super_size":      payload_super_metadata.get("super_size"),
+            "group_name":      payload_super_metadata.get("group_name"),
+            "group_size":      payload_super_metadata.get("group_size"),
+            "metadata_slots":  payload_super_metadata.get("metadata_slots"),
+            "virtual_ab":      payload_super_metadata.get("virtual_ab"),
+        }
 
     result = rebuild_super(
         super_parts_dir=super_parts_dir,
         output_super=output_super,
         reports_dir=reports_dir,
         original_super_img=original_super_img,
-        original_partition_sizes=original_partition_sizes,
+        original_partition_sizes=_part_sizes,
         execute=execute,
         preserve_original_super=preserve,
+        super_profile=_super_profile,
     )
     result["strategy"] = strategy
 
@@ -154,6 +178,7 @@ def execute_super_strategy(
         original_super_img=original_super_img,
         output_super=output_super,
         rebuild_result=result,
+        payload_super_metadata=payload_super_metadata,
     )
     return result
 
@@ -166,6 +191,7 @@ def _write_super_metadata_report(
     original_super_img: Optional[Path],
     output_super: Path,
     rebuild_result: dict,
+    payload_super_metadata: Optional[dict] = None,
 ) -> None:
     """Write output/reports/super_metadata_report.txt."""
     reports_dir = Path(reports_dir)
@@ -174,10 +200,12 @@ def _write_super_metadata_report(
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     sr = rebuild_result
+    psm = payload_super_metadata or {}
     # VAB: valid when _b slots all have zero size
     is_vab = bool(
         sr.get("vab_b_slots_valid")
         or sr.get("vab_b_slots_are_zero_size")
+        or psm.get("virtual_ab")
     )
     partitions: list[str] = sr.get("partitions_in_final") or []
     a_parts = sorted(p for p in partitions if p.endswith("_a"))
@@ -190,6 +218,16 @@ def _write_super_metadata_report(
         except OSError:
             orig_size = None
 
+    # Prefer psm.metadata_source when available (more descriptive)
+    _meta_src = (
+        psm.get("metadata_source")
+        or sr.get("super_metadata_source")
+        or "(unknown)"
+    )
+    _group_name = psm.get("group_name") or "(unknown)"
+    _group_size = psm.get("group_size") or "(unknown)"
+    _super_size_display = psm.get("super_size") or sr.get("super_img_size") or "(unknown)"
+
     lines = [
         "=" * 60,
         "  DeadZone Factory — Super Metadata Report",
@@ -200,7 +238,10 @@ def _write_super_metadata_report(
         f"  Original super size : {orig_size if orig_size is not None else '(unknown)'}",
         f"  Final super path    : {output_super}",
         f"  Final super size    : {sr.get('super_img_size') or '(unknown)'}",
-        f"  Metadata source     : {sr.get('super_metadata_source') or '(unknown)'}",
+        f"  Metadata source     : {_meta_src}",
+        f"  Super size (target) : {_super_size_display}",
+        f"  Group name          : {_group_name}",
+        f"  Group size          : {_group_size}",
         f"  VAB layout          : {is_vab}",
         f"  lpmake executed     : {sr.get('lpmake_executed', False)}",
         f"  lpmake return code  : {sr.get('lpmake_return_code')}",

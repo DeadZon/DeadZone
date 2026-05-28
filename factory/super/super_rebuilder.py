@@ -300,6 +300,7 @@ def rebuild_super(
     original_partition_sizes: dict[str, int] | None = None,
     execute: bool = False,
     preserve_original_super: bool = False,
+    super_profile: dict | None = None,
 ) -> dict[str, Any]:
     """Rebuild or preserve final super.img.
 
@@ -427,29 +428,47 @@ def rebuild_super(
             )
 
     if not super_info and original_partition_sizes:
-        total = sum(original_partition_sizes.values())
-        super_size = max(total * 2, 9 * 1024 * 1024 * 1024)
-        result["warnings"].append(
-            f"No original super.img — estimating super size: {super_size} bytes"
-        )
+        # Use super_profile values when available for accurate group name + size
+        _sp = super_profile or {}
+        _group_base = str(_sp.get("group_name") or "qti_dynamic_partitions")
+        _group_a = f"{_group_base}_a"
+        _group_b = f"{_group_base}_b"
+        _meta_slots = int(_sp.get("metadata_slots") or 3)
+        _virtual_ab = bool(_sp.get("virtual_ab", True))
+
+        _profile_super_size = int(_sp.get("super_size") or 0)
+        if _profile_super_size > 0:
+            super_size = _profile_super_size
+        else:
+            total = sum(original_partition_sizes.values())
+            super_size = max(total * 2, 9 * 1024 * 1024 * 1024)
+            result["warnings"].append(
+                f"No original super.img and no registry super_size — "
+                f"estimating: {super_size} bytes"
+            )
+
+        _a_parts = [
+            {"name": f"{p}_a", "size": s, "group_name": _group_a, "attributes": 1}
+            for p, s in original_partition_sizes.items()
+        ]
+        _b_parts = [
+            {"name": f"{p}_b", "size": 0, "group_name": _group_b, "attributes": 1}
+            for p in original_partition_sizes
+        ] if _virtual_ab else []
+
         super_info = {
             "block_devices": [{"name": "super", "size": super_size}],
             "group_table": [
-                {"name": "qti_dynamic_partitions_a"},
-                {"name": "qti_dynamic_partitions_b"},
-            ],
-            "partition_table": (
-                [
-                    {"name": f"{p}_a", "size": s, "group_name": "qti_dynamic_partitions_a", "attributes": 1}
-                    for p, s in original_partition_sizes.items()
-                ] + [
-                    {"name": f"{p}_b", "size": 0, "group_name": "qti_dynamic_partitions_b", "attributes": 1}
-                    for p in original_partition_sizes
-                ]
-            ),
-            "metadata_slot_count": 3,
+                {"name": _group_a},
+                {"name": _group_b},
+            ] if _virtual_ab else [{"name": _group_a}],
+            "partition_table": _a_parts + _b_parts,
+            "metadata_slot_count": _meta_slots,
         }
-        result["super_metadata_source"] = "derived_from_partition_sizes"
+        result["super_metadata_source"] = (
+            "device_registry_profile" if _profile_super_size > 0
+            else "derived_from_partition_sizes"
+        )
 
     if not super_info:
         result["errors"].append(

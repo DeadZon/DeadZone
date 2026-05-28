@@ -16,11 +16,22 @@ super:
   dynamic_group: qti_dynamic_partitions
   super_size: 9126805504
   slot_mode: vab
+  virtual_ab: true
   active_slot: a
   inactive_slot_zero: true
   filesystem: erofs
   output_format: sparse
   metadata_slots: 3
+  dynamic_partitions:
+    - system
+    - system_ext
+    - product
+    - vendor
+    - odm
+    - mi_ext
+    - vendor_dlkm
+    - odm_dlkm
+    - system_dlkm
 
 required_images:
   - apusys.img
