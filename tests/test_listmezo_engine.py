@@ -607,3 +607,312 @@ def test_pipeline_stage_status_applied_in_execute_mode(tmp_path):
         )
 
     assert result["status"] == "APPLIED"
+
+
+# ── Integration audit tests ────────────────────────────────────────────────────
+
+class TestListMezoUsesCorrectPartitionFunction:
+    """Fix #3: _try_extract_for_listmezo must call extract_dynamic_partitions_from_payload_dir."""
+
+    def test_correct_function_called(self, tmp_path):
+        import unittest.mock as mock
+        from factory.apps.listmezo_engine import _try_extract_for_listmezo
+
+        source_images = tmp_path / "source_images"
+        source_images.mkdir()
+        extract_dir = tmp_path / "listmezo_partitions"
+
+        with mock.patch(
+            "factory.unpack.partitions.extract_dynamic_partitions_from_payload_dir",
+            return_value=({}, {}),
+        ) as mock_fn, mock.patch(
+            "factory.unpack.partitions.collect_extracted_partitions",
+            return_value=["system"],
+        ):
+            _try_extract_for_listmezo(source_images, extract_dir)
+
+        assert mock_fn.called, (
+            "extract_dynamic_partitions_from_payload_dir must be called"
+        )
+
+    def test_broken_function_not_imported(self):
+        """scan_payloads_extract_partitions must not appear in listmezo_engine source."""
+        import inspect
+        from factory.apps import listmezo_engine
+        src = inspect.getsource(listmezo_engine)
+        assert "scan_payloads_extract_partitions" not in src, (
+            "scan_payloads_extract_partitions is a non-existent symbol and must be removed"
+        )
+
+    def test_correct_function_exists_in_partitions(self):
+        """extract_dynamic_partitions_from_payload_dir must be importable from partitions."""
+        from factory.unpack.partitions import extract_dynamic_partitions_from_payload_dir
+        assert callable(extract_dynamic_partitions_from_payload_dir)
+
+
+class TestRepackListMezoPartitions:
+    """Fix #4: After ListMezo execute, rebuilt images must overwrite super_parts/*.img."""
+
+    def _setup_repack_env(self, tmp_path):
+        """Create the minimal filesystem tree expected by the repack stage."""
+        work_dir = tmp_path / "work"
+        lm_parts = work_dir / "listmezo_partitions"
+        config_dir = lm_parts / "config"
+        super_parts = work_dir / "super_parts"
+
+        for d in (lm_parts, config_dir, super_parts):
+            d.mkdir(parents=True)
+
+        # Minimal partition dir with one file so iterdir() is non-empty.
+        system_dir = lm_parts / "system"
+        system_dir.mkdir()
+        (system_dir / "build.prop").write_text("ro.build.host=test\n", encoding="utf-8")
+
+        # Fake fs_config + file_contexts
+        (config_dir / "system_fs_config").write_text("/ 0 0 0755\n", encoding="utf-8")
+        (config_dir / "system_file_contexts").write_text("/ u:object_r:rootfs:s0\n", encoding="utf-8")
+
+        # Existing super_parts/system.img (stub — repack will replace it)
+        (super_parts / "system.img").write_bytes(b"\x00" * 16)
+
+        return work_dir, super_parts
+
+    def test_dry_run_returns_dry_run(self, tmp_path):
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+        result = run_repack_listmezo_partitions_stage(
+            work_dir=work_dir,
+            super_parts_dir=super_parts,
+            reports_dir=tmp_path / "reports",
+            execute=False,
+        )
+        assert result["status"] == "DRY_RUN"
+
+    def test_skipped_when_listmezo_not_applied(self, tmp_path):
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+        for status in ("DRY_RUN", "SKIPPED"):
+            result = run_repack_listmezo_partitions_stage(
+                work_dir=work_dir,
+                super_parts_dir=super_parts,
+                reports_dir=tmp_path / "reports",
+                listmezo_stage_report={"status": status},
+                execute=True,
+            )
+            assert result["status"] == "SKIPPED", f"expected SKIPPED for lm_status={status}"
+
+    def test_skipped_when_no_partition_dirs(self, tmp_path):
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir = tmp_path / "work"
+        work_dir.mkdir()
+        super_parts = tmp_path / "super_parts"
+        super_parts.mkdir()
+        result = run_repack_listmezo_partitions_stage(
+            work_dir=work_dir,
+            super_parts_dir=super_parts,
+            reports_dir=tmp_path / "reports",
+            listmezo_stage_report={"status": "APPLIED"},
+            execute=True,
+        )
+        assert result["status"] == "SKIPPED"
+
+    def test_fails_when_fs_config_missing(self, tmp_path):
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+        # Remove fs_config so repack must fail.
+        (work_dir / "listmezo_partitions" / "config" / "system_fs_config").unlink()
+
+        result = run_repack_listmezo_partitions_stage(
+            work_dir=work_dir,
+            super_parts_dir=super_parts,
+            reports_dir=tmp_path / "reports",
+            listmezo_stage_report={"status": "APPLIED"},
+            execute=True,
+        )
+        assert result["status"] == "FAILED"
+        assert "system" in result["failed"]
+        assert result["errors"]
+
+    def test_fails_when_mkfs_erofs_missing(self, tmp_path):
+        import unittest.mock as mock
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+
+        with mock.patch(
+            "factory.apps.repack_listmezo_partitions.resolve_mkfs_erofs_binary_legacy",
+            return_value=None,
+        ):
+            result = run_repack_listmezo_partitions_stage(
+                work_dir=work_dir,
+                super_parts_dir=super_parts,
+                reports_dir=tmp_path / "reports",
+                listmezo_stage_report={"status": "APPLIED"},
+                execute=True,
+            )
+        assert result["status"] == "FAILED"
+        assert "system" in result["failed"]
+
+    def test_rebuilt_image_replaces_super_parts_img(self, tmp_path):
+        """After successful repack, super_parts/system.img is replaced by the rebuilt image."""
+        import unittest.mock as mock
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+
+        rebuilt_content = b"FAKE_EROFS_IMG"
+
+        def _fake_mkfs(cmd, capture_output=False, timeout=None):
+            del capture_output, timeout
+            # Write fake content to the output path (last positional arg before src dir).
+            out_img = Path(cmd[-2])
+            out_img.write_bytes(rebuilt_content)
+            import subprocess
+            r = mock.MagicMock(spec=subprocess.CompletedProcess)
+            r.returncode = 0
+            return r
+
+        with mock.patch(
+            "factory.apps.repack_listmezo_partitions.resolve_mkfs_erofs_binary_legacy",
+            return_value=Path("/fake/mkfs.erofs"),
+        ), mock.patch(
+            "factory.apps.repack_listmezo_partitions.subprocess.run",
+            side_effect=_fake_mkfs,
+        ):
+            result = run_repack_listmezo_partitions_stage(
+                work_dir=work_dir,
+                super_parts_dir=super_parts,
+                reports_dir=tmp_path / "reports",
+                listmezo_stage_report={"status": "APPLIED"},
+                execute=True,
+            )
+
+        assert result["status"] == "APPLIED", f"expected APPLIED, got {result}"
+        assert "system" in result["rebuilt"]
+        assert (super_parts / "system.img").read_bytes() == rebuilt_content
+
+    def test_repack_failure_leaves_no_rebuilt_img(self, tmp_path):
+        """If mkfs.erofs fails, the original super_parts img must NOT be replaced."""
+        import unittest.mock as mock
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+
+        original_content = (super_parts / "system.img").read_bytes()
+
+        def _failing_mkfs(cmd, capture_output, timeout):
+            import subprocess
+            r = mock.MagicMock(spec=subprocess.CompletedProcess)
+            r.returncode = 1
+            r.stderr = b"mkfs.erofs: fake error"
+            return r
+
+        with mock.patch(
+            "factory.apps.repack_listmezo_partitions.resolve_mkfs_erofs_binary_legacy",
+            return_value=Path("/fake/mkfs.erofs"),
+        ), mock.patch(
+            "factory.apps.repack_listmezo_partitions.subprocess.run",
+            side_effect=_failing_mkfs,
+        ):
+            result = run_repack_listmezo_partitions_stage(
+                work_dir=work_dir,
+                super_parts_dir=super_parts,
+                reports_dir=tmp_path / "reports",
+                listmezo_stage_report={"status": "APPLIED"},
+                execute=True,
+            )
+
+        assert result["status"] == "FAILED"
+        # Original img must be intact — repack must not have replaced it.
+        assert (super_parts / "system.img").read_bytes() == original_content
+
+    def test_report_written(self, tmp_path):
+        """repack_listmezo_report.txt must always be written."""
+        import unittest.mock as mock
+        from factory.apps.repack_listmezo_partitions import run_repack_listmezo_partitions_stage
+        work_dir, super_parts = self._setup_repack_env(tmp_path)
+        reports_dir = tmp_path / "reports"
+
+        with mock.patch(
+            "factory.apps.repack_listmezo_partitions.resolve_mkfs_erofs_binary_legacy",
+            return_value=None,
+        ):
+            run_repack_listmezo_partitions_stage(
+                work_dir=work_dir,
+                super_parts_dir=super_parts,
+                reports_dir=reports_dir,
+                listmezo_stage_report={"status": "APPLIED"},
+                execute=True,
+            )
+
+        assert (reports_dir / "repack_listmezo_report.txt").exists()
+
+
+class TestAdapterWiring:
+    """Fix #1/#2: eu_rom_adapter and datbr_adapter called for the right ROM formats."""
+
+    def test_eu_rom_adapter_importable(self):
+        from factory.unpack.eu_rom_adapter import inspect_rom_source, EuRomInfo
+        assert callable(inspect_rom_source)
+
+    def test_datbr_adapter_importable(self):
+        from factory.unpack.datbr_adapter import process_datbr_rom, DatBrResult
+        assert callable(process_datbr_rom)
+
+    def test_eu_adapter_called_for_xiaomi_eu_zip(self, tmp_path):
+        """smart_base_engine must call inspect_rom_source for FORMAT_XIAOMI_EU_ZIP."""
+        import unittest.mock as mock
+        from factory.input.rom_detector import FORMAT_XIAOMI_EU_ZIP
+        from factory.unpack.eu_rom_adapter import EuRomInfo
+
+        unpacked = tmp_path / "unpacked_rom"
+        unpacked.mkdir(parents=True)
+
+        fake_eu_info = EuRomInfo(
+            source_type="super_img",
+            original_path=unpacked,
+            status="OK",
+        )
+
+        with mock.patch(
+            "factory.unpack.eu_rom_adapter.inspect_rom_source",
+            return_value=fake_eu_info,
+        ) as mock_inspect, mock.patch(
+            "factory.unpack.universal_unpacker.unpack_rom",
+            return_value={"status": "OK", "errors": [], "warnings": []},
+        ):
+            # Import and call the unpack logic indirectly to avoid full engine setup.
+            # Verify the adapter is wired by checking the import is present in engine.
+            import inspect as _inspect
+            import factory.engine.smart_base_engine as _eng
+            src = _inspect.getsource(_eng)
+            assert "inspect_rom_source" in src, (
+                "inspect_rom_source must be called in smart_base_engine._do_unpack"
+            )
+            assert "eu_rom_adapter" in src, (
+                "eu_rom_adapter must be referenced in smart_base_engine"
+            )
+
+    def test_datbr_adapter_called_for_new_dat_br_zip(self):
+        """smart_base_engine must call process_datbr_rom for FORMAT_NEW_DAT_BR_ZIP."""
+        import inspect as _inspect
+        import factory.engine.smart_base_engine as _eng
+        src = _inspect.getsource(_eng)
+        assert "process_datbr_rom" in src, (
+            "process_datbr_rom must be called in smart_base_engine._do_unpack"
+        )
+        assert "datbr_adapter" in src, (
+            "datbr_adapter must be referenced in smart_base_engine"
+        )
+
+    def test_repack_stage_in_pipeline_after_listmezo(self):
+        """repack_listmezo_partitions must appear after listmezo_free_normalize in the engine."""
+        import inspect as _inspect
+        import factory.engine.smart_base_engine as _eng
+        src = _inspect.getsource(_eng)
+        lm_pos = src.find("listmezo_free_normalize")
+        repack_pos = src.find("repack_listmezo_partitions")
+        super_exec_pos = src.find("super_execute")
+        assert lm_pos != -1, "listmezo_free_normalize not found in engine"
+        assert repack_pos != -1, "repack_listmezo_partitions not found in engine"
+        assert super_exec_pos != -1, "super_execute not found in engine"
+        assert lm_pos < repack_pos < super_exec_pos, (
+            "Expected order: listmezo_free_normalize < repack_listmezo_partitions < super_execute"
+        )

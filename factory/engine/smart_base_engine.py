@@ -68,19 +68,20 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 # ── Stage timeout configuration (minutes) ────────────────────────────────────
 
 STAGE_TIMEOUTS_MINUTES: dict[str, int] = {
-    "preflight":         2,
-    "analyze_rom":       5,
-    "unpack_rom":        60,
-    "source_manifest":   10,
-    "super_inputs":             15,
-    "listmezo_free_normalize":  15,
-    "super_strategy":           1,
-    "super_execute":     60,
-    "assemble_images":   15,
-    "apply_mods":        30,
-    "final_zip":         45,
-    "pixeldrain_upload": 45,
-    "cleanup":           10,
+    "preflight":                    2,
+    "analyze_rom":                  5,
+    "unpack_rom":                   60,
+    "source_manifest":              10,
+    "super_inputs":                 15,
+    "listmezo_free_normalize":      15,
+    "repack_listmezo_partitions":   30,
+    "super_strategy":               1,
+    "super_execute":                60,
+    "assemble_images":              15,
+    "apply_mods":                   30,
+    "final_zip":                    45,
+    "pixeldrain_upload":            45,
+    "cleanup":                      10,
 }
 
 _HEARTBEAT_STAGES: frozenset[str] = frozenset({
@@ -550,12 +551,96 @@ def run_smart_base_engine(
 
         def _do_unpack() -> dict:
             nonlocal _unpack
+            import shutil as _shutil  # noqa: PLC0415
+            from factory.input.rom_detector import (  # noqa: PLC0415
+                FORMAT_NEW_DAT_BR_ZIP,
+                FORMAT_SPLIT_SUPER_ZIP,
+                FORMAT_XIAOMI_EU_ZIP,
+            )
+
             res = unpack_with_analysis(
                 analysis=_analysis,
                 work_dir=work_dir,
                 execute=True,
             )
             _unpack = res
+
+            if res.get("status") not in ("OK", "APPLIED"):
+                return res
+
+            rom_format = getattr(_analysis, "rom_format", None)
+            unpacked_dir = work_dir / "unpacked_rom"
+            source_images_dir = work_dir / "source_images"
+
+            # ── EU / split-super / super.zst / cust-split layout ─────────────
+            # Use eu_rom_adapter as the first inspection adapter so that .zst
+            # decompression, cust.img merging, and op_list parsing all happen
+            # before super_inputs collects partition images.
+            if rom_format in (FORMAT_XIAOMI_EU_ZIP, FORMAT_SPLIT_SUPER_ZIP) and unpacked_dir.is_dir():
+                try:
+                    from factory.unpack.eu_rom_adapter import inspect_rom_source  # noqa: PLC0415
+                    eu_info = inspect_rom_source(unpacked_dir, work_dir, reports_dir)
+                    res["eu_adapter_source_type"] = eu_info.source_type
+                    res["eu_adapter_status"] = eu_info.status
+                    if eu_info.status == "FAILED":
+                        res.setdefault("warnings", []).append(
+                            f"eu_rom_adapter: {eu_info.error}"
+                        )
+                    else:
+                        if eu_info.normalized_path and eu_info.normalized_path.is_file():
+                            target = source_images_dir / "super.img"
+                            if not target.is_file():
+                                source_images_dir.mkdir(parents=True, exist_ok=True)
+                                _shutil.copy2(str(eu_info.normalized_path), str(target))
+                                print(f"[unpack_rom] eu_adapter: normalized super.img → {target}")
+                        if eu_info.cust_img_path and eu_info.cust_img_path.is_file():
+                            cust_target = source_images_dir / "cust.img"
+                            if not cust_target.is_file():
+                                source_images_dir.mkdir(parents=True, exist_ok=True)
+                                _shutil.copy2(str(eu_info.cust_img_path), str(cust_target))
+                except Exception as _exc:
+                    res.setdefault("warnings", []).append(
+                        f"eu_rom_adapter inspection failed (non-fatal): {_exc}"
+                    )
+
+            # ── new.dat.br conversion ─────────────────────────────────────────
+            # The unpack stage extracts the archive but does not convert
+            # *.new.dat.br files to raw images.  Call datbr_adapter here so
+            # that converted .img files land in source_images/ and super_parts/
+            # before super_inputs and super_execute run.
+            if rom_format == FORMAT_NEW_DAT_BR_ZIP and unpacked_dir.is_dir():
+                try:
+                    from factory.unpack.datbr_adapter import process_datbr_rom  # noqa: PLC0415
+                    datbr_result = process_datbr_rom(unpacked_dir, work_dir, reports_dir)
+                    res["datbr_status"] = datbr_result.status
+                    if datbr_result.status == "FAILED":
+                        res["status"] = "FAILED"
+                        res.setdefault("errors", []).append(
+                            f"datbr_adapter: {datbr_result.error}"
+                        )
+                    else:
+                        source_images_dir.mkdir(parents=True, exist_ok=True)
+                        super_parts = work_dir / "super_parts"
+                        super_parts.mkdir(parents=True, exist_ok=True)
+                        for _part_name, _img_path in datbr_result.images.items():
+                            _src_target = source_images_dir / f"{_part_name}.img"
+                            if not _src_target.is_file():
+                                _shutil.copy2(str(_img_path), str(_src_target))
+                            _sp_target = super_parts / f"{_part_name}.img"
+                            if not _sp_target.is_file():
+                                _shutil.copy2(str(_img_path), str(_sp_target))
+                                print(f"[unpack_rom] datbr_adapter: {_part_name}.img → super_parts/")
+                        if datbr_result.status == "PARTIAL":
+                            res.setdefault("warnings", []).append(
+                                f"datbr_adapter: partial conversion "
+                                f"({len(datbr_result.images)} succeeded, "
+                                f"{len(datbr_result.warnings)} failed)"
+                            )
+                except Exception as _exc:
+                    res.setdefault("warnings", []).append(
+                        f"datbr_adapter failed (non-fatal): {_exc}"
+                    )
+
             return res
 
         ok = _run("unpack_rom", _do_unpack, critical=True)
@@ -670,6 +755,41 @@ def run_smart_base_engine(
                 "errors": [],
             }
             _stage_durations["listmezo_free_normalize"] = 0.0
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Stage 6c — Repack ListMezo-modified partitions into super_parts
+    # Must run after listmezo_free_normalize and before super_execute so that
+    # lpmake receives the updated partition images.
+    # ══════════════════════════════════════════════════════════════════════════
+    if edition == "free":
+        if ok and ctx.execute:
+            _lm_report = ctx.stage_reports.get("listmezo_free_normalize") or {}
+
+            def _do_repack_listmezo() -> dict:
+                from factory.apps.repack_listmezo_partitions import (  # noqa: PLC0415
+                    run_repack_listmezo_partitions_stage,
+                )
+                return run_repack_listmezo_partitions_stage(
+                    work_dir=work_dir,
+                    super_parts_dir=super_parts_dir,
+                    reports_dir=reports_dir,
+                    listmezo_stage_report=_lm_report,
+                    execute=True,
+                )
+
+            ok = _run("repack_listmezo_partitions", _do_repack_listmezo, critical=True)
+        elif not ctx.execute:
+            ctx.stage_reports["repack_listmezo_partitions"] = {
+                "status": "DRY_RUN", "warnings": [], "errors": [],
+            }
+            _stage_durations["repack_listmezo_partitions"] = 0.0
+    else:
+        ctx.stage_reports["repack_listmezo_partitions"] = {
+            "status": "SKIPPED",
+            "warnings": [f"edition={edition} — repack_listmezo only applies to free edition"],
+            "errors": [],
+        }
+        _stage_durations["repack_listmezo_partitions"] = 0.0
 
     # ══════════════════════════════════════════════════════════════════════════
     # Stages 7+8 — Select and execute super strategy

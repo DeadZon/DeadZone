@@ -803,10 +803,10 @@ def _try_extract_for_listmezo(
     try:
         from factory.unpack.partitions import (  # noqa: PLC0415
             collect_extracted_partitions,
-            scan_payloads_extract_partitions,
+            extract_dynamic_partitions_from_payload_dir,
         )
-        scan_payloads_extract_partitions(
-            payload_extracted_dir=source_images_dir,
+        extract_dynamic_partitions_from_payload_dir(
+            payload_out_dir=source_images_dir,
             project_dir=extract_dir,
         )
         extracted = collect_extracted_partitions(extract_dir)
