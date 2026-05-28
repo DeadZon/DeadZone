@@ -318,6 +318,12 @@ def _report_base(
         "compression_mode": f"ZIP_DEFLATED compresslevel={os.environ.get('DEADZONE_ZIP_LEVEL', '6')}",
         "compression_method": "ZIP_DEFLATED",
         "compression_level": int(os.environ.get("DEADZONE_ZIP_LEVEL", "6")),
+        "requested_compression_method": "ZIP_DEFLATED",
+        "requested_compression_level": int(os.environ.get("DEADZONE_ZIP_LEVEL", "6")),
+        "actual_compression_method": None,
+        "actual_compression_level": None,
+        "compression_fallback": False,
+        "fallback_reason": None,
         "uncompressed_size_mib": None,
         "compressed_zip_size_mib": None,
         "compression_ratio": None,
@@ -624,10 +630,17 @@ def build_final_fastboot_zip(
         report["report_files"] = write_final_fastboot_zip_report(report, reports_dir)
         return report
 
-    # Honour DEADZONE_ZIP_LEVEL env var (default 6; set to 0 for uncompressed).
+    # Resolve compression settings.
+    # Default: ZIP_DEFLATED level 6.
+    # ZIP_STORED only when DEADZONE_ZIP_COMPRESSION=stored OR DEADZONE_ZIP_LEVEL=0.
     _zip_level = int(os.environ.get("DEADZONE_ZIP_LEVEL", "6"))
-    _zip_compression = zipfile.ZIP_STORED if _zip_level == 0 else zipfile.ZIP_DEFLATED
-    _method_name = "ZIP_STORED" if _zip_level == 0 else "ZIP_DEFLATED"
+    _zip_compression_env = os.environ.get("DEADZONE_ZIP_COMPRESSION", "deflated").lower()
+    _use_stored = _zip_compression_env == "stored" or _zip_level == 0
+    _zip_compression = zipfile.ZIP_STORED if _use_stored else zipfile.ZIP_DEFLATED
+    _method_name = "ZIP_STORED" if _use_stored else "ZIP_DEFLATED"
+    _compress_level = None if _use_stored else _zip_level
+    report["requested_compression_method"] = _method_name
+    report["requested_compression_level"] = _zip_level
     report["compression_mode"] = f"{_method_name} compresslevel={_zip_level}"
     report["compression_method"] = _method_name
     report["compression_level"] = _zip_level
@@ -641,18 +654,27 @@ def build_final_fastboot_zip(
     if final_zip.exists():
         final_zip.unlink()
     try:
-        with zipfile.ZipFile(final_zip, "w", _zip_compression, compresslevel=_zip_level if _zip_level > 0 else None) as zf:
+        with zipfile.ZipFile(final_zip, "w", _zip_compression, compresslevel=_compress_level, allowZip64=True) as zf:
             for path in _iter_staging_files(staging_dir):
                 arcname = _normalize_entry(str(path.relative_to(staging_dir)))
                 zf.write(path, arcname)
+        report["actual_compression_method"] = _method_name
+        report["actual_compression_level"] = 0 if _use_stored else _zip_level
+        report["compression_fallback"] = False
     except Exception as _zip_exc:
         report["warnings"].append(
             f"Compressed ZIP failed ({_zip_exc}); falling back to ZIP_STORED"
         )
-        with zipfile.ZipFile(final_zip, "w", zipfile.ZIP_STORED) as zf:
+        with zipfile.ZipFile(final_zip, "w", zipfile.ZIP_STORED, allowZip64=True) as zf:
             for path in _iter_staging_files(staging_dir):
                 arcname = _normalize_entry(str(path.relative_to(staging_dir)))
                 zf.write(path, arcname)
+        report["compression_fallback"] = True
+        report["fallback_reason"] = str(_zip_exc)
+        report["original_requested_compression"] = _method_name
+        report["final_compression_method"] = "ZIP_STORED"
+        report["actual_compression_method"] = "ZIP_STORED"
+        report["actual_compression_level"] = 0
         report["compression_method"] = "ZIP_STORED"
         report["compression_level"] = 0
         report["compression_mode"] = "ZIP_STORED compresslevel=0 (fallback)"

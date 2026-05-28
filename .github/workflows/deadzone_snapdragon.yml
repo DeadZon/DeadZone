@@ -388,7 +388,8 @@ jobs:
           DEADZONE_EDITION: "${{ inputs.edition }}"
           DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
           DEADZONE_FAST_MODE: "true"
-          DEADZONE_ZIP_LEVEL: "${{ inputs.edition == 'free' && '0' || '9' }}"
+          DEADZONE_ZIP_LEVEL: "6"
+          DEADZONE_ZIP_COMPRESSION: "deflated"
           DEADZONE_MAX_WORKERS: ""
           DEADZONE_EXTRACT_THREADS: ""
         run: |
@@ -429,7 +430,8 @@ jobs:
           DEADZONE_EDITION: "${{ inputs.edition }}"
           DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
           DEADZONE_FAST_MODE: "true"
-          DEADZONE_ZIP_LEVEL: "${{ inputs.edition == 'free' && '0' || '9' }}"
+          DEADZONE_ZIP_LEVEL: "6"
+          DEADZONE_ZIP_COMPRESSION: "deflated"
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""
