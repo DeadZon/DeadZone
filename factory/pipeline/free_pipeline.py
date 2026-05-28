@@ -316,6 +316,37 @@ def _write_smart_free_engine_report(
 
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 
+def _run_listmezo_stage(ctx: Any, output_dir: Path) -> dict:
+    """Run ListMezo Normalize Engine if enabled in context or environment."""
+    enable = (
+        getattr(ctx, "enable_listmezo", None)
+        or os.environ.get("ENABLE_LISTMEZO", "true").lower() not in ("0", "false", "no")
+    )
+    if not enable:
+        return {"status": "SKIPPED", "reason": "enable_listmezo=false"}
+
+    rom_root = getattr(ctx, "project_dir", None)
+    if not rom_root:
+        return {"status": "SKIPPED", "reason": "project_dir not set in context"}
+
+    listmezo_mode = (
+        getattr(ctx, "listmezo_mode", None)
+        or os.environ.get("LISTMEZO_MODE", "dry_run")
+    )
+
+    try:
+        from factory.apps.listmezo_engine import run_listmezo
+        return run_listmezo(
+            rom_root=rom_root,
+            edition="free",
+            mode=listmezo_mode,
+            output_dir=output_dir,
+        )
+    except Exception as exc:
+        print(f"[ListMezo] Non-fatal error: {exc}")
+        return {"status": "ERROR", "error": str(exc)}
+
+
 def run_free_pipeline(
     ctx: Any,
     notifier: Optional[Any],
@@ -363,8 +394,10 @@ def run_free_pipeline(
         # Write free_engine_report.txt (compat: tests expect this file)
         _write_smart_free_engine_report(reports_dir, ctx, result)
         _write_telegram_status(notifier, ctx.notify_telegram, soc or "", source, output_dir)
-        # Strip internal _* fields before returning
-        return {k: v for k, v in result.items() if not k.startswith("_")}
+        final = {k: v for k, v in result.items() if not k.startswith("_")}
+        # ── ListMezo normalize (free edition) ────────────────────────────────
+        final["listmezo"] = _run_listmezo_stage(ctx, output_dir)
+        return final
 
     # ── Legacy engine fallback (DEADZONE_LEGACY_ENGINE=true) ─────────────────
     preflight_status = "SKIPPED"
@@ -409,4 +442,6 @@ def run_free_pipeline(
     _write_free_engine_report(reports_dir, ctx, result)
     _write_telegram_status(notifier, ctx.notify_telegram, soc or "", source, output_dir)
 
-    return {k: v for k, v in result.items() if not k.startswith("_")}
+    final = {k: v for k, v in result.items() if not k.startswith("_")}
+    final["listmezo"] = _run_listmezo_stage(ctx, output_dir)
+    return final
