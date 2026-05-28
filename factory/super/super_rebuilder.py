@@ -48,6 +48,25 @@ from factory.super.super_input_collector import DYNAMIC_PARTITION_NAMES, _DYNAMI
 _LP_METADATA_OVERHEAD: int = 4 * 1024 * 1024
 
 
+def _clean_unsparse_sibling(img: Path) -> None:
+    """Remove *.unsparse.img if lpunpack created it next to img.
+
+    lpunpack.SparseImage.unsparse() writes {stem}.unsparse.img into the same
+    directory as the input file.  When that input is output/images/final/super.img
+    the artifact lands in the public final-images folder and breaks ZIP packaging.
+    This helper deletes it immediately after every lpunpack call.
+    """
+    if not img or not img.parent.is_dir():
+        return
+    unsparse = img.parent / f"{img.stem}.unsparse.img"
+    if unsparse.is_file():
+        try:
+            unsparse.unlink()
+            print(f"[super_rebuilder] removed unsparse artifact: {unsparse.name}")
+        except OSError as exc:
+            print(f"[super_rebuilder] warning: could not remove {unsparse.name}: {exc}")
+
+
 # ── Metadata helpers ──────────────────────────────────────────────────────────
 
 def _base(name: str) -> str:
@@ -221,6 +240,7 @@ def _validate_super(
 
     try:
         info = _lpunpack_get_info(str(super_img))
+        _clean_unsparse_sibling(super_img)
         if not info:
             result["errors"].append("lpunpack returned empty result — super.img may be corrupt")
             result["status"] = "FAILED"
@@ -360,6 +380,7 @@ def rebuild_super(
             if _lpunpack_get_info is not None:
                 try:
                     info = _lpunpack_get_info(str(output_super))
+                    _clean_unsparse_sibling(output_super)
                     if info:
                         result["validation_status"] = "PASSED"
                         result["partitions_in_final"] = sorted(

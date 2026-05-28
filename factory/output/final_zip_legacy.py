@@ -99,6 +99,53 @@ FORBIDDEN_IMAGE_NAMES: frozenset[str] = frozenset({
 
 KNOWN_IMAGE_ORDER = [image for _, image in FLASH_ORDER]
 
+# Super build/validation artifacts that must never enter the final ZIP.
+_SWEEP_FORBIDDEN_NAMES: frozenset[str] = frozenset({
+    "super.unsparse.img",
+    "super_raw.img",
+    "super_sparse.img",
+    "super_metadata.img",
+    "lpdump.img",
+    "lpdump_validation.img",
+})
+
+
+def _sweep_forbidden_super_artifacts(
+    images_dir: Path, output_dir: Path, report: dict
+) -> list[str]:
+    """Move forbidden super artifacts out of images_dir before packaging.
+
+    These are validation/temp files that lpunpack or super-build steps may leave
+    in the final-images folder.  Moves them to
+    output/work/super_workspace/forbidden_final_artifacts/ and records them.
+    Returns the list of moved file names.
+    """
+    dest_dir = output_dir.parent / "work" / "super_workspace" / "forbidden_final_artifacts"
+    moved: list[str] = []
+    for img in sorted(p for p in images_dir.iterdir() if p.is_file()):
+        name = img.name
+        lower = name.lower()
+        if (
+            lower in _SWEEP_FORBIDDEN_NAMES
+            or lower.endswith(".unsparse.img")
+            or lower.startswith("super.img.")
+            or (lower.startswith("super_") and lower.endswith(".chunk"))
+        ):
+            try:
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(img), dest_dir / name)
+                moved.append(name)
+                print(f"[final_zip] swept forbidden artifact: {name} → forbidden_final_artifacts/")
+            except Exception as exc:
+                report["warnings"].append(f"Could not sweep forbidden artifact {name}: {exc}")
+    if moved:
+        report["warnings"].append(
+            f"Swept forbidden super artifacts from final images before packaging: {moved}"
+        )
+        existing = report.get("skipped_duplicate_super_images") or []
+        report["skipped_duplicate_super_images"] = sorted(set(existing) | set(moved))
+    return moved
+
 
 def _normalize_entry(path: str) -> str:
     return path.replace("\\", "/").lstrip("/")
@@ -325,9 +372,18 @@ def build_final_fastboot_zip(
     report["super_img_source"] = str(images_dir / "super.img") if has_super else None
     report["bootchain_images_found"] = [n for n in REQUIRED_BOOTCHAIN_IMAGES if (images_dir / n).is_file()]
     report["bootchain_images_missing"] = [n for n in REQUIRED_BOOTCHAIN_IMAGES if not (images_dir / n).is_file()]
+
+    # Sweep validation/temp super artifacts before checking for exactly one super.
+    # These may have been left by lpunpack during super validation in the final-images dir.
+    _sweep_forbidden_super_artifacts(images_dir, output_dir, report)
+
     current_image_names = sorted(p.name for p in images_dir.iterdir() if p.is_file())
     super_variants = _super_variant_names(current_image_names)
-    report["skipped_duplicate_super_images"] = [n for n in super_variants if n != "super.img"]
+    # Merge already-swept names with any remaining super variants (excluding super.img itself).
+    _already_swept = report.get("skipped_duplicate_super_images") or []
+    report["skipped_duplicate_super_images"] = sorted(
+        set(_already_swept) | set(n for n in super_variants if n != "super.img")
+    )
     report["exactly_one_super_img"] = super_variants == ["super.img"]
     if not report["exactly_one_super_img"]:
         report["errors"].append(

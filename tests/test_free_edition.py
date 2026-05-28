@@ -1894,7 +1894,9 @@ class TestSmartSourceImageManifest:
             for key in ["role", "origin", "include_in_final", "reason"]:
                 assert key in image
 
-    def test_final_zip_rejects_super_variants_and_includes_all_final_images(self):
+    def test_final_zip_sweeps_split_super_chunk_and_succeeds(self):
+        """super.img.0 (split super chunk) must be swept before the exactly_one_super check.
+        After sweep, packaging must succeed — not fail — because super.img is still present."""
         from factory.output.final_zip_legacy import build_final_fastboot_zip
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1923,9 +1925,17 @@ class TestSmartSourceImageManifest:
                 execute=False,
             )
 
-        assert result["final_status"] == "FAILED"
-        assert result["exactly_one_super_img"] is False
-        assert any("exactly one super" in e.lower() for e in result["errors"])
+        # super.img.0 is swept before the check; exactly one super.img remains → DRY_RUN
+        assert result["exactly_one_super_img"] is True, (
+            "exactly_one_super_img must be True after super.img.0 is swept"
+        )
+        assert result["final_status"] == "DRY_RUN", (
+            f"Expected DRY_RUN after sweep, got {result['final_status']}. Errors: {result['errors']}"
+        )
+        # The swept chunk must be recorded in the skipped list
+        assert "super.img.0" in result.get("skipped_duplicate_super_images", []), (
+            "super.img.0 must appear in skipped_duplicate_super_images"
+        )
 
     def test_final_zip_plans_all_final_source_images(self):
         from factory.output.final_zip_legacy import build_final_fastboot_zip
@@ -1962,6 +1972,345 @@ class TestSmartSourceImageManifest:
             assert f"images/{name}" in result["zip_entries"]
         assert not any("output/work" in e for e in result["zip_entries"])
         assert not result["forbidden_entries"]
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 18. SUPER.UNSPARSE.IMG MANAGED — never in final images or ZIP
+# ═══════════════════════════════════════════════════════════════════
+
+class TestSuperUnsparseManagedClean:
+    """Verifies that super.unsparse.img (lpunpack validation artifact) is kept
+    out of the public final-images folder and final ZIP."""
+
+    # ── 1. super_rebuilder cleans unsparse from the final dir ──────────────
+
+    def test_rebuild_super_preserve_cleans_unsparse_from_final_dir(self):
+        """After preserve_original_super, super.unsparse.img must NOT remain in output_super.parent."""
+        from factory.super.super_rebuilder import rebuild_super
+        import factory.super.super_rebuilder as _sr_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            original_super = Path(tmp) / "source_images" / "super.img"
+            original_super.parent.mkdir(parents=True)
+            original_super.write_bytes(b"SUPER_BYTES")
+
+            final_dir = Path(tmp) / "output" / "images" / "final"
+            final_dir.mkdir(parents=True)
+            output_super = final_dir / "super.img"
+            reports_dir = Path(tmp) / "reports"
+
+            # Simulate lpunpack creating super.unsparse.img next to the output super
+            original_get_info = _sr_mod._lpunpack_get_info
+
+            def _fake_get_info(path):
+                # Create the unsparse sibling, as lpunpack would do for sparse images
+                p = Path(path)
+                (p.parent / f"{p.stem}.unsparse.img").write_bytes(b"UNSPARSE_DATA")
+                return None  # return None so validation is skipped gracefully
+
+            _sr_mod._lpunpack_get_info = _fake_get_info
+            try:
+                result = rebuild_super(
+                    super_parts_dir=Path(tmp) / "super_parts",
+                    output_super=output_super,
+                    reports_dir=reports_dir,
+                    original_super_img=original_super,
+                    execute=True,
+                    preserve_original_super=True,
+                )
+            finally:
+                _sr_mod._lpunpack_get_info = original_get_info
+
+            # Assertions must be inside the `with` block while the temp dir still exists
+            assert result["status"] == "APPLIED"
+            assert not (final_dir / "super.unsparse.img").exists(), (
+                "super.unsparse.img must be removed from final dir after lpunpack validation"
+            )
+            assert output_super.is_file(), "super.img must still be present"
+
+    # ── 2. final_image_assembler sweeps unsparse before manifest ────────────
+
+    def test_assembler_sweeps_unsparse_before_manifest(self):
+        """assemble_final_images must move super.unsparse.img out of final_dir before manifest."""
+        with tempfile.TemporaryDirectory() as tmp:
+            final_dir = Path(tmp) / "output" / "images" / "final"
+            final_dir.mkdir(parents=True)
+            super_img = final_dir / "super.img"
+            super_img.write_bytes(b"SUPER")
+            # Simulate the lpunpack artifact appearing in final_dir
+            (final_dir / "super.unsparse.img").write_bytes(b"UNSPARSE")
+
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "boot.img")
+
+            result = assemble_final_images(
+                super_img=super_img,
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+
+        assert result["status"] == "APPLIED"
+        assert "super.unsparse.img" not in (result.get("final_manifest") or []), (
+            "super.unsparse.img must not appear in final_manifest"
+        )
+        assert result.get("exactly_one_super_img") is True
+        assert not (final_dir / "super.unsparse.img").exists(), (
+            "super.unsparse.img must be moved out of final_dir"
+        )
+
+    # ── 3. final_dir has exactly one super.img after cleanup ────────────────
+
+    def test_final_dir_exactly_one_super_after_cleanup(self):
+        """After assemble, exactly_one_super_img must be True even if unsparse was present."""
+        with tempfile.TemporaryDirectory() as tmp:
+            final_dir = Path(tmp) / "final"
+            final_dir.mkdir()
+            (final_dir / "super.img").write_bytes(b"SUPER")
+            (final_dir / "super.unsparse.img").write_bytes(b"UNSPARSE")
+            # super.img.0 is a split chunk (extension .0, not .img) — still swept
+            (final_dir / "super.img.0").write_bytes(b"CHUNK")
+
+            source_dir = Path(tmp) / "src"
+            _write(source_dir / "boot.img")
+
+            result = assemble_final_images(
+                super_img=final_dir / "super.img",
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+
+            assert result["exactly_one_super_img"] is True
+            # Only super.img (and boot.img) must remain; forbidden artifacts swept
+            remaining = {p.name for p in final_dir.iterdir() if p.is_file()}
+            assert "super.unsparse.img" not in remaining
+            assert "super.img.0" not in remaining
+            assert "super.img" in remaining
+
+    # ── 4. final_zip_legacy sweeps unsparse before packaging check ──────────
+
+    def test_final_zip_sweeps_unsparse_before_exactly_one_super_check(self):
+        """build_final_fastboot_zip must remove super.unsparse.img and not fail the super check."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images_dir = root / "output" / "images" / "final"
+            images_dir.mkdir(parents=True)
+            _write(images_dir / "super.img")
+            _write(images_dir / "boot.img")
+            # This artifact should be swept before the exactly_one_super check
+            _write(images_dir / "super.unsparse.img", b"UNSPARSE_ARTIFACT")
+
+            template_zip = root / "template.zip"
+            with zipfile.ZipFile(str(template_zip), "w") as zf:
+                zf.writestr("bin/windows/fastboot.exe", b"")
+                zf.writestr("bin/windows/AdbWinApi.dll", b"")
+                zf.writestr("bin/windows/AdbWinUsbApi.dll", b"")
+
+            result = build_final_fastboot_zip(
+                images_dir=images_dir,
+                output_dir=root / "output" / "final",
+                build_name="DeadZone_Test",
+                device="zorn",
+                flavor="free",
+                soc="snapdragon",
+                template_zip=template_zip,
+                execute=False,
+            )
+
+        assert result["exactly_one_super_img"] is True, (
+            "exactly_one_super_img must be True after super.unsparse.img is swept"
+        )
+        assert not (images_dir / "super.unsparse.img").exists(), (
+            "super.unsparse.img must be removed from images_dir"
+        )
+        assert not any("super.unsparse" in e for e in result.get("errors", [])), (
+            f"No error about super.unsparse.img expected after sweep. Errors: {result['errors']}"
+        )
+
+    # ── 5. ZIP staging and entries exclude super.unsparse.img ───────────────
+
+    def test_zip_entries_exclude_super_unsparse(self):
+        """dry-run zip_entries must not contain any super.unsparse.img entry."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images_dir = root / "output" / "images" / "final"
+            images_dir.mkdir(parents=True)
+            for name in ["super.img", "boot.img"]:
+                _write(images_dir / name)
+            _write(images_dir / "super.unsparse.img", b"UNSPARSE")
+
+            template_zip = root / "template.zip"
+            with zipfile.ZipFile(str(template_zip), "w") as zf:
+                zf.writestr("bin/windows/fastboot.exe", b"")
+                zf.writestr("bin/windows/AdbWinApi.dll", b"")
+                zf.writestr("bin/windows/AdbWinUsbApi.dll", b"")
+
+            result = build_final_fastboot_zip(
+                images_dir=images_dir,
+                output_dir=root / "output" / "final",
+                build_name="DeadZone_Test",
+                device="zorn",
+                flavor="deadzone",
+                soc="snapdragon",
+                template_zip=template_zip,
+                device_model="Xiaomi Zorn",
+                android_version="16",
+                build_incremental="OS3.0.1.0.WNOCNXM",
+                execute=False,
+            )
+
+        for entry in result.get("zip_entries", []):
+            assert "unsparse" not in entry.lower(), (
+                f"super.unsparse.img must not appear in ZIP entries, found: {entry}"
+            )
+        assert "images/super.img" in result.get("zip_entries", [])
+
+    # ── 6. Source images (userdata, metadata, vm-bootsys) remain included ───
+
+    def test_source_images_not_affected_by_unsparse_sweep(self):
+        """userdata.img / metadata.img / vm-bootsys.img must still be included after sweep."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            for name in ["userdata.img", "metadata.img", "misc.img", "persist.img",
+                         "rescue.img", "vm-bootsys.img"]:
+                _write(source_dir / name)
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            # Also put a forbidden artifact in the source_dir — must NOT end up in final
+            _write(source_dir / "super.unsparse.img", b"UNSPARSE")
+
+            final_dir = Path(tmp) / "output" / "images" / "final"
+            result = assemble_final_images(super_img, source_dir, final_dir, execute=True)
+
+        manifest = set(result["final_manifest"])
+        for name in ["userdata.img", "metadata.img", "misc.img",
+                     "persist.img", "rescue.img", "vm-bootsys.img"]:
+            assert name in manifest, f"{name} must be in final manifest"
+        assert "super.unsparse.img" not in manifest
+
+    # ── 7. source_image_manifest marks super.unsparse.img as validation/temp ─
+
+    def test_source_manifest_marks_unsparse_as_validation(self):
+        """build_source_image_manifest must assign role='validation' and include_in_final=False
+        to super.unsparse.img."""
+        from factory.images.source_image_manifest import build_source_image_manifest
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "boot.img")
+            _write(source_dir / "super.unsparse.img", b"UNSPARSE_DATA")
+            super_img = Path(tmp) / "super.img"
+            _write(super_img, b"SUPER")
+            work_root = Path(tmp) / "work"
+
+            manifest = build_source_image_manifest(
+                source_roots=[source_dir],
+                work_root=work_root,
+                final_super_path=super_img,
+            )
+
+        unsparse_entries = [
+            e for e in manifest["images"]
+            if e["name"].lower() == "super.unsparse.img"
+        ]
+        assert unsparse_entries, "super.unsparse.img must appear in manifest"
+        entry = unsparse_entries[0]
+        assert entry["include_in_final"] is False, (
+            "super.unsparse.img must have include_in_final=False"
+        )
+        assert entry["role"] in {"validation", "temp"}, (
+            f"super.unsparse.img must have role='validation' or 'temp', got {entry['role']!r}"
+        )
+
+    # ── 8. final_image_manifest.json has exactly_one_super_img=true ─────────
+
+    def test_final_image_manifest_exactly_one_super_true(self):
+        """final_image_manifest.json must have exactly_one_super_img=true even when
+        super.unsparse.img was present in final_dir."""
+        import json
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # _write_final_image_manifest uses final_dir.parents[1] / "reports"
+            # final_dir = output/images/final → parents[1] = output
+            final_dir = Path(tmp) / "output" / "images" / "final"
+            final_dir.mkdir(parents=True)
+            (final_dir / "super.img").write_bytes(b"SUPER")
+            (final_dir / "super.unsparse.img").write_bytes(b"UNSPARSE")
+
+            source_dir = Path(tmp) / "work" / "source_images"
+            _write(source_dir / "boot.img")
+
+            result = assemble_final_images(
+                super_img=final_dir / "super.img",
+                source_images_dir=source_dir,
+                final_dir=final_dir,
+                execute=True,
+            )
+
+            # Report goes to final_dir.parents[1] / "reports" = output/reports
+            report_path = Path(tmp) / "output" / "reports" / "final_image_manifest.json"
+            assert report_path.is_file(), "final_image_manifest.json must be written"
+            data = json.loads(report_path.read_text(encoding="utf-8"))
+
+            assert data["exactly_one_super_img"] is True, (
+                "final_image_manifest.json must have exactly_one_super_img=true"
+            )
+            assert "super.unsparse.img" not in data.get("included_images", []), (
+                "super.unsparse.img must not appear in included_images"
+            )
+            moved = data.get("moved_forbidden_artifacts", [])
+            assert "super.unsparse.img" in moved, (
+                "super.unsparse.img must appear in moved_forbidden_artifacts"
+            )
+
+    # ── 9. Zorn-style final images pass packaging validation ────────────────
+
+    def test_zorn_style_final_images_pass_packaging(self):
+        """Final-images folder with only super.img + standard standalone images must pass
+        build_final_fastboot_zip validation (the zorn scenario)."""
+        from factory.output.final_zip_legacy import build_final_fastboot_zip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            images_dir = root / "output" / "images" / "final"
+            images_dir.mkdir(parents=True)
+            for name in ["super.img", "boot.img", "vbmeta.img", "dtbo.img"]:
+                _write(images_dir / name)
+            # No super.unsparse.img — clean zorn scenario
+
+            template_zip = root / "template.zip"
+            with zipfile.ZipFile(str(template_zip), "w") as zf:
+                zf.writestr("bin/windows/fastboot.exe", b"")
+                zf.writestr("bin/windows/AdbWinApi.dll", b"")
+                zf.writestr("bin/windows/AdbWinUsbApi.dll", b"")
+
+            result = build_final_fastboot_zip(
+                images_dir=images_dir,
+                output_dir=root / "output" / "final",
+                build_name="DeadZone_Test",
+                device="zorn",
+                flavor="deadzone",
+                soc="snapdragon",
+                template_zip=template_zip,
+                device_model="Xiaomi Zorn",
+                android_version="16",
+                build_incremental="OS3.0.1.0.WNOCNXM",
+                execute=False,
+            )
+
+        assert result["exactly_one_super_img"] is True
+        assert result["final_status"] == "DRY_RUN", (
+            f"Zorn-style packaging must produce DRY_RUN. Got: {result['final_status']}\n"
+            f"Errors: {result['errors']}"
+        )
+        assert not result["forbidden_entries"], (
+            f"No forbidden entries expected: {result['forbidden_entries']}"
+        )
 
 
 # ── Runner ────────────────────────────────────────────────────────────────────

@@ -36,6 +36,27 @@ DYNAMIC_PARTITION_IMAGES: frozenset[str] = frozenset({
     "system_dlkm.img",
 })
 
+# Artifacts that must never appear in the public final-images folder.
+# Created by lpunpack validation or intermediate super build steps.
+_FORBIDDEN_FINAL_ARTIFACT_NAMES: frozenset[str] = frozenset({
+    "super.unsparse.img",
+    "super_raw.img",
+    "super_sparse.img",
+    "super_metadata.img",
+    "lpdump.img",
+    "lpdump_validation.img",
+})
+
+
+def _is_forbidden_final_artifact(name: str) -> bool:
+    lower = name.lower()
+    return (
+        lower in _FORBIDDEN_FINAL_ARTIFACT_NAMES
+        or lower.endswith(".unsparse.img")
+        or lower.startswith("super.img.")
+        or (lower.startswith("super_") and lower.endswith(".chunk"))
+    )
+
 
 def assemble_final_images(
     super_img: Path,
@@ -171,6 +192,24 @@ def assemble_final_images(
         except Exception as exc:
             errors.append(f"copy {src.name}: {exc}")
 
+    # Sweep forbidden super artifacts (validation/temp files left by lpunpack or
+    # intermediate build steps) out of final_dir before writing the manifest.
+    # These must never appear in the public final-images folder or ZIP.
+    moved_forbidden: list[str] = []
+    _sweep_dest = work_root / "super_workspace" / "forbidden_final_artifacts"
+    for _img in sorted(p for p in final_dir.iterdir() if p.is_file()):
+        if _is_forbidden_final_artifact(_img.name):
+            try:
+                _sweep_dest.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(_img), _sweep_dest / _img.name)
+                moved_forbidden.append(_img.name)
+                warnings.append(f"Swept forbidden artifact from final: {_img.name}")
+                print(f"[final_assembler] swept: {_img.name} → {_sweep_dest.name}/")
+            except Exception as exc:
+                warnings.append(f"Could not sweep {_img.name}: {exc}")
+    if moved_forbidden:
+        result["moved_forbidden_artifacts"] = moved_forbidden
+
     result["copied"] = copied
     result["final_manifest"] = sorted(
         p.name for p in final_dir.glob("*.img") if p.is_file()
@@ -223,19 +262,23 @@ def _write_final_image_manifest(final_dir: Path, result: dict, source_manifest: 
         for path in sorted(final_dir.glob("*.img"))
         if path.is_file()
     ]
+    moved_forbidden = result.get("moved_forbidden_artifacts") or []
     payload = {
         "final_dir": str(final_dir),
         "final_image_count": len(images),
         "included_images": [image["name"] for image in images],
         "images": images,
-        "skipped_duplicate_super_images": [
-            e["name"] for e in source_manifest.get("images", [])
-            if e.get("role") in {"super", "split_super"} and not e.get("include_in_final")
-        ],
+        "skipped_duplicate_super_images": sorted(set(
+            [
+                e["name"] for e in source_manifest.get("images", [])
+                if e.get("role") in {"super", "split_super"} and not e.get("include_in_final")
+            ] + moved_forbidden
+        )),
         "skipped_dynamic_temp_images": [
             e["name"] for e in source_manifest.get("images", [])
             if e.get("role") in {"dynamic_partition", "validation", "temp"}
         ],
+        "moved_forbidden_artifacts": moved_forbidden,
         "exactly_one_super_img": result.get("exactly_one_super_img", False),
     }
     (reports_dir / "final_image_manifest.json").write_text(
