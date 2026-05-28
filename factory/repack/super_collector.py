@@ -1,5 +1,5 @@
 """
-New factory super collector for zircon / MTK HyperOS OTA payload extraction.
+Factory super collector for MTK / Snapdragon HyperOS OTA payload extraction.
 
 Responsibilities
 ----------------
@@ -13,8 +13,8 @@ Responsibilities
 
 4. Write reports: output/reports/super_build_report.{json,txt}
 
-Zircon profile
---------------
+Default super profile (used when device registry has no entry)
+--------------------------------------------------------------
     SUPER_SIZE           = 9126805504  (~8.5 GiB)
     SUPER_GROUP_BASENAME = "qti_dynamic_partitions"
     slot_mode            = "vab"
@@ -44,11 +44,17 @@ try:
 except Exception:
     _lpunpack_get_info = None  # type: ignore
 
-# ── Zircon device profile ──────────────────────────────────────────────────────
-ZIRCON_SUPER_SIZE: int = 9126805504
-ZIRCON_SUPER_GROUP_BASENAME: str = "qti_dynamic_partitions"
-ZIRCON_METADATA_SLOTS: int = 3
-ZIRCON_METADATA_MAX_SIZE: int = 65536
+# ── Default super profile (fallback when no device-specific registry entry) ────
+DEFAULT_SUPER_SIZE: int = 9126805504
+DEFAULT_SUPER_GROUP_BASENAME: str = "qti_dynamic_partitions"
+DEFAULT_METADATA_SLOTS: int = 3
+DEFAULT_METADATA_MAX_SIZE: int = 65536
+
+# Backward-compat aliases (do not remove — may be imported by legacy modules)
+ZIRCON_SUPER_SIZE          = DEFAULT_SUPER_SIZE
+ZIRCON_SUPER_GROUP_BASENAME = DEFAULT_SUPER_GROUP_BASENAME
+ZIRCON_METADATA_SLOTS      = DEFAULT_METADATA_SLOTS
+ZIRCON_METADATA_MAX_SIZE   = DEFAULT_METADATA_MAX_SIZE
 
 # LP metadata overhead reserved before usable data space.
 # 4 MiB covers geometry blocks ×2 + metadata slots ×3 ×2 with alignment headroom.
@@ -228,8 +234,7 @@ def load_device_super_profile(
 
     Priority:
       1. payload.bin manifest → group name and partition list
-      2. Zircon defaults for super_size (always 9126805504 for zircon; used as
-         the universal fallback when no device-specific registry entry exists)
+      2. Default super_size fallback when no device-specific registry entry exists.
 
     Returns a dict with all fields needed to drive lpmake:
       super_size, group_size, group_basename, group_a_name, group_b_name,
@@ -242,17 +247,17 @@ def load_device_super_profile(
     group_basename, part_names_from_manifest, manifest_warnings = _load_payload_manifest_super(payload_dir)
     warnings.extend(manifest_warnings)
 
-    # Super block-device size: always use the zircon verified value for zircon;
-    # fall back to the same constant for unknown devices (no registry present).
-    super_size = ZIRCON_SUPER_SIZE
-    if device_key and device_key != "zircon":
+    # Use default super_size; emit a generic info warning for any device
+    # that does not yet have a device-specific registry entry.
+    super_size = DEFAULT_SUPER_SIZE
+    if device_key:
         warnings.append(
             f"No device-specific super_size profile for '{device_key}'; "
-            f"using zircon fallback {ZIRCON_SUPER_SIZE}"
+            f"using default fallback {DEFAULT_SUPER_SIZE}"
         )
 
     if not group_basename:
-        group_basename = ZIRCON_SUPER_GROUP_BASENAME
+        group_basename = DEFAULT_SUPER_GROUP_BASENAME
         warnings.append(
             f"Could not read group name from payload manifest; "
             f"using fallback: {group_basename}"
@@ -276,8 +281,8 @@ def load_device_super_profile(
         "group_basename": group_basename,
         "group_a_name": f"{group_basename}_a",
         "group_b_name": f"{group_basename}_b",
-        "metadata_slots": ZIRCON_METADATA_SLOTS,
-        "metadata_max_size": ZIRCON_METADATA_MAX_SIZE,
+        "metadata_slots": DEFAULT_METADATA_SLOTS,
+        "metadata_max_size": DEFAULT_METADATA_MAX_SIZE,
         "partition_names": part_names,
         "slot_mode": "vab",
         "virtual_ab": True,
@@ -494,7 +499,7 @@ def validate_super_with_lpunpack(
         if expected_super_size and device_size != expected_super_size:
             validation_errors.append(
                 f"super.img device_size={device_size} "
-                f"but expected {expected_super_size} (zircon profile)"
+                f"but expected {expected_super_size} (device profile)"
             )
 
         expected_a_slots = [f"{p}_a" for p in expected_partitions]
