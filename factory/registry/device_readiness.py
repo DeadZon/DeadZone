@@ -76,6 +76,11 @@ def _build_record(device: dict[str, Any]) -> dict[str, Any]:
     ready_for_free         = universal_engine_ready
     ready_for_paid_editions = universal_engine_ready
 
+    # Both direct GitHub workflows and Fly workflows use free-text codename input,
+    # so all workflow_ready devices are supported by both paths.
+    direct_supported = workflow_ready
+    fly_supported    = workflow_ready
+
     return {
         "codename":              codename or device.get("codename", ""),
         "display_name":          display_name,
@@ -90,6 +95,8 @@ def _build_record(device: dict[str, Any]) -> dict[str, Any]:
         "requires_manual_soc":   requires_manual_soc,
         "ready_for_free":        ready_for_free,
         "ready_for_paid_editions": ready_for_paid_editions,
+        "direct_supported":      direct_supported,
+        "fly_supported":         fly_supported,
         "notes":                 notes,
     }
 

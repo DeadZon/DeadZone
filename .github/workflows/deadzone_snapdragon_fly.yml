@@ -4,29 +4,33 @@ on:
   workflow_dispatch:
     inputs:
       codename:
-        description: "Device codename, e.g. zircon, garnet"
+        description: "Device codename (e.g. garnet, fuxi, aurora)"
         required: true
-        type: string
-
-      custom_codename:
-        description: "Optional override codename"
-        required: false
         type: string
 
       edition:
         description: "ROM edition"
         required: true
         type: choice
-        default: legend
+        default: free
         options:
           - free
           - gaming
           - legend
           - epic
 
-      rom_url:
-        description: "Direct ROM ZIP/TGZ URL. Required for execute builds."
+      rom_source:
+        description: "ROM source"
         required: true
+        type: choice
+        default: manual_url
+        options:
+          - manual_url
+          - auto_latest
+
+      rom_url:
+        description: "Direct ROM ZIP/TGZ URL — required when rom_source=manual_url"
+        required: false
         type: string
 
       mode:
@@ -50,39 +54,71 @@ on:
         type: boolean
         default: true
 
+      enable_listmezo:
+        description: "Enable ListMezo free app normalize (active for free edition only)"
+        required: false
+        type: boolean
+        default: true
+
+      listmezo_mode:
+        description: "ListMezo mode: dry_run = scan+report only; execute = apply changes"
+        required: false
+        type: choice
+        default: dry_run
+        options:
+          - dry_run
+          - execute
+
+      vm_cpus:
+        description: "Fly VM CPU count (e.g. 4, 8)"
+        required: false
+        type: string
+        default: "8"
+
+      vm_memory:
+        description: "Fly VM memory in MB (e.g. 8192, 16384)"
+        required: false
+        type: string
+        default: "16384"
+
+      fly_region:
+        description: "Fly.io region (e.g. iad, lax, ord)"
+        required: false
+        type: string
+        default: "iad"
+
+      telegram_msg_id:
+        description: "Existing Telegram message ID to edit (leave empty to send new)"
+        required: false
+        type: string
+
 concurrency:
   group: deadzone-${{ github.workflow }}-${{ inputs.codename }}-${{ inputs.edition }}
   cancel-in-progress: true
 
 jobs:
-  trigger-fly:
-    name: "Snapdragon Fly | ${{ inputs.custom_codename || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
+  fly-machine-run:
+    name: "Snapdragon Fly | ${{ inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    outputs:
-      build_id: ${{ steps.post.outputs.build_id }}
-      job_id: ${{ steps.post.outputs.job_id }}
-      telegram_message_id: ${{ steps.post.outputs.telegram_message_id }}
+    timeout-minutes: 180
 
     steps:
       - name: Validate inputs
         run: |
           set -euo pipefail
 
-          CODENAME="${{ inputs.custom_codename }}"
-          [ -z "$CODENAME" ] && CODENAME="${{ inputs.codename }}"
+          CODENAME="${{ inputs.codename }}"
           CODENAME="$(echo "$CODENAME" | xargs)"
 
           if [ -z "$CODENAME" ]; then
-            echo "[ERROR] codename is required. Please enter a real codename like zircon or garnet."
+            echo "[ERROR] codename is required. Enter a device codename like garnet or fuxi."
             exit 1
           fi
 
           for BAD in select_device_codename select_device device none null default; do
             if [ "$CODENAME" = "$BAD" ]; then
               echo "[ERROR] Invalid device codename: $CODENAME."
-              echo "[ERROR] Please enter a real codename like zircon or garnet."
+              echo "[ERROR] Please enter a real codename like garnet or fuxi."
               exit 1
             fi
           done
@@ -99,70 +135,30 @@ jobs:
             *) echo "[ERROR] Invalid mode: $MODE. Must be dry_run or execute."; exit 1 ;;
           esac
 
-          ROM_URL="${{ inputs.rom_url }}"
-          if [ -z "$ROM_URL" ]; then
-            echo "::error::rom_url is required. Paste the real ROM URL."
-            exit 1
-          fi
-          if [ "$ROM_URL" = "auto" ]; then
-            echo "::error::rom_url=auto is disabled. Paste the real ROM URL."
-            exit 1
-          fi
-          case "$ROM_URL" in
-            http://*|https://*) ;;
-            *) echo "[ERROR] rom_url must start with http:// or https://"; exit 1 ;;
+          ROM_SOURCE="${{ inputs.rom_source }}"
+          case "$ROM_SOURCE" in
+            manual_url|auto_latest) ;;
+            *) echo "[ERROR] Invalid rom_source: $ROM_SOURCE. Must be manual_url or auto_latest."; exit 1 ;;
           esac
 
-          echo "[OK] codename  = $CODENAME"
-          echo "[OK] edition   = $EDITION"
-          echo "[OK] mode      = $MODE"
-          echo "[OK] rom_url   = $ROM_URL"
+          ROM_URL="${{ inputs.rom_url }}"
+          if [ "$ROM_SOURCE" = "manual_url" ] && [ "$MODE" = "execute" ]; then
+            if [ -z "$ROM_URL" ]; then
+              echo "[ERROR] rom_url is required when rom_source=manual_url and mode=execute."
+              exit 1
+            fi
+            case "$ROM_URL" in
+              http://*|https://*) ;;
+              *) echo "[ERROR] rom_url must start with http:// or https://"; exit 1 ;;
+            esac
+          fi
+
+          echo "[OK] codename   = $CODENAME"
+          echo "[OK] edition    = $EDITION"
+          echo "[OK] mode       = $MODE"
+          echo "[OK] rom_source = $ROM_SOURCE"
+          echo "[OK] rom_url    = ${ROM_URL:-(not required)}"
           echo "[OK] Inputs validated."
-
-      - name: Normalize inputs
-        id: norm
-        run: |
-          set -euo pipefail
-
-          CODENAME="${{ inputs.custom_codename }}"
-          [ -z "$CODENAME" ] && CODENAME="${{ inputs.codename }}"
-          CODENAME="$(echo "$CODENAME" | xargs)"
-
-          EDITION="${{ inputs.edition }}"
-          case "$EDITION" in
-            free) MOD="free" ;;
-            gaming) MOD="gaming" ;;
-            legend) MOD="legend" ;;
-            epic) MOD="epic" ;;
-            *) MOD="free" ;;
-          esac
-
-          if [ "$MOD" = "free" ]; then
-            FINAL_NAME="DeadZone_${CODENAME}_V1"
-          else
-            FINAL_NAME="DeadZone_${CODENAME}_${MOD}_V1"
-          fi
-
-          MODE="${{ inputs.mode }}"
-          ROM_URL="${{ inputs.rom_url }}"
-          UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
-          NOTIFY_TG="${{ inputs.notify_telegram }}"
-          [ -z "$UPLOAD_PD" ] && UPLOAD_PD="true"
-          [ -z "$NOTIFY_TG" ] && NOTIFY_TG="true"
-
-          echo "codename=$CODENAME"           >> "$GITHUB_OUTPUT"
-          echo "mod=$MOD"                     >> "$GITHUB_OUTPUT"
-          echo "final_name=$FINAL_NAME"       >> "$GITHUB_OUTPUT"
-          echo "mode=$MODE"                   >> "$GITHUB_OUTPUT"
-          echo "rom_url=$ROM_URL"             >> "$GITHUB_OUTPUT"
-          echo "upload_pixeldrain=$UPLOAD_PD" >> "$GITHUB_OUTPUT"
-          echo "notify_telegram=$NOTIFY_TG"   >> "$GITHUB_OUTPUT"
-
-          echo "[NORM] codename   = $CODENAME"
-          echo "[NORM] mod        = $MOD"
-          echo "[NORM] final_name = $FINAL_NAME"
-          echo "[NORM] mode       = $MODE"
-          echo "[NORM] rom_url    = $ROM_URL"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -172,148 +168,101 @@ jobs:
           set -euo pipefail
           python3 scripts/validate_repo_text_files.py
 
-      - name: Validate Fly secrets and notify on failure
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Validate Fly secrets
         env:
-          SNAP_URL: ${{ secrets.SNAPDRAGON_FLY_BUILDER_URL }}
-          FALLBACK_URL: ${{ secrets.FLY_BUILDER_URL }}
-          BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_SNAPDRAGON_APP_NAME: ${{ secrets.FLY_SNAPDRAGON_APP_NAME }}
+          FLY_APP_NAME: ${{ secrets.FLY_APP_NAME }}
         run: |
           set -euo pipefail
-          BUILDER_URL="${SNAP_URL:-$FALLBACK_URL}"
-          MISSING=""
-          [ -z "$BUILDER_URL" ]   && MISSING="${MISSING}SNAPDRAGON_FLY_BUILDER_URL or FLY_BUILDER_URL\n"
-          [ -z "$BUILDER_TOKEN" ] && MISSING="${MISSING}BUILDER_TOKEN\n"
-
-          if [ -n "$MISSING" ]; then
-            echo "[ERROR] Required Fly secrets not set:"
-            echo -e "$MISSING"
-            echo ""
-            echo "========================================================"
-            echo "Required GitHub repository secrets:"
-            echo ""
-            echo "For Snapdragon Fly:"
-            echo "  SNAPDRAGON_FLY_BUILDER_URL=https://dz-builder-snapdragon.fly.dev"
-            echo "  or FLY_BUILDER_URL=https://dz-builder-snapdragon.fly.dev"
-            echo "  BUILDER_TOKEN=<same token configured on Fly>"
-            echo ""
-            echo "Telegram optional but recommended:"
-            echo "  TELEGRAM_SNAPDRAGON_BOT_TOKEN"
-            echo "  TELEGRAM_SNAPDRAGON_CHAT_ID"
-            echo "  or: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID"
-            echo "========================================================"
-            echo ""
-
-            python3 scripts/notify_dispatch_failure.py \
-              --soc snapdragon \
-              --codename "${{ steps.norm.outputs.codename }}" \
-              --edition  "${{ steps.norm.outputs.mod }}" \
-              --mode     "${{ steps.norm.outputs.mode }}" \
-              --title    "DeadZone Fly Dispatch Failed" \
-              --reason   "Missing Fly secrets" \
-              --missing  "$(echo -e "$MISSING" | tr '\n' ',' | sed 's/,$//')" \
-              --run-url  "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-              || true
-
-            exit 3
-          fi
-
-          echo "[OK] Fly secrets verified. URL: $BUILDER_URL"
-
-      - name: Health check Fly builder
-        env:
-          SNAP_URL: ${{ secrets.SNAPDRAGON_FLY_BUILDER_URL }}
-          FALLBACK_URL: ${{ secrets.FLY_BUILDER_URL }}
-        run: |
-          set -euo pipefail
-          BUILDER_URL="${SNAP_URL:-$FALLBACK_URL}"
-          echo "[FLY] Health check: $BUILDER_URL/health"
-          if ! curl -fsS \
-               --retry 5 --retry-delay 5 \
-               --connect-timeout 10 --max-time 30 \
-               "$BUILDER_URL/health"; then
-            echo ""
-            echo "[ERROR] Fly builder health check failed. Deploy or start dz-builder-snap before dispatch."
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "[ERROR] FLY_API_TOKEN secret is not set."
+            echo "Set FLY_API_TOKEN in repository secrets with a Fly.io API token."
             exit 1
           fi
-          echo ""
-          echo "[OK] Fly builder is healthy."
+          RESOLVED_APP="${FLY_SNAPDRAGON_APP_NAME:-${FLY_APP_NAME:-deadzone-fly-snapdragon}}"
+          echo "[OK] FLY_API_TOKEN present."
+          echo "[OK] FLY_APP_NAME = ${RESOLVED_APP}"
 
-      - name: POST build job to Fly Snapdragon builder
-        id: post
+      - name: Launch Fly machine (Snapdragon build)
         env:
-          SNAP_URL: ${{ secrets.SNAPDRAGON_FLY_BUILDER_URL }}
-          FALLBACK_URL: ${{ secrets.FLY_BUILDER_URL }}
-          BUILDER_TOKEN: ${{ secrets.BUILDER_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_SNAPDRAGON_APP_NAME: ${{ secrets.FLY_SNAPDRAGON_APP_NAME }}
+          FLY_APP_NAME: ${{ secrets.FLY_APP_NAME }}
+          PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
+          TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_SNAPDRAGON_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_SNAPDRAGON_GROUP_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_GROUP_ID }}
+          TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_GROUP_ID }}
         run: |
           set -euo pipefail
-          BUILDER_URL="${SNAP_URL:-$FALLBACK_URL}"
-          CODENAME="${{ steps.norm.outputs.codename }}"
-          MOD="${{ steps.norm.outputs.mod }}"
-          MODE="${{ steps.norm.outputs.mode }}"
-          ROM_URL="${{ steps.norm.outputs.rom_url }}"
-          FINAL_NAME="${{ steps.norm.outputs.final_name }}"
-          UPLOAD_PD="${{ steps.norm.outputs.upload_pixeldrain }}"
-          NOTIFY_TG="${{ steps.norm.outputs.notify_telegram }}"
 
-          PAYLOAD=$(python3 - <<PYEOF
-          import json
-          d = {
-              "source":            "Fly",
-              "soc":               "snapdragon",
-              "codename":          "$CODENAME",
-              "edition":           "$MOD",
-              "mod":               "$MOD",
-              "rom_url":           "$ROM_URL",
-              "mode":              "$MODE",
-              "final_name":        "$FINAL_NAME",
-              "upload_pixeldrain": "$UPLOAD_PD" == "true",
-              "notify_telegram":   "$NOTIFY_TG" == "true",
-          }
-          print(json.dumps(d))
-          PYEOF
-          )
+          CODENAME="${{ inputs.codename }}"
+          CODENAME="$(echo "$CODENAME" | xargs)"
+          EDITION="${{ inputs.edition }}"
+          ROM_SOURCE="${{ inputs.rom_source }}"
+          ROM_URL="${{ inputs.rom_url }}"
+          MODE="${{ inputs.mode }}"
+          UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
+          NOTIFY_TG="${{ inputs.notify_telegram }}"
+          ENABLE_LM="${{ inputs.enable_listmezo }}"
+          LM_MODE="${{ inputs.listmezo_mode || 'dry_run' }}"
+          VM_CPUS="${{ inputs.vm_cpus || '8' }}"
+          VM_MEM="${{ inputs.vm_memory || '16384' }}"
+          FLY_REGION="${{ inputs.fly_region || 'iad' }}"
+          TG_MSG_ID="${{ inputs.telegram_msg_id }}"
 
-          echo "[FLY] Posting to $BUILDER_URL/build"
-          echo "[FLY] Codename : $CODENAME"
-          echo "[FLY] Edition  : $MOD"
-          echo "[FLY] Mode     : $MODE"
-          echo "[FLY] ROM URL  : $ROM_URL"
+          [ -z "$UPLOAD_PD" ] && UPLOAD_PD="true"
+          [ -z "$NOTIFY_TG" ] && NOTIFY_TG="true"
+          [ -z "$ENABLE_LM" ] && ENABLE_LM="true"
 
-          HTTP_CODE=$(curl -sS -w "%{http_code}" \
-            --retry 5 --retry-all-errors --retry-delay 10 \
-            --connect-timeout 20 --max-time 120 \
-            -o response.json \
-            -X POST "$BUILDER_URL/build" \
-            -H "Authorization: Bearer $BUILDER_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
+          # Resolve app name from secrets with fallback
+          RESOLVED_APP="${FLY_SNAPDRAGON_APP_NAME:-${FLY_APP_NAME:-deadzone-fly-snapdragon}}"
 
-          echo "[FLY] HTTP status: $HTTP_CODE"
-          echo "[FLY] Response body:"
-          cat response.json
-          echo ""
+          # Resolve SoC-specific Telegram secrets with generic fallback
+          RESOLVED_BOT_TOKEN="${TELEGRAM_SNAPDRAGON_BOT_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
+          RESOLVED_CHAT_ID="${TELEGRAM_SNAPDRAGON_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
+          RESOLVED_GROUP_ID="${TELEGRAM_SNAPDRAGON_GROUP_ID:-${TELEGRAM_GROUP_ID:-}}"
 
-          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
-            echo "[ERROR] Fly builder returned HTTP $HTTP_CODE — build not accepted."
-            exit 3
-          fi
+          echo "[FLY] Launching Snapdragon build machine"
+          echo "[FLY] codename   = $CODENAME"
+          echo "[FLY] edition    = $EDITION"
+          echo "[FLY] mode       = $MODE"
+          echo "[FLY] rom_source = $ROM_SOURCE"
+          echo "[FLY] region     = $FLY_REGION"
+          echo "[FLY] vm_cpus    = $VM_CPUS"
+          echo "[FLY] vm_memory  = $VM_MEM MB"
 
-          BUILD_ID=$(python3 -c \
-            "import json; d=json.load(open('response.json')); print(d.get('build_id',''))" \
-            2>/dev/null || echo "")
-          JOB_ID=$(python3 -c \
-            "import json; d=json.load(open('response.json')); print(d.get('job_id',''))" \
-            2>/dev/null || echo "")
-          TG_MSG_ID=$(python3 -c \
-            "import json; d=json.load(open('response.json')); print(d.get('telegram_message_id',''))" \
-            2>/dev/null || echo "")
-
-          echo "[FLY] build_id            : $BUILD_ID"
-          echo "[FLY] job_id              : $JOB_ID"
-          echo "[FLY] telegram_message_id : $TG_MSG_ID"
-
-          echo "build_id=$BUILD_ID"             >> "$GITHUB_OUTPUT"
-          echo "job_id=$JOB_ID"                 >> "$GITHUB_OUTPUT"
-          echo "telegram_message_id=$TG_MSG_ID" >> "$GITHUB_OUTPUT"
+          flyctl machine run . \
+            --app "$RESOLVED_APP" \
+            --dockerfile docker/Dockerfile.fly \
+            --region "$FLY_REGION" \
+            --vm-cpu-kind performance \
+            --vm-cpus "$VM_CPUS" \
+            --vm-memory "$VM_MEM" \
+            --env DEADZONE_SOC=snapdragon \
+            --env DEADZONE_DEVICE_CODENAME="$CODENAME" \
+            --env DEADZONE_EDITION="$EDITION" \
+            --env DEADZONE_ROM_SOURCE="$ROM_SOURCE" \
+            --env DEADZONE_ROM_URL="$ROM_URL" \
+            --env DEADZONE_MODE="$MODE" \
+            --env DEADZONE_UPLOAD_PIXELDRAIN="$UPLOAD_PD" \
+            --env DEADZONE_NOTIFY_TELEGRAM="$NOTIFY_TG" \
+            --env ENABLE_LISTMEZO="$ENABLE_LM" \
+            --env LISTMEZO_MODE="$LM_MODE" \
+            --env LISTMEZO_EDITION=free \
+            --env PIXELDRAIN_API_KEY="${PIXELDRAIN_API_KEY:-}" \
+            --env TELEGRAM_BOT_TOKEN="$RESOLVED_BOT_TOKEN" \
+            --env TELEGRAM_CHAT_ID="$RESOLVED_CHAT_ID" \
+            --env TELEGRAM_GROUP_ID="$RESOLVED_GROUP_ID" \
+            --env TELEGRAM_MSG_ID="$TG_MSG_ID" \
+            --env GITHUB_RUN_ID="$GITHUB_RUN_ID" \
+            --env GITHUB_SERVER_URL="$GITHUB_SERVER_URL" \
+            --env GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
+            --env GITHUB_ACTOR="$GITHUB_ACTOR" \
+            --rm
