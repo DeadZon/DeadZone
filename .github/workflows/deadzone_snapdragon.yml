@@ -145,6 +145,21 @@ on:
         type: boolean
         default: true
 
+      enable_listmezo:
+        description: "Enable ListMezo free app normalize (active for free edition only)"
+        required: false
+        type: boolean
+        default: true
+
+      listmezo_mode:
+        description: "ListMezo mode: dry_run = scan+report only; execute = apply changes"
+        required: false
+        type: choice
+        default: dry_run
+        options:
+          - dry_run
+          - execute
+
 concurrency:
   group: deadzone-${{ github.workflow }}-${{ inputs.select_device }}-${{ inputs.edition }}
   cancel-in-progress: true
@@ -392,6 +407,9 @@ jobs:
           DEADZONE_ZIP_COMPRESSION: "deflated"
           DEADZONE_MAX_WORKERS: ""
           DEADZONE_EXTRACT_THREADS: ""
+          ENABLE_LISTMEZO: "${{ inputs.enable_listmezo != false && 'true' || 'false' }}"
+          LISTMEZO_MODE: "${{ inputs.listmezo_mode || 'dry_run' }}"
+          LISTMEZO_EDITION: "free"
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""
@@ -432,6 +450,9 @@ jobs:
           DEADZONE_FAST_MODE: "true"
           DEADZONE_ZIP_LEVEL: "6"
           DEADZONE_ZIP_COMPRESSION: "deflated"
+          ENABLE_LISTMEZO: "${{ inputs.enable_listmezo != false && 'true' || 'false' }}"
+          LISTMEZO_MODE: "${{ inputs.listmezo_mode || 'dry_run' }}"
+          LISTMEZO_EDITION: "free"
         run: |
           set -euo pipefail
           EXTRA_FLAGS=""

@@ -395,8 +395,12 @@ def run_free_pipeline(
         _write_smart_free_engine_report(reports_dir, ctx, result)
         _write_telegram_status(notifier, ctx.notify_telegram, soc or "", source, output_dir)
         final = {k: v for k, v in result.items() if not k.startswith("_")}
-        # ── ListMezo normalize (free edition) ────────────────────────────────
-        final["listmezo"] = _run_listmezo_stage(ctx, output_dir)
+        # ListMezo is now a proper pipeline stage inside run_smart_base_engine.
+        # Expose its stage report under the "listmezo" key for callers that
+        # previously read final["listmezo"].
+        final["listmezo"] = (
+            (result.get("stage_reports") or {}).get("listmezo_free_normalize") or {}
+        )
         return final
 
     # ── Legacy engine fallback (DEADZONE_LEGACY_ENGINE=true) ─────────────────

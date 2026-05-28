@@ -72,8 +72,9 @@ STAGE_TIMEOUTS_MINUTES: dict[str, int] = {
     "analyze_rom":       5,
     "unpack_rom":        60,
     "source_manifest":   10,
-    "super_inputs":      15,
-    "super_strategy":    1,
+    "super_inputs":             15,
+    "listmezo_free_normalize":  15,
+    "super_strategy":           1,
     "super_execute":     60,
     "assemble_images":   15,
     "apply_mods":        30,
@@ -621,6 +622,54 @@ def run_smart_base_engine(
         _run("super_inputs", _do_super_input)
     elif not ctx.execute:
         ctx.stage_reports["super_inputs"] = {"status": "DRY_RUN", "warnings": [], "errors": []}
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # Stage 6b — ListMezo Free Normalize (free edition only)
+    # Positioned after super_inputs so partition .img files are available,
+    # and before super_execute so any filesystem modifications can influence
+    # a future repack stage.
+    # ══════════════════════════════════════════════════════════════════════════
+    if edition == "free":
+        _enable_listmezo: bool = (
+            getattr(ctx, "enable_listmezo", None) is not False
+            and os.environ.get("ENABLE_LISTMEZO", "true").lower() not in ("0", "false", "no")
+        )
+        _listmezo_mode: str = (
+            getattr(ctx, "listmezo_mode", None)
+            or os.environ.get("LISTMEZO_MODE", "dry_run")
+        )
+        _lm_reports_dir = str(output_dir / "reports" / "listmezo" / "free")
+
+        if _enable_listmezo:
+            _notify(
+                "LISTMEZO_NORMALIZE",
+                f"Edition: Free | ListMezo normalize ({_listmezo_mode})",
+            )
+
+            def _do_listmezo() -> dict:
+                from factory.apps.listmezo_engine import run_listmezo_pipeline_stage  # noqa: PLC0415
+                return run_listmezo_pipeline_stage(
+                    edition="free",
+                    work_dir=work_dir,
+                    output_dir=output_dir,
+                    listmezo_mode=_listmezo_mode,
+                    execute=ctx.execute,
+                )
+
+            _run("listmezo_free_normalize", _do_listmezo)
+        else:
+            ctx.stage_reports["listmezo_free_normalize"] = {
+                "status": "SKIPPED",
+                "mode": _listmezo_mode,
+                "guide": "ListMezo/free/apps.list",
+                "reports_dir": _lm_reports_dir,
+                "found_ok": 0, "renamed": 0, "missing": 0,
+                "wrong_location": 0, "removed_extras": 0, "unknown": 0,
+                "conflicts": 0,
+                "warnings": ["enable_listmezo=false"],
+                "errors": [],
+            }
+            _stage_durations["listmezo_free_normalize"] = 0.0
 
     # ══════════════════════════════════════════════════════════════════════════
     # Stages 7+8 — Select and execute super strategy

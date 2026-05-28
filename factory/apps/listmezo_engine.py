@@ -776,6 +776,162 @@ def run_listmezo(
     }
 
 
+# ── Pipeline stage helpers ────────────────────────────────────────────────────
+
+def _find_editable_rom_root(work_dir: Path) -> Optional[Path]:
+    """Return the first dir under work_dir that contains at least one scoped app dir."""
+    candidates = [
+        work_dir / "unpacked_rom",
+        work_dir / "partitions",
+        work_dir / "extracted_partitions",
+        work_dir,
+    ]
+    for cand in candidates:
+        if not cand.is_dir():
+            continue
+        for rel in SCOPED_DIRS:
+            if (cand / rel).is_dir():
+                return cand
+    return None
+
+
+def _try_extract_for_listmezo(
+    source_images_dir: Path,
+    extract_dir: Path,
+) -> Optional[Path]:
+    """Attempt to extract partition .img files into extract_dir. Returns extract_dir on success."""
+    try:
+        from factory.unpack.partitions import (  # noqa: PLC0415
+            collect_extracted_partitions,
+            scan_payloads_extract_partitions,
+        )
+        scan_payloads_extract_partitions(
+            payload_extracted_dir=source_images_dir,
+            project_dir=extract_dir,
+        )
+        extracted = collect_extracted_partitions(extract_dir)
+        if extracted:
+            print(f"[listmezo_stage] Extracted partitions: {extracted}")
+            return extract_dir
+    except Exception as exc:
+        print(f"[listmezo_stage] Partition extraction attempt failed: {exc}")
+    return None
+
+
+def write_listmezo_skipped_report(report_dir: Path) -> None:
+    """Write SKIPPED report files when editable partition dirs are not found."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    for name in (
+        "missing_apps.json", "removed_extras.json", "wrong_location.json",
+        "renamed_apps.json", "unknown_apks.json", "guide_warnings.json",
+    ):
+        p = report_dir / name
+        if not p.exists():
+            p.write_text("[]", encoding="utf-8")
+
+    lines = [
+        "[LISTMEZO FREE REPORT]",
+        "Status: SKIPPED",
+        "Reason: editable partition directories not found",
+        "Expected directories:",
+    ]
+    for d in SCOPED_DIRS:
+        lines.append(f"- {d}")
+    (report_dir / "listmezo_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def run_listmezo_pipeline_stage(
+    edition: str,
+    work_dir: Path | str,
+    output_dir: Path | str,
+    listmezo_mode: str = "dry_run",
+    execute: bool = True,
+    listmezo_root: Optional[Path | str] = None,
+) -> dict:
+    """
+    Run the listmezo_free_normalize pipeline stage.
+
+    Returns a stage-report dict compatible with pipeline_report.json:
+      status        — APPLIED | DRY_RUN | SKIPPED | FAILED
+      mode          — dry_run | execute
+      guide         — guide path string
+      reports_dir   — absolute path to report directory
+      found_ok / renamed / missing / wrong_location / removed_extras / unknown / conflicts
+      warnings / errors
+    """
+    work_dir = Path(work_dir)
+    output_dir = Path(output_dir)
+    report_dir = output_dir / "reports" / "listmezo" / "free"
+
+    _base: dict = {
+        "mode": listmezo_mode,
+        "guide": "ListMezo/free/apps.list",
+        "reports_dir": str(report_dir),
+        "found_ok": 0,
+        "renamed": 0,
+        "missing": 0,
+        "wrong_location": 0,
+        "removed_extras": 0,
+        "unknown": 0,
+        "conflicts": 0,
+        "warnings": [],
+        "errors": [],
+    }
+
+    if not execute:
+        return {**_base, "status": "DRY_RUN"}
+
+    # Locate extracted partition filesystem directories
+    rom_root = _find_editable_rom_root(work_dir)
+
+    if rom_root is None:
+        source_images = work_dir / "source_images"
+        if source_images.is_dir():
+            extract_dir = work_dir / "listmezo_partitions"
+            rom_root = _try_extract_for_listmezo(source_images, extract_dir)
+
+    if rom_root is None:
+        write_listmezo_skipped_report(report_dir)
+        return {
+            **_base,
+            "status": "SKIPPED",
+            "reason": "editable partition directories not found",
+        }
+
+    try:
+        result = run_listmezo(
+            rom_root=rom_root,
+            edition=edition,
+            mode=listmezo_mode,
+            output_dir=output_dir,
+            listmezo_root=listmezo_root,
+        )
+    except Exception as exc:
+        return {
+            **_base,
+            "status": "FAILED",
+            "errors": [str(exc)],
+        }
+
+    if result.get("status") == "SKIPPED":
+        write_listmezo_skipped_report(report_dir)
+        return {**_base, "status": "SKIPPED", "reason": result.get("reason", "")}
+
+    summary = result.get("summary") or {}
+    stage_status = "DRY_RUN" if listmezo_mode != "execute" else "APPLIED"
+    return {
+        **_base,
+        "status": stage_status,
+        "found_ok": summary.get("found_ok", 0),
+        "renamed": summary.get("renamed", 0),
+        "missing": summary.get("missing", 0),
+        "wrong_location": summary.get("wrong_location", 0),
+        "removed_extras": summary.get("removed_extras", 0),
+        "unknown": summary.get("unknown_apks", 0),
+        "conflicts": summary.get("conflicts", 0),
+    }
+
+
 # ── CLI shim ──────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

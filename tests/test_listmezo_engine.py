@@ -14,8 +14,10 @@ from factory.apps.listmezo_engine import (
     extract_package_name,
     parse_guide,
     run_listmezo,
+    run_listmezo_pipeline_stage,
     run_matching,
     scan_rom,
+    write_listmezo_skipped_report,
 )
 
 
@@ -434,3 +436,174 @@ def test_run_listmezo_all_missing_with_empty_rom(tmp_path):
     assert len(missing) == result["summary"]["total_guide_apps"]
     assert result["summary"]["found_ok"] == 0
     assert result["summary"]["removed_extras"] == 0
+
+
+# ── Pipeline stage tests ───────────────────────────────────────────────────────
+
+def _make_listmezo_root(tmp_path: Path) -> Path:
+    guide_dir = tmp_path / "ListMezo" / "free"
+    guide_dir.mkdir(parents=True)
+    (guide_dir / "apps.list").write_text(MINIMAL_GUIDE, encoding="utf-8")
+    return tmp_path / "ListMezo"
+
+
+def test_pipeline_stage_dry_run_no_execute(tmp_path):
+    """Stage returns DRY_RUN when execute=False (pipeline-level dry_run)."""
+    result = run_listmezo_pipeline_stage(
+        edition="free",
+        work_dir=tmp_path / "work",
+        output_dir=tmp_path / "output",
+        listmezo_mode="dry_run",
+        execute=False,
+    )
+    assert result["status"] == "DRY_RUN"
+    assert result["guide"] == "ListMezo/free/apps.list"
+    assert "reports_dir" in result
+
+
+def test_pipeline_stage_skipped_when_no_partition_dirs(tmp_path):
+    """Stage writes SKIPPED + reason when no editable partition dirs are found."""
+    work_dir = tmp_path / "work"
+    work_dir.mkdir(parents=True)
+    output_dir = tmp_path / "output"
+
+    result = run_listmezo_pipeline_stage(
+        edition="free",
+        work_dir=work_dir,
+        output_dir=output_dir,
+        listmezo_mode="dry_run",
+        execute=True,
+    )
+
+    assert result["status"] == "SKIPPED"
+    assert "reason" in result
+    assert result["reason"] != ""
+
+    # listmezo_report.txt must be written even when SKIPPED
+    report_dir = Path(result["reports_dir"])
+    assert (report_dir / "listmezo_report.txt").exists()
+    txt = (report_dir / "listmezo_report.txt").read_text()
+    assert "SKIPPED" in txt
+    assert "editable partition directories not found" in txt
+
+
+def test_pipeline_stage_skipped_report_lists_expected_dirs(tmp_path):
+    """SKIPPED report must name all expected scoped dirs."""
+    report_dir = tmp_path / "reports" / "listmezo" / "free"
+    write_listmezo_skipped_report(report_dir)
+
+    txt = (report_dir / "listmezo_report.txt").read_text()
+    for expected in ("system/app", "system/priv-app", "product/app",
+                     "product/priv-app", "system_ext/app", "system_ext/priv-app"):
+        assert expected in txt
+
+    # All JSON report files must exist and be valid empty lists
+    for name in ("missing_apps.json", "removed_extras.json", "wrong_location.json",
+                 "renamed_apps.json", "unknown_apks.json", "guide_warnings.json"):
+        data = json.loads((report_dir / name).read_text())
+        assert isinstance(data, list)
+
+
+def test_pipeline_stage_runs_when_partition_dirs_exist(tmp_path):
+    """Stage runs and returns DRY_RUN when scoped dirs are present in work_dir."""
+    work_dir = tmp_path / "work"
+    # Create a minimal scoped dir so _find_editable_rom_root returns work_dir
+    (work_dir / "system" / "app").mkdir(parents=True)
+    output_dir = tmp_path / "output"
+    listmezo_root = _make_listmezo_root(tmp_path)
+
+    import unittest.mock as mock
+    with mock.patch(
+        "factory.apps.listmezo_engine.run_listmezo",
+        return_value={
+            "status": "DRY_RUN",
+            "summary": {
+                "found_ok": 0, "renamed": 0, "missing": 6,
+                "wrong_location": 0, "removed_extras": 0,
+                "unknown_apks": 0, "conflicts": 0,
+            },
+            "errors": [],
+        },
+    ) as mock_lm:
+        result = run_listmezo_pipeline_stage(
+            edition="free",
+            work_dir=work_dir,
+            output_dir=output_dir,
+            listmezo_mode="dry_run",
+            execute=True,
+            listmezo_root=listmezo_root,
+        )
+        assert mock_lm.called
+        called_rom_root = mock_lm.call_args[1].get("rom_root") or mock_lm.call_args[0][0]
+        assert Path(called_rom_root) == work_dir
+
+    assert result["status"] == "DRY_RUN"
+    assert result["missing"] == 6
+
+
+def test_pipeline_stage_dry_run_never_deletes_unknowns():
+    """Unknown APKs must never appear in removed_extras even in execute mode."""
+    guide = _fake_guide([])   # empty guide → everything is extra
+    rom_idx = {}              # scan_rom puts unknown-package APKs in unknown list, not index
+    result = run_matching(guide, rom_idx, Path("/fake"), dry_run=False)
+    assert result.extras == []
+
+
+def test_pipeline_stage_wrong_location_not_deleted_in_execute():
+    """Guided packages in wrong location must not be deleted (kept in wrong_location, not extras)."""
+    guide = _fake_guide([("system_ext/priv-app", "Settings", "com.android.settings")])
+    rom_idx = _fake_rom_index([
+        ("com.android.settings", "product/priv-app", "Settings", "Settings.apk"),
+    ])
+    result = run_matching(guide, rom_idx, Path("/fake"), dry_run=False)
+    assert len(result.wrong_location) == 1
+    assert result.wrong_location[0]["action"] == "kept_not_moved_phase_1"
+    assert result.extras == []
+
+
+def test_pipeline_stage_result_has_required_keys(tmp_path):
+    """Stage report always contains the keys required by pipeline_report.json spec."""
+    result = run_listmezo_pipeline_stage(
+        edition="free",
+        work_dir=tmp_path / "empty_work",
+        output_dir=tmp_path / "output",
+        listmezo_mode="dry_run",
+        execute=False,
+    )
+    required_keys = {
+        "status", "mode", "guide", "reports_dir",
+        "found_ok", "renamed", "missing", "wrong_location",
+        "removed_extras", "unknown", "conflicts",
+        "warnings", "errors",
+    }
+    assert required_keys.issubset(result.keys())
+
+
+def test_pipeline_stage_status_applied_in_execute_mode(tmp_path):
+    """Stage status is APPLIED (not DRY_RUN) when listmezo_mode=execute."""
+    work_dir = tmp_path / "work"
+    (work_dir / "system" / "app").mkdir(parents=True)
+    output_dir = tmp_path / "output"
+
+    import unittest.mock as mock
+    with mock.patch(
+        "factory.apps.listmezo_engine.run_listmezo",
+        return_value={
+            "status": "EXECUTED",
+            "summary": {
+                "found_ok": 1, "renamed": 0, "missing": 0,
+                "wrong_location": 0, "removed_extras": 0,
+                "unknown_apks": 0, "conflicts": 0,
+            },
+            "errors": [],
+        },
+    ):
+        result = run_listmezo_pipeline_stage(
+            edition="free",
+            work_dir=work_dir,
+            output_dir=output_dir,
+            listmezo_mode="execute",
+            execute=True,
+        )
+
+    assert result["status"] == "APPLIED"
