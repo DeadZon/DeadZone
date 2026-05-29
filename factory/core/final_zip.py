@@ -52,8 +52,12 @@ FORBIDDEN_ZIP_PARTS = {
 }
 FORBIDDEN_ZIP_TEXT = {
     "build_info",
+    "build_report",
     "sha256sums",
     "upload_links",
+    "upload_report",
+    "telegram_report",
+    "secrets",
     "factory.pipeline." + "orchestrator",
     "scripts" + "/",
 }

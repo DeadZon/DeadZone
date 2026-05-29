@@ -16,7 +16,9 @@ from factory.core.reports import write_production_reports
 from factory.core.repacker import build_repacked_super, repack_partitions
 from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
+from factory.core.telegram import TelegramResult, TelegramStatus
 from factory.core.unpacker import unpack_rom
+from factory.core.uploader import UploadResult, upload_final_zip_to_pixeldrain, write_skipped_upload_report
 from factory.core.workspace import Workspace, create_workspace, read_json, write_json
 
 
@@ -41,6 +43,11 @@ class BuildContext:
     device_profile: dict[str, Any] | None = None
     super_profile: dict[str, Any] | None = None
     final_zip_path: Path | None = None
+    upload_pixeldrain: bool = False
+    notify_telegram: bool = False
+    upload_result: UploadResult = field(default_factory=UploadResult)
+    telegram_result: TelegramResult = field(default_factory=TelegramResult)
+    telegram: TelegramStatus | None = None
     reports: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     status: str = "RUNNING"
@@ -63,6 +70,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mode", choices=ALLOWED_MODES, default="build")
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--keep-workspace", action="store_true")
+    parser.add_argument("--upload-pixeldrain", action="store_true")
+    parser.add_argument("--notify-telegram", action="store_true")
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--show-device", default="")
     return parser.parse_args()
@@ -122,6 +131,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
     ctx.started_stage = name
     print(f"[DeadZone] Stage: {name}")
     print("[MEZO] Status: started")
+    if ctx.telegram:
+        ctx.telegram_result = ctx.telegram.add_event(name, "RUN")
     started = time.monotonic()
     try:
         result = fn()
@@ -136,6 +147,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
             "error": str(exc),
         })
         print("[MEZO] Status: failed")
+        if ctx.telegram:
+            ctx.telegram_result = ctx.telegram.add_event(name, "FAIL", str(exc))
         raise
     duration = time.monotonic() - started
     ctx.completed_stage = name
@@ -145,6 +158,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
         "duration_seconds": duration,
     })
     print("[MEZO] Status: completed")
+    if ctx.telegram:
+        ctx.telegram_result = ctx.telegram.add_event(name, "OK")
     return result
 
 
@@ -193,6 +208,10 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     )
     _update_resolved_device_metadata(ctx)
     _print_device(ctx.device_profile)
+    if ctx.telegram:
+        codename = ctx.device_profile.get("resolved_codename") or ctx.device_profile.get("codename") or "unknown"
+        ctx.telegram.device = str(codename)
+        ctx.telegram_result = ctx.telegram.add_event("device resolved", "OK", str(codename))
     unpack_result = _stage(
         ctx,
         "unpack ROM into workspace",
@@ -255,27 +274,64 @@ def main() -> int:
         selected_codename=selected_codename,
         custom_codename=args.custom_codename,
         keep_workspace=args.keep_workspace,
+        upload_pixeldrain=args.upload_pixeldrain,
+        notify_telegram=args.notify_telegram,
         workspace=ws,
     )
     print("[DeadZone] Stage: production build")
     print("[MEZO] Status: running")
     print(f"[SOC] {ctx.soc}")
     print(f"[STYLE] {ctx.style_label}")
+    if ctx.upload_pixeldrain:
+        print("[DeadZone] Upload: PixelDrain requested")
+    if ctx.notify_telegram:
+        print("[DeadZone] Telegram: notifications requested")
     if ctx.selected_codename:
         print(f"[SELECTED DEVICE] {ctx.selected_codename}")
+    ctx.telegram = TelegramStatus(
+        enabled=ctx.notify_telegram,
+        soc=ctx.soc,
+        style=ctx.style_label,
+        device=ctx.selected_codename or ctx.custom_codename or "unknown",
+        workspace=ws,
+    )
+    ctx.telegram_result = ctx.telegram.start()
     try:
         _run_build(ctx)
     except Exception:
         ctx.completed_at = time.time()
         ctx.cleanup_status = "not run after failure"
+        ctx.upload_result = write_skipped_upload_report(ws, requested=ctx.upload_pixeldrain, reason="build failed before final ZIP")
+        if ctx.telegram:
+            ctx.telegram_result = ctx.telegram.finish("FAIL", final_zip=ctx.final_zip_path)
+            ctx.telegram_result = ctx.telegram.write_report()
         ctx.reports = write_production_reports(ctx, ws)
         print(f"[MEZO] Status: failed at {ctx.failed_stage}")
         return 1
+
+    if ctx.upload_pixeldrain:
+        print("[DeadZone] Upload: starting PixelDrain upload")
+        ctx.upload_result = upload_final_zip_to_pixeldrain(ctx.final_zip_path, ws)
+    else:
+        ctx.upload_result = write_skipped_upload_report(ws, requested=False)
+    upload_url = ctx.upload_result.url if ctx.upload_result.ok else ""
+    if upload_url and ctx.telegram:
+        ctx.telegram_result = ctx.telegram.add_event("upload URL", "OK", upload_url)
+
     ctx.completed_at = time.time()
+    if ctx.upload_pixeldrain and not ctx.upload_result.ok:
+        ctx.status = "UPLOAD_FAILED"
+    if ctx.telegram:
+        final_status = "OK" if ctx.status == "OK" else "FAIL"
+        ctx.telegram_result = ctx.telegram.finish(final_status, final_zip=ctx.final_zip_path, upload_url=upload_url)
+        ctx.telegram_result = ctx.telegram.write_report()
     ctx.reports = write_production_reports(ctx, ws)
-    print("[MEZO] Status: completed")
+    if ctx.status == "UPLOAD_FAILED":
+        print("[MEZO] Status: upload failed after build")
+    else:
+        print("[MEZO] Status: completed")
     print(f"[FINAL ZIP] {ctx.final_zip_path}")
-    return 0
+    return 0 if ctx.status == "OK" else 1
 
 
 if __name__ == "__main__":

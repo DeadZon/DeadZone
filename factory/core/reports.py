@@ -46,6 +46,8 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     device = getattr(ctx, "device_profile", {}) or {}
     final_zip = getattr(ctx, "final_zip_path", None)
     cleanup_status = getattr(ctx, "cleanup_status", "not run")
+    upload_result = getattr(ctx, "upload_result", None)
+    telegram_result = getattr(ctx, "telegram_result", None)
     status = getattr(ctx, "status", "UNKNOWN")
     failed_stage = getattr(ctx, "failed_stage", "") or "(none)"
     started_at = getattr(ctx, "started_at", time.time())
@@ -78,6 +80,15 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"mode: {getattr(ctx, 'mode', '')}",
         f"workspace: {ws.root}",
         f"final ZIP path: {final_zip or '(none)'}",
+        f"upload requested: {getattr(upload_result, 'requested', False)}",
+        f"upload provider: {getattr(upload_result, 'provider', 'PixelDrain')}",
+        f"upload status: {getattr(upload_result, 'status', 'not requested')}",
+        f"upload URL: {getattr(upload_result, 'url', '') or '(none)'}",
+        f"upload failure reason: {getattr(upload_result, 'failure_reason', '') or '(none)'}",
+        f"telegram requested: {getattr(telegram_result, 'requested', False)}",
+        f"telegram status: {getattr(telegram_result, 'status', 'not requested')}",
+        f"telegram message id: {getattr(telegram_result, 'message_id', None) or '(none)'}",
+        f"telegram failure reason: {getattr(telegram_result, 'failure_reason', '') or '(none)'}",
         f"cleanup status: {cleanup_status}",
         f"started stage: {getattr(ctx, 'started_stage', '(none)')}",
         f"completed stage: {getattr(ctx, 'completed_stage', '(none)')}",
@@ -107,6 +118,10 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"style: {getattr(ctx, 'style_label', '')}",
         f"soc: {getattr(ctx, 'soc', '')}",
         f"final ZIP path: {final_zip or '(none)'}",
+        f"upload status: {getattr(upload_result, 'status', 'not requested')}",
+        f"upload URL: {getattr(upload_result, 'url', '') or '(none)'}",
+        f"telegram status: {getattr(telegram_result, 'status', 'not requested')}",
+        f"telegram message id: {getattr(telegram_result, 'message_id', None) or '(none)'}",
         f"cleanup status: {cleanup_status}",
         "",
         "stage timeline:",

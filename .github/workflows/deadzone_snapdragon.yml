@@ -132,6 +132,12 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt || true
       - name: Build DeadZone
+        env:
+          PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
+          TELEGRAM_SNAPDRAGON_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
         run: |
           ROM_URL="${{ inputs.rom_url }}"
           STYLE="${{ inputs.style }}"
@@ -156,11 +162,11 @@ jobs:
           fi
 
           if [ "${{ inputs.upload_pixeldrain }}" = "true" ]; then
-            echo "[DeadZone] PixelDrain upload is reserved for the next stage and is not wired yet."
+            ARGS+=(--upload-pixeldrain)
           fi
 
           if [ "${{ inputs.notify_telegram }}" = "true" ]; then
-            echo "[DeadZone] Telegram notification is reserved for the next stage and is not wired yet."
+            ARGS+=(--notify-telegram)
           fi
 
           python3 -m factory.deadzone "${ARGS[@]}"
