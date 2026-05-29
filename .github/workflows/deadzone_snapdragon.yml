@@ -131,6 +131,38 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt || true
+      - name: Install payload dumper
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xz-utils
+          python3 - <<'PY'
+          import json
+          import platform
+          import urllib.request
+
+          arch = platform.machine().lower()
+          aliases = {
+              "x86_64": ("amd64", "x86_64"),
+              "amd64": ("amd64", "x86_64"),
+              "aarch64": ("arm64", "aarch64"),
+              "arm64": ("arm64", "aarch64"),
+          }.get(arch, (arch,))
+          with urllib.request.urlopen("https://api.github.com/repos/ssut/payload-dumper-go/releases/latest") as response:
+              data = json.load(response)
+          matches = [
+              asset for asset in data.get("assets", [])
+              if "linux" in asset.get("name", "").lower()
+              and any(alias in asset.get("name", "").lower() for alias in aliases)
+              and asset.get("name", "").lower().endswith((".tar.gz", ".tgz"))
+          ]
+          if not matches:
+              raise SystemExit("payload-dumper-go linux release asset not found")
+          urllib.request.urlretrieve(matches[0]["browser_download_url"], "/tmp/payload-dumper-go.tar.gz")
+          PY
+          mkdir -p /tmp/payload-dumper-go tools/helper
+          tar -xzf /tmp/payload-dumper-go.tar.gz -C /tmp/payload-dumper-go
+          install -m 0755 "$(find /tmp/payload-dumper-go -type f -name payload-dumper-go | head -n 1)" tools/helper/payload-dumper-go
+          tools/helper/payload-dumper-go -h >/dev/null || true
       - name: Build DeadZone
         env:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
@@ -216,6 +248,7 @@ jobs:
             output/workspace/reports/telegram_report.txt
             output/workspace/reports/final_zip_report.txt
             output/workspace/reports/super_build_report.txt
+            output/workspace/reports/payload_unpack_report.txt
             output/workspace/reports/device_registry_report.txt
             output/workspace/reports/super_profile_report.txt
             output/workspace/reports/error_summary.txt
