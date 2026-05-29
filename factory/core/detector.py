@@ -323,7 +323,7 @@ def print_detected(info: RomInfo) -> None:
     print(f"[ROM] Type: {info.rom_type}")
     print(f"[DEVICE] Codename: {info.codename}")
     print(f"[ANDROID] Version: {info.android_version}")
-    print(f"[BUILD] {info.build}")
+    print(f"[BUILD] Version: {info.build}")
     print(f"[REGION] {info.region}")
     print(f"[SOC] {info.soc}")
     print(f"[SLOT] {info.slot_mode}")

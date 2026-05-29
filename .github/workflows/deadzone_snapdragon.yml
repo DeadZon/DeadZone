@@ -24,16 +24,6 @@ on:
         default: build
         options:
           - build
-      upload_pixeldrain:
-        description: Upload final ZIP to PixelDrain
-        required: false
-        type: boolean
-        default: false
-      notify_telegram:
-        description: Notify Telegram
-        required: false
-        type: boolean
-        default: false
       custom_codename:
         description: Optional fallback codename when detection fails
         required: false
@@ -61,14 +51,8 @@ jobs:
           if [ -n "${{ inputs.custom_codename }}" ]; then
             ARGS+=(--custom-codename "${{ inputs.custom_codename }}")
           fi
-          if [ "${{ inputs.upload_pixeldrain }}" = "true" ]; then
-            ARGS+=(--upload-pixeldrain)
-          fi
-          if [ "${{ inputs.notify_telegram }}" = "true" ]; then
-            ARGS+=(--notify-telegram)
-          fi
           "${ARGS[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: deadzone-snapdragon-output
-          path: output/final/*
+          path: output/workspace/final/*
