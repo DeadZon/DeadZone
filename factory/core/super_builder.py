@@ -1,28 +1,15 @@
 from __future__ import annotations
 
-import os
-import platform
-import shutil
-import stat
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from factory.core.detector import DYNAMIC_PARTITIONS, RomInfo
 from factory.core.super_profile import build_super_profile
+from factory.core.toolchain import MISSING_LPMAKE_MESSAGE, resolve_toolchain
 from factory.core.workspace import Workspace, read_json, write_json
 
 DYNAMIC_IMAGES = {f"{name}.img" for name in DYNAMIC_PARTITIONS}
-
-
-@dataclass(frozen=True)
-class Toolset:
-    lpmake: Path | None
-    lpdump: Path | None
-    lpunpack: Path | None
-    simg2img: Path | None
-    img2simg: Path | None
 
 
 def _metadata_path(ws: Workspace, name: str) -> Path:
@@ -35,44 +22,6 @@ def _load_required_metadata(ws: Workspace) -> dict[str, dict[str, Any]]:
     if missing:
         raise RuntimeError(f"required super metadata is missing: {', '.join(missing)}")
     return {name: read_json(_metadata_path(ws, name), {}) for name in names}
-
-
-def _helper_candidates(tool: str) -> list[Path]:
-    exe = f"{tool}.exe" if os.name == "nt" else tool
-    system_name = platform.system().lower()
-    machine = platform.machine()
-    roots = [
-        Path("tools/helper"),
-        Path("tools/helper/bin"),
-        Path("tools/helper/bin") / system_name,
-        Path("tools/helper/bin") / system_name / machine,
-        Path("tools/helper/bin/linux"),
-        Path("tools/helper/bin/windows"),
-    ]
-    return [root / exe for root in roots] + [root / tool for root in roots if exe != tool]
-
-
-def resolve_tool(tool: str) -> Path | None:
-    for candidate in _helper_candidates(tool):
-        if candidate.is_file():
-            if os.name == "posix":
-                try:
-                    candidate.chmod(candidate.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-                except OSError:
-                    pass
-            return candidate.resolve()
-    found = shutil.which(tool) or shutil.which(f"{tool}.exe")
-    return Path(found).resolve() if found else None
-
-
-def resolve_tools() -> Toolset:
-    return Toolset(
-        lpmake=resolve_tool("lpmake"),
-        lpdump=resolve_tool("lpdump"),
-        lpunpack=resolve_tool("lpunpack"),
-        simg2img=resolve_tool("simg2img"),
-        img2simg=resolve_tool("img2simg"),
-    )
 
 
 def _int_value(*values: Any) -> int:
@@ -154,7 +103,7 @@ def _build_lpmake_command(
 
 def _validate_with_lpdump(super_img: Path, lpdump: Path | None) -> dict[str, Any]:
     if lpdump is None:
-        return {"status": "SKIPPED", "reason": "lpdump not available from tools/helper or PATH", "output": ""}
+        return {"status": "SKIPPED", "reason": "lpdump not available from toolchain", "output": ""}
     if not super_img.is_file():
         return {"status": "FAILED", "reason": f"super.img not found: {super_img}", "output": ""}
     proc = subprocess.run(
@@ -203,6 +152,8 @@ def _write_report(
         lines.append("  (not VAB)")
     lines += [
         "",
+        f"toolchain report: {result.get('toolchain_report') or '(none)'}",
+        "",
         "lpmake command:",
         f"  {' '.join(str(token) for token in command)}" if command else "  (none)",
         "",
@@ -228,7 +179,9 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     super_layout = metadata["super_layout.json"]
     layout = build_super_profile(ws, info, inspection)
     dynamic_images = {name: Path(path) for name, path in layout.get("dynamic_images", {}).items()}
-    tools = resolve_tools()
+    toolchain = resolve_toolchain(ws)
+    lpmake = toolchain.path("lpmake")
+    lpdump = toolchain.path("lpdump")
     final_super = ws.images / "super.img"
     needs_rebuild = bool(
         super_layout.get("rebuild_required")
@@ -245,21 +198,44 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     if final_super.is_file() and not needs_rebuild:
         action = "preserved"
         reason = "original super.img is present and no dynamic partition rebuild was requested"
-        validation = _validate_with_lpdump(final_super, tools.lpdump)
+        validation = _validate_with_lpdump(final_super, lpdump)
     elif final_super.is_file() and not dynamic_images:
         action = "preserved"
         reason = "super.img is present and no replacement dynamic partition images are available"
-        validation = _validate_with_lpdump(final_super, tools.lpdump)
+        validation = _validate_with_lpdump(final_super, lpdump)
     else:
         action = "rebuilt"
         if not dynamic_images:
             raise RuntimeError("cannot rebuild super.img because no dynamic partition images are available")
-        if tools.lpmake is None:
-            raise RuntimeError("lpmake not available from tools/helper or PATH")
+        if lpmake is None:
+            message = f"{MISSING_LPMAKE_MESSAGE} Toolchain report: {toolchain.report_path}"
+            result = {
+                "status": "FAILED",
+                "action": "failed",
+                "reason": message,
+                "super_img": str(final_super),
+                "super_size": final_super.stat().st_size if final_super.is_file() else None,
+                "input_metadata_source": layout.get("metadata_source"),
+                "target_super_size": layout.get("target_super_size"),
+                "group_name": layout.get("dynamic_group_name"),
+                "group_size": layout.get("group_size"),
+                "slot_mode": layout.get("slot_mode"),
+                "partition_list": layout.get("selected_partitions"),
+                "vab_zero_size_b_partitions": [f"{p}_b" for p in layout.get("selected_partitions", [])] if layout.get("virtual_ab") else [],
+                "lpmake_command": command,
+                "tools": {name: str(status.path) if status.path else None for name, status in toolchain.tools.items()},
+                "toolchain_report": str(toolchain.report_path),
+                "validation": {"status": "FAILED", "reason": MISSING_LPMAKE_MESSAGE, "output": ""},
+                "warnings": warnings,
+                "errors": [message],
+            }
+            write_json(ws.meta / "super_build_result.json", result)
+            _write_report(ws, result, layout, result["validation"])
+            raise RuntimeError(message)
         reason = "dynamic partition content requires a new super.img"
         if not final_super.is_file():
             reason = "no original super.img is available and dynamic partition images exist"
-        command = _build_lpmake_command(final_super, layout, dynamic_images, tools.lpmake, warnings)
+        command = _build_lpmake_command(final_super, layout, dynamic_images, lpmake, warnings)
         final_super.parent.mkdir(parents=True, exist_ok=True)
         if final_super.exists():
             final_super.unlink()
@@ -270,7 +246,7 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
             errors.append(f"lpmake failed with code {proc.returncode}; see {log}")
             validation = {"status": "FAILED", "reason": "lpmake did not produce a valid super.img", "output": ""}
         else:
-            validation = _validate_with_lpdump(final_super, tools.lpdump)
+            validation = _validate_with_lpdump(final_super, lpdump)
 
     result = {
         "status": "FAILED" if errors or validation.get("status") == "FAILED" else "OK",
@@ -286,7 +262,8 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
         "partition_list": layout.get("selected_partitions"),
         "vab_zero_size_b_partitions": [f"{p}_b" for p in layout.get("selected_partitions", [])] if layout.get("virtual_ab") else [],
         "lpmake_command": command,
-        "tools": {name: str(path) if path else None for name, path in tools.__dict__.items()},
+        "tools": {name: str(status.path) if status.path else None for name, status in toolchain.tools.items()},
+        "toolchain_report": str(toolchain.report_path),
         "validation": validation,
         "warnings": warnings,
         "errors": errors,

@@ -167,4 +167,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     error_path = reports_dir / "error_summary.txt"
     if error_path.exists():
         reports["error_summary"] = str(error_path)
+    toolchain_path = reports_dir / "toolchain_report.txt"
+    if toolchain_path.exists():
+        reports["toolchain"] = str(toolchain_path)
     return reports

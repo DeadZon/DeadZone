@@ -21,6 +21,7 @@ def cleanup(ws: Workspace, keep_workspace: bool = True) -> dict:
         "orchestration_report.txt",
         "stage_status.json",
         "telegram_report.txt",
+        "toolchain_report.txt",
         "upload_links.txt",
         "upload_report.txt",
         "github_summary.md",

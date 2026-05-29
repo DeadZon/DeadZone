@@ -20,6 +20,7 @@ from factory.core.status import StageTracker
 from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
 from factory.core.telegram import TelegramResult, TelegramStatus
+from factory.core.toolchain import resolve_toolchain
 from factory.core.unpacker import unpack_rom
 from factory.core.uploader import UploadResult, upload_final_zip_to_pixeldrain, write_skipped_upload_report
 from factory.core.workspace import Workspace, create_workspace, read_json, write_json
@@ -79,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--notify-telegram", action="store_true")
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--show-device", default="")
+    parser.add_argument("--check-toolchain", action="store_true")
     return parser.parse_args()
 
 
@@ -99,6 +101,14 @@ def _print_device_list() -> None:
         print(f"[{soc}] {len(devices)}")
         for device in devices:
             print(f"  {device.get('codename')} | {device.get('name')}")
+
+
+def _print_toolchain() -> None:
+    ws = create_workspace(Path("output/workspace"), clean=False)
+    toolchain = resolve_toolchain(ws)
+    for name, status in toolchain.tools.items():
+        print(f"[TOOLCHAIN] {name}: {status.path or '(missing)'}")
+    print(f"[TOOLCHAIN REPORT] {toolchain.report_path}")
 
 
 def _selected_codename(device_codename: str, custom_codename: str) -> str:
@@ -349,6 +359,9 @@ def main() -> int:
         ws = create_workspace(Path("output/workspace"), clean=False)
         device = resolve_device(args.show_device, ws=ws)
         _print_device(device)
+        return 0
+    if args.check_toolchain:
+        _print_toolchain()
         return 0
     if not args.rom_url or not args.style or not args.soc:
         raise SystemExit("--rom-url, --style, and --soc are required for build mode")

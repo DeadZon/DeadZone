@@ -69,10 +69,11 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install -r requirements.txt || true
-      - name: Install payload dumper
+      - name: Prepare Android toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xz-utils
+          sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file android-sdk-libsparse-utils || \
+            sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file
           python3 - <<'PY'
           import json
           import platform
@@ -101,6 +102,20 @@ jobs:
           tar -xzf /tmp/payload-dumper-go.tar.gz -C /tmp/payload-dumper-go
           install -m 0755 "$(find /tmp/payload-dumper-go -type f -name payload-dumper-go | head -n 1)" tools/helper/payload-dumper-go
           tools/helper/payload-dumper-go -h >/dev/null || true
+          chmod +x tools/helper/linux/* 2>/dev/null || true
+          echo "$PWD/tools/helper/linux" >> "$GITHUB_PATH"
+          echo "$PWD/tools/helper" >> "$GITHUB_PATH"
+          export PATH="$PWD/tools/helper/linux:$PWD/tools/helper:$PATH"
+          which lpmake || true
+          which lpdump || true
+          which lpunpack || true
+          which simg2img || true
+          which img2simg || true
+          python3 -m factory.deadzone --check-toolchain
+          if [ ! -x tools/helper/linux/lpmake ] && ! command -v lpmake >/dev/null 2>&1; then
+            echo "lpmake is missing. Install Android dynamic partition tools or place lpmake in tools/helper/linux."
+            exit 1
+          fi
       - name: Build DeadZone
         env:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
@@ -186,6 +201,7 @@ jobs:
             output/workspace/reports/telegram_report.txt
             output/workspace/reports/final_zip_report.txt
             output/workspace/reports/super_build_report.txt
+            output/workspace/reports/toolchain_report.txt
             output/workspace/reports/payload_unpack_report.txt
             output/workspace/reports/device_registry_report.txt
             output/workspace/reports/super_profile_report.txt

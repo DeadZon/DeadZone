@@ -4,8 +4,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
+ENV PATH="/app/tools/helper/linux:/app/tools/helper:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget unzip zip tar xz-utils zstd brotli file git android-sdk-libsparse-utils \
+    || apt-get install -y --no-install-recommends \
     curl wget unzip zip tar xz-utils zstd brotli file git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -18,6 +21,7 @@ RUN python3 -c 'import json, platform, urllib.request; arch = platform.machine()
     && mkdir -p /tmp/payload-dumper-go /app/tools/helper \
     && tar -xzf /tmp/payload-dumper-go.tar.gz -C /tmp/payload-dumper-go \
     && install -m 0755 "$(find /tmp/payload-dumper-go -type f -name payload-dumper-go | head -n 1)" /app/tools/helper/payload-dumper-go \
+    && chmod +x /app/tools/helper/linux/* 2>/dev/null || true \
     && rm -rf /tmp/payload-dumper-go /tmp/payload-dumper-go.tar.gz
 
 ENTRYPOINT ["python3", "-m", "factory.deadzone"]
