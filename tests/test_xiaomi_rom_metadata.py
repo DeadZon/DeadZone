@@ -394,6 +394,72 @@ class TestZornFinalZipDoesNotFailOnMetadata:
         assert "android_version is missing" in result.get("error", "")
 
 
+# ═══════════════════════════════════════════════════════════════════
+# 7. ZIRCON OTA FILENAME FALLBACK — end-to-end pipeline metadata test
+# ═══════════════════════════════════════════════════════════════════
+
+class TestZirconOtaFilenameMetadataFallback:
+    """Filename fallback for local payload OTA builds.
+
+    Given: zircon-ota_full-OS3.0.303.0.WNOCNXM-user-16.0-09c35a83d6.zip
+    Expected:
+      - codename=zircon
+      - android_version=16.0
+      - mi_incremental/build_incremental=OS3.0.303.0.WNOCNXM
+      - final zip metadata validation passes (FlashScriptMetadata.build succeeds)
+    """
+    _FILENAME = "zircon-ota_full-OS3.0.303.0.WNOCNXM-user-16.0-09c35a83d6.zip"
+
+    def test_codename(self):
+        result = parse_xiaomi_rom_metadata_from_sources(self._FILENAME)
+        assert result.get("codename") == "zircon"
+
+    def test_android_version(self):
+        result = parse_xiaomi_rom_metadata_from_sources(self._FILENAME)
+        assert result.get("android_version") == "16.0"
+
+    def test_mi_incremental(self):
+        result = parse_xiaomi_rom_metadata_from_sources(self._FILENAME)
+        assert result.get("build_incremental") == "OS3.0.303.0.WNOCNXM"
+
+    def test_sources_attempted_always_present_on_match(self):
+        """metadata_sources_attempted must be in the result when a filename matches."""
+        result = parse_xiaomi_rom_metadata_from_sources(self._FILENAME)
+        assert "metadata_sources_attempted" in result
+        assert self._FILENAME in result["metadata_sources_attempted"]
+
+    def test_sources_attempted_always_present_on_no_match(self):
+        """metadata_sources_attempted must be present even when no pattern matches."""
+        result = parse_xiaomi_rom_metadata_from_sources("some_unknown_rom.zip")
+        assert "metadata_sources_attempted" in result
+        assert "some_unknown_rom.zip" in result["metadata_sources_attempted"]
+
+    def test_final_zip_metadata_validation_passes(self):
+        """Metadata from zircon OTA filename must satisfy FlashScriptMetadata.build()."""
+        result = parse_xiaomi_rom_metadata_from_sources(self._FILENAME)
+        meta = FlashScriptMetadata.build(
+            edition="deadzone",
+            device_codename=result["codename"],
+            device_model=result["codename"],
+            android_version=result["android_version"],
+            build_incremental=result["build_incremental"],
+            image_count=10,
+        )
+        assert meta.android_version == "16.0"
+        assert meta.build_incremental == "OS3.0.303.0.WNOCNXM"
+        assert meta.device_codename == "zircon"
+        assert meta.os_name == "HyperOS 3"
+        assert meta.region == "China"
+
+    def test_from_path_extracts_filename(self):
+        """Full local path must resolve to the filename and still parse correctly."""
+        full_path = f"/tmp/roms/{self._FILENAME}"
+        result = parse_xiaomi_rom_metadata_from_sources(full_path)
+        assert result.get("android_version") == "16.0"
+        assert result.get("build_incremental") == "OS3.0.303.0.WNOCNXM"
+        assert result.get("codename") == "zircon"
+
+
 # ── Runner ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

@@ -156,6 +156,11 @@ def parse_xiaomi_rom_metadata_from_sources(*sources: str) -> dict:
 
     Sources are tried in order. Non-empty values from earlier useful sources win;
     later sources fill only missing fields. URLs are parsed by path basename.
+
+    ``metadata_sources_attempted`` is always present in the returned dict so
+    callers have diagnostics even when no source matched any known filename
+    pattern.  An empty dict is returned only when no non-empty sources were
+    supplied at all.
     """
     merged: dict = {}
     attempted: list[str] = []
@@ -180,4 +185,8 @@ def parse_xiaomi_rom_metadata_from_sources(*sources: str) -> dict:
     if merged:
         merged["metadata_source"] = useful_sources[0] if useful_sources else "unknown"
         merged["metadata_sources_attempted"] = attempted
+    elif attempted:
+        # No filename matched any pattern; return a diagnostics-only dict so
+        # callers always know what was tried rather than seeing empty [].
+        return {"metadata_sources_attempted": attempted}
     return merged

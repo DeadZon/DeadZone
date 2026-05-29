@@ -448,7 +448,15 @@ def run_legacy_engine(
                     ctx.rom_url or "",
                     str(ctx.rom_path or ""),
                 )
-                if parsed_meta:
+                # Always record what was attempted so _do_zip error messages are useful.
+                ctx.metadata_sources_attempted = parsed_meta.get("metadata_sources_attempted", [])
+                # Only propagate actual metadata fields when a match was found.
+                _has_useful = bool(
+                    parsed_meta.get("codename")
+                    or parsed_meta.get("android_version")
+                    or parsed_meta.get("build_incremental")
+                )
+                if _has_useful:
                     if not _detection.detected_device_codename:
                         _detection.detected_device_codename = parsed_meta.get("codename")
                     if not _detection.detected_android_version:
@@ -457,8 +465,8 @@ def run_legacy_engine(
                         _detection.detected_hyperos_or_miui_version = parsed_meta.get("build_incremental")
                     if not _detection.detected_region:
                         _detection.detected_region = parsed_meta.get("region")
-                    ctx.metadata_source = parsed_meta.get("metadata_source")
-                    ctx.metadata_sources_attempted = parsed_meta.get("metadata_sources_attempted", [])
+                    if parsed_meta.get("metadata_source"):
+                        ctx.metadata_source = parsed_meta["metadata_source"]
                     if not getattr(ctx, "os_name", None):
                         ctx.os_name = parsed_meta.get("os_name")
                     if not getattr(ctx, "platform", None):
@@ -697,6 +705,39 @@ def run_legacy_engine(
                     missing_meta.append("mi_incremental/build_incremental")
                 if not getattr(ctx, "region", None) and not ctx.mi_incremental:
                     missing_meta.append("region")
+
+                # Last-resort: parse any still-missing fields from the ROM filename.
+                # This covers local payload OTA builds where the normal detect_rom
+                # metadata block may have run before the ROM path was set, or where
+                # the payload doesn't contain build.prop.
+                if missing_meta and ctx.rom_path:
+                    _rom_name = Path(ctx.rom_path).name
+                    if _rom_name:
+                        try:
+                            from factory.input.xiaomi_rom_metadata import (
+                                parse_xiaomi_rom_metadata_from_sources,
+                            )
+                            _fname = parse_xiaomi_rom_metadata_from_sources(
+                                _rom_name, ctx.rom_url or ""
+                            )
+                            if _fname.get("android_version") and not ctx.android_version:
+                                ctx.android_version = _fname["android_version"]
+                                missing_meta = [m for m in missing_meta if m != "android_version"]
+                                print(f"[final_zip] filename fallback: android_version={ctx.android_version}")
+                            if _fname.get("build_incremental") and not ctx.mi_incremental:
+                                ctx.mi_incremental = _fname["build_incremental"]
+                                missing_meta = [m for m in missing_meta if "incremental" not in m]
+                                print(f"[final_zip] filename fallback: mi_incremental={ctx.mi_incremental}")
+                            if _fname.get("region") and not getattr(ctx, "region", None):
+                                ctx.region = _fname["region"]
+                                missing_meta = [m for m in missing_meta if m != "region"]
+                            if _fname.get("metadata_sources_attempted") and not ctx.metadata_sources_attempted:
+                                ctx.metadata_sources_attempted = _fname["metadata_sources_attempted"]
+                        except Exception as _fb_exc:
+                            ctx.warnings.append(
+                                f"final_zip filename metadata fallback failed: {_fb_exc}"
+                            )
+
                 if missing_meta:
                     attempted = getattr(ctx, "metadata_sources_attempted", [])
                     return {
@@ -720,6 +761,7 @@ def run_legacy_engine(
                     device_model=ctx.device_model,
                     android_version=ctx.android_version,
                     build_incremental=ctx.mi_incremental,
+                    region=getattr(ctx, "region", None) or "",
                     execute=True,
                 )
             ok = _run("final_zip", _do_zip, critical=True)

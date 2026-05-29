@@ -1066,6 +1066,37 @@ def run_smart_base_engine(
                     missing_meta.append("android_version")
                 if not ctx.mi_incremental:
                     missing_meta.append("mi_incremental/build_incremental")
+
+                # Last-resort: parse any still-missing fields from the ROM filename.
+                # Covers local payload OTA builds where analyze_rom couldn't read
+                # build.prop (e.g. payload-only ZIP with no system/build.prop).
+                if missing_meta and ctx.rom_path:
+                    _rom_name = Path(ctx.rom_path).name
+                    if _rom_name:
+                        try:
+                            from factory.input.xiaomi_rom_metadata import (
+                                parse_xiaomi_rom_metadata_from_sources,
+                            )
+                            _fname = parse_xiaomi_rom_metadata_from_sources(
+                                _rom_name, ctx.rom_url or ""
+                            )
+                            if _fname.get("android_version") and not ctx.android_version:
+                                ctx.android_version = _fname["android_version"]
+                                missing_meta = [m for m in missing_meta if m != "android_version"]
+                                print(f"[final_zip] filename fallback: android_version={ctx.android_version}")
+                            if _fname.get("build_incremental") and not ctx.mi_incremental:
+                                ctx.mi_incremental = _fname["build_incremental"]
+                                missing_meta = [m for m in missing_meta if "incremental" not in m]
+                                print(f"[final_zip] filename fallback: mi_incremental={ctx.mi_incremental}")
+                            if _fname.get("region") and not getattr(ctx, "region", None):
+                                ctx.region = _fname["region"]
+                            if _fname.get("metadata_sources_attempted") and not ctx.metadata_sources_attempted:
+                                ctx.metadata_sources_attempted = _fname["metadata_sources_attempted"]
+                        except Exception as _fb_exc:
+                            ctx.warnings.append(
+                                f"final_zip filename metadata fallback failed: {_fb_exc}"
+                            )
+
                 if missing_meta:
                     attempted = getattr(ctx, "metadata_sources_attempted", [])
                     return {
