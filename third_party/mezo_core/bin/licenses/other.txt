@@ -1,3 +1,0 @@
-oppo_ozip_decrypt by bkerler
-ext4-extractor by ColdWindScholar
-payload_dumper by vm03

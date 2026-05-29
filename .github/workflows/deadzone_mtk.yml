@@ -1,472 +1,74 @@
-name: DeadZone MTK GitHub Build
+name: DeadZone MTK
 
 on:
   workflow_dispatch:
     inputs:
-      codename:
-        description: "Select target device"
-        required: true
-        type: choice
-        options:
-          # AUTO-GENERATED DEVICE OPTIONS START
-          - renoir | Redmi K30 Ultra
-          - cezanne | Redmi K40
-          - cannon | Redmi Note 10 Pro
-          - light | Redmi Note 11
-          - mondeo | Redmi Note 11 5G
-          - fleur | Redmi Note 11 Pro
-          - miel | Redmi Note 11 Pro+ 5G
-          - biloba | Redmi Note 11S
-          - pissaro | Redmi Note 12 Pro / Xiaomi 12i
-          - zircon | Redmi Note 13 Pro+ 5G
-          - bomb | Xiaomi 11i / Xiaomi 11i HyperCharge
-          - agate | Xiaomi 11T
-          - daumier | Xiaomi 12 Pro Dimensity Edition
-          - plato | Xiaomi 12T
-          - aristotle | Xiaomi 13T
-          - rubens | Xiaomi 13T Pro
-          - corot | Xiaomi 14T
-          - pantah | Xiaomi 14T Pro
-          # AUTO-GENERATED DEVICE OPTIONS END
-
-      codename_override:
-        description: "Optional codename override (leave blank to use dropdown)"
-        required: false
-        type: string
-
-      edition:
-        description: "ROM edition"
-        required: true
-        type: choice
-        default: free
-        options:
-          - free
-          - gaming
-          - legend
-          - epic
-
-      rom_source:
-        description: "ROM source"
-        required: true
-        type: choice
-        default: manual_url
-        options:
-          - manual_url
-          - auto_latest
-
       rom_url:
-        description: "Direct ROM ZIP/TGZ URL — required when rom_source=manual_url"
+        description: ROM URL or path
+        required: true
+        type: string
+      style:
+        description: DeadZone style
+        required: true
+        type: choice
+        default: Stable
+        options:
+          - Stable
+          - Legend
+          - Gaming
+          - EPiC
+      mode:
+        description: Build mode
+        required: true
+        type: choice
+        default: build
+        options:
+          - build
+      upload_pixeldrain:
+        description: Upload final ZIP to PixelDrain
+        required: false
+        type: boolean
+        default: false
+      notify_telegram:
+        description: Notify Telegram
+        required: false
+        type: boolean
+        default: false
+      custom_codename:
+        description: Optional fallback codename when detection fails
         required: false
         type: string
-
-      mode:
-        description: "Build mode"
-        required: true
-        type: choice
-        default: execute
-        options:
-          - dry_run
-          - execute
-
-      upload_pixeldrain:
-        description: "Upload final ROM ZIP to PixelDrain"
-        required: true
-        type: boolean
-        default: true
-
-      notify_telegram:
-        description: "Send Telegram live updates"
-        required: true
-        type: boolean
-        default: true
-
-      enable_listmezo:
-        description: "Enable ListMezo free app normalize (active for free edition only)"
-        required: false
-        type: boolean
-        default: true
-
-      listmezo_mode:
-        description: "ListMezo mode: dry_run = scan+report only; execute = apply changes"
-        required: false
-        type: choice
-        default: dry_run
-        options:
-          - dry_run
-          - execute
-
-concurrency:
-  group: deadzone-${{ github.workflow }}-${{ inputs.codename }}-${{ inputs.edition }}
-  cancel-in-progress: true
 
 jobs:
   build:
-    name: "MTK | ${{ inputs.codename_override || inputs.codename }} | ${{ inputs.edition }} | ${{ inputs.mode }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 120
-
+    env:
+      ROM_URL: ${{ inputs.rom_url }}
+      STYLE: ${{ inputs.style }}
+      SOC: mtk
     steps:
-      - name: Validate inputs
-        run: |
-          set -euo pipefail
-
-          EDITION="${{ inputs.edition }}"
-          case "$EDITION" in
-            free|gaming|legend|epic) ;;
-            *) echo "[ERROR] Invalid edition: $EDITION. Must be one of: free, gaming, legend, epic."; exit 1 ;;
-          esac
-
-          MODE="${{ inputs.mode }}"
-          case "$MODE" in
-            dry_run|execute) ;;
-            *) echo "[ERROR] Invalid mode: $MODE. Must be dry_run or execute."; exit 1 ;;
-          esac
-
-          ROM_SOURCE="${{ inputs.rom_source }}"
-          case "$ROM_SOURCE" in
-            manual_url|auto_latest) ;;
-            *) echo "[ERROR] Invalid rom_source: $ROM_SOURCE. Must be manual_url or auto_latest."; exit 1 ;;
-          esac
-
-          echo "[OK] edition    = $EDITION"
-          echo "[OK] mode       = $MODE"
-          echo "[OK] rom_source = $ROM_SOURCE"
-          echo "[OK] Basic inputs validated."
-
-      - name: Resolve selected device
-        run: |
-          set -euo pipefail
-
-          SELECTED="${{ inputs.codename }}"
-          CUSTOM="${{ inputs.codename_override }}"
-
-          if [ -z "$SELECTED" ]; then
-            echo "[ERROR] select_device is required."
-            exit 1
-          fi
-
-          # Parse codename (left of " | ")
-          CODENAME="${SELECTED%% | *}"
-          CODENAME="$(echo "$CODENAME" | xargs)"
-
-          if [ -z "$CODENAME" ] || [ "$CODENAME" = "$SELECTED" ]; then
-            echo "[ERROR] Could not parse codename from: $SELECTED"
-            echo "[ERROR] Expected format: codename | Display Name"
-            exit 1
-          fi
-
-          # Parse display name (right of " | ")
-          DISPLAY_NAME="${SELECTED#*| }"
-          DISPLAY_NAME="$(echo "$DISPLAY_NAME" | xargs)"
-
-          # Override codename with custom_device if set
-          if [ -n "$CUSTOM" ]; then
-            echo "[DEVICE] Overriding dropdown codename '$CODENAME' with custom_device='$CUSTOM'"
-            CODENAME="$(echo "$CUSTOM" | xargs)"
-          fi
-
-          # Guard against placeholder values
-          for BAD in select_device_codename select_device device none null default; do
-            if [ "$CODENAME" = "$BAD" ]; then
-              echo "[ERROR] Invalid device codename: $CODENAME"
-              exit 1
-            fi
-          done
-
-          # Resolve ROM URL based on rom_source
-          ROM_SOURCE="${{ inputs.rom_source }}"
-          ROM_URL="${{ inputs.rom_url }}"
-          DEADZONE_ROM_URL=""
-
-          if [ "$ROM_SOURCE" = "manual_url" ]; then
-            if [ -z "$ROM_URL" ]; then
-              echo "[ERROR] rom_url is required when rom_source=manual_url"
-              exit 1
-            fi
-            case "$ROM_URL" in
-              http://*|https://*) ;;
-              *) echo "[ERROR] rom_url must start with http:// or https://"; exit 1 ;;
-            esac
-            DEADZONE_ROM_URL="$ROM_URL"
-          elif [ "$ROM_SOURCE" = "auto_latest" ]; then
-            echo "[INFO] Attempting automatic ROM URL lookup for: $CODENAME"
-            echo "[ERROR] No automatic ROM URL found for this device. Use manual_url mode."
-            exit 1
-          fi
-
-          # Write resolved values to GITHUB_ENV
-          {
-            echo "DEADZONE_DEVICE_CODENAME=$CODENAME"
-            echo "DEADZONE_DEVICE_DISPLAY_NAME=$DISPLAY_NAME"
-            echo "DEADZONE_ROM_URL=$DEADZONE_ROM_URL"
-            echo "DEADZONE_ROM_SOURCE=$ROM_SOURCE"
-          } >> "$GITHUB_ENV"
-
-          echo "[DEVICE] codename     = $CODENAME"
-          echo "[DEVICE] display_name = $DISPLAY_NAME"
-          echo "[DEVICE] rom_source   = $ROM_SOURCE"
-          echo "[DEVICE] rom_url      = $DEADZONE_ROM_URL"
-
-      - name: Normalize inputs
-        id: norm
-        run: |
-          set -euo pipefail
-
-          CODENAME="$DEADZONE_DEVICE_CODENAME"
-
-          EDITION="${{ inputs.edition }}"
-          case "$EDITION" in
-            free) MOD="free" ;;
-            gaming) MOD="gaming" ;;
-            legend) MOD="legend" ;;
-            epic) MOD="epic" ;;
-            *) MOD="free" ;;
-          esac
-
-          if [ "$MOD" = "free" ]; then
-            FINAL_NAME="DeadZone_${CODENAME}_V1"
-          else
-            FINAL_NAME="DeadZone_${CODENAME}_${MOD}_V1"
-          fi
-
-          MODE="${{ inputs.mode }}"
-          ROM_URL="$DEADZONE_ROM_URL"
-          UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
-          NOTIFY_TG="${{ inputs.notify_telegram }}"
-
-          echo "codename=$CODENAME"           >> "$GITHUB_OUTPUT"
-          echo "mod=$MOD"                     >> "$GITHUB_OUTPUT"
-          echo "final_name=$FINAL_NAME"       >> "$GITHUB_OUTPUT"
-          echo "mode=$MODE"                   >> "$GITHUB_OUTPUT"
-          echo "rom_url=$ROM_URL"             >> "$GITHUB_OUTPUT"
-          echo "upload_pixeldrain=$UPLOAD_PD" >> "$GITHUB_OUTPUT"
-          echo "notify_telegram=$NOTIFY_TG"   >> "$GITHUB_OUTPUT"
-
-          echo "[NORM] codename   = $CODENAME"
-          echo "[NORM] mod        = $MOD"
-          echo "[NORM] final_name = $FINAL_NAME"
-          echo "[NORM] mode       = $MODE"
-          echo "[NORM] rom_url    = $ROM_URL"
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
-          pip install --quiet \
-            requests pyyaml flask cryptography httpx protobuf \
-            pycryptodome toml zstandard brotli
-
-      - name: Send Telegram build start
-        id: tg_start
-        if: steps.norm.outputs.notify_telegram == 'true'
-        env:
-          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r requirements.txt || true
+      - name: Build DeadZone
         run: |
-          set +e
-          MSG_ID=$(python -m factory.notify.telegram_live \
-            --soc mtk \
-            --codename "${{ steps.norm.outputs.codename }}" \
-            --edition  "${{ steps.norm.outputs.mod }}" \
-            --action   start 2>/dev/null)
-          EXIT_CODE=$?
-          MSG_ID="${MSG_ID//[$'\t\r\n ']}"
-          if echo "$MSG_ID" | grep -qE '^[0-9]+$'; then
-            echo "DEADZONE_TELEGRAM_MESSAGE_ID=${MSG_ID}" >> "$GITHUB_ENV"
-            echo "tg_message_id=${MSG_ID}" >> "$GITHUB_OUTPUT"
-            echo "[TG] Start message sent: message_id=${MSG_ID}"
-          else
-            echo "[TG] Telegram start skipped or failed (exit=${EXIT_CODE})."
+          ARGS=(python3 -m factory.deadzone --rom-url "$ROM_URL" --style "$STYLE" --soc "$SOC" --mode "${{ inputs.mode }}")
+          if [ -n "${{ inputs.custom_codename }}" ]; then
+            ARGS+=(--custom-codename "${{ inputs.custom_codename }}")
           fi
-
-      - name: Download source ROM (execute mode only)
-        if: steps.norm.outputs.mode == 'execute'
-        id: download
-        run: |
-          set -euo pipefail
-          ROM_URL="$DEADZONE_ROM_URL"
-
-          if [ -z "$ROM_URL" ]; then
-            echo "[ERROR] rom_url is empty in execute mode."
-            exit 1
+          if [ "${{ inputs.upload_pixeldrain }}" = "true" ]; then
+            ARGS+=(--upload-pixeldrain)
           fi
-
-          mkdir -p _input_roms
-
-          case "$ROM_URL" in
-            *.tgz)    ROM_FILE="_input_roms/source_rom.tgz" ;;
-            *.tar.gz) ROM_FILE="_input_roms/source_rom.tar.gz" ;;
-            *.zip)    ROM_FILE="_input_roms/source_rom.zip" ;;
-            *)        ROM_FILE="_input_roms/source_rom.zip" ;;
-          esac
-
-          echo "[DL] Downloading ROM from: $ROM_URL"
-          echo "[DL] Saving to: $ROM_FILE"
-
-          curl -L --fail --retry 5 --retry-delay 10 --connect-timeout 30 \
-            -o "$ROM_FILE" "$ROM_URL"
-
-          if [ ! -f "$ROM_FILE" ]; then
-            echo "[ERROR] ROM file not found after download."
-            exit 1
+          if [ "${{ inputs.notify_telegram }}" = "true" ]; then
+            ARGS+=(--notify-telegram)
           fi
-
-          ROM_SIZE=$(stat -c%s "$ROM_FILE" 2>/dev/null || stat -f%z "$ROM_FILE")
-          MIN_SIZE=$((100 * 1024 * 1024))
-          echo "[DL] ROM size: $ROM_SIZE bytes"
-          if [ "$ROM_SIZE" -lt "$MIN_SIZE" ]; then
-            echo "[ERROR] ROM file is too small (${ROM_SIZE} bytes < 100MB). Download may have failed."
-            exit 1
-          fi
-          echo "[DL] ROM download validated OK."
-          echo "rom_path=$ROM_FILE" >> "$GITHUB_OUTPUT"
-
-      - name: Run factory pipeline (MTK local — execute)
-        if: steps.norm.outputs.mode == 'execute'
-        env:
-          PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
-          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
-          DEADZONE_EDITION: "${{ inputs.edition }}"
-          DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
-          DEADZONE_FAST_MODE: "true"
-          DEADZONE_ZIP_LEVEL: "6"
-          DEADZONE_ZIP_COMPRESSION: "deflated"
-          DEADZONE_MAX_WORKERS: ""
-          DEADZONE_EXTRACT_THREADS: ""
-          ENABLE_LISTMEZO: "${{ inputs.enable_listmezo != false && 'true' || 'false' }}"
-          LISTMEZO_MODE: "${{ inputs.listmezo_mode || 'dry_run' }}"
-          LISTMEZO_EDITION: "free"
-        run: |
-          set -euo pipefail
-          EXTRA_FLAGS=""
-          if [ "${{ steps.norm.outputs.upload_pixeldrain }}" = "true" ]; then
-            EXTRA_FLAGS="$EXTRA_FLAGS --upload-pixeldrain"
-          fi
-          if [ "${{ steps.norm.outputs.notify_telegram }}" = "true" ]; then
-            EXTRA_FLAGS="$EXTRA_FLAGS --notify-telegram"
-          fi
-
-          python -m factory.pipeline.orchestrator \
-            --soc mtk \
-            --codename "$DEADZONE_DEVICE_CODENAME" \
-            --edition  "${{ steps.norm.outputs.mod }}" \
-            --rom      "${{ steps.download.outputs.rom_path }}" \
-            --rom-url  "$DEADZONE_ROM_URL" \
-            --mode     execute \
-            $EXTRA_FLAGS || {
-              echo "[FAIL] Factory exited non-zero. Dumping logs:"
-              [ -f output/reports/deadzone_patch_report.txt ] && \
-                cat output/reports/deadzone_patch_report.txt || true
-              [ -f output/reports/pipeline_report.json ] && \
-                cat output/reports/pipeline_report.json || true
-              for LOG in output/logs/*.log; do
-                [ -f "$LOG" ] && { echo "=== $LOG ==="; tail -100 "$LOG"; } || true
-              done
-              exit 1
-            }
-
-      - name: Run factory pipeline (MTK local — dry_run)
-        if: steps.norm.outputs.mode != 'execute'
-        env:
-          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
-          DEADZONE_EDITION: "${{ inputs.edition }}"
-          DEADZONE_UNIVERSAL_INTAKE: "${{ inputs.edition == 'free' && 'true' || 'false' }}"
-          DEADZONE_FAST_MODE: "true"
-          DEADZONE_ZIP_LEVEL: "6"
-          DEADZONE_ZIP_COMPRESSION: "deflated"
-          ENABLE_LISTMEZO: "${{ inputs.enable_listmezo != false && 'true' || 'false' }}"
-          LISTMEZO_MODE: "${{ inputs.listmezo_mode || 'dry_run' }}"
-          LISTMEZO_EDITION: "free"
-        run: |
-          set -euo pipefail
-          EXTRA_FLAGS=""
-          if [ "${{ steps.norm.outputs.notify_telegram }}" = "true" ]; then
-            EXTRA_FLAGS="$EXTRA_FLAGS --notify-telegram"
-          fi
-
-          python -m factory.pipeline.orchestrator \
-            --soc mtk \
-            --codename "$DEADZONE_DEVICE_CODENAME" \
-            --edition  "${{ steps.norm.outputs.mod }}" \
-            --rom-url  "$DEADZONE_ROM_URL" \
-            --mode     dry_run \
-            $EXTRA_FLAGS || {
-              echo "[FAIL] Factory exited non-zero. Dumping logs:"
-              [ -f output/reports/deadzone_patch_report.txt ] && \
-                cat output/reports/deadzone_patch_report.txt || true
-              [ -f output/reports/pipeline_report.json ] && \
-                cat output/reports/pipeline_report.json || true
-              for LOG in output/logs/*.log; do
-                [ -f "$LOG" ] && { echo "=== $LOG ==="; tail -100 "$LOG"; } || true
-              done
-              exit 1
-            }
-
-      - name: Write device selection report
-        if: always()
-        run: |
-          set +e
-          python scripts/write_device_selection_report.py \
-            --codename      "$DEADZONE_DEVICE_CODENAME" \
-            --display-name  "$DEADZONE_DEVICE_DISPLAY_NAME" \
-            --select-device "${{ inputs.codename }}" \
-            --rom-source    "$DEADZONE_ROM_SOURCE" \
-            --rom-url       "$DEADZONE_ROM_URL" \
-            --mode          "${{ steps.norm.outputs.mode }}" \
-            || echo "[WARN] Could not write device selection report."
-
-      - name: Finalize Telegram notification
-        if: always() && steps.norm.outputs.notify_telegram == 'true'
-        env:
-          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-          TELEGRAM_THREAD_ID: ${{ secrets.TELEGRAM_THREAD_ID }}
-          DEADZONE_TELEGRAM_MESSAGE_ID: ${{ env.DEADZONE_TELEGRAM_MESSAGE_ID }}
-        run: |
-          set +e
-          CODENAME="$DEADZONE_DEVICE_CODENAME"
-          EDITION="${{ steps.norm.outputs.mod }}"
-          JOB_STATUS="${{ job.status }}"
-
-          FINAL_STATUS=""
-          if [ -f output/reports/telegram_status.json ]; then
-            FINAL_STATUS=$(python3 -c "import json; d=json.load(open('output/reports/telegram_status.json')); print(d.get('final_status') or '')" 2>/dev/null || true)
-          fi
-
-          if [ -n "$FINAL_STATUS" ] && [ "$FINAL_STATUS" != "None" ] && [ "$FINAL_STATUS" != "null" ]; then
-            echo "[TG] Orchestrator already finalized: $FINAL_STATUS"
-            exit 0
-          fi
-
-          echo "[TG] Job status: $JOB_STATUS - sending final notification"
-          if [ "$JOB_STATUS" = "cancelled" ]; then
-            python -m factory.notify.telegram_live \
-              --soc mtk --codename "$CODENAME" --edition "$EDITION" \
-              --action cancelled || true
-          else
-            python -m factory.notify.telegram_live \
-              --soc mtk --codename "$CODENAME" --edition "$EDITION" \
-              --action fail \
-              --error-summary "Build did not complete. Check logs in GitHub artifacts." || true
-          fi
-
-      - name: Upload build reports
-        if: always()
-        uses: actions/upload-artifact@v4
+          "${ARGS[@]}"
+      - uses: actions/upload-artifact@v4
         with:
-          name: build-report-mtk-${{ steps.norm.outputs.codename }}-${{ github.run_number }}
-          path: |
-            output/reports/**
-            output/logs/**
-          if-no-files-found: ignore
+          name: deadzone-mtk-output
+          path: output/final/*

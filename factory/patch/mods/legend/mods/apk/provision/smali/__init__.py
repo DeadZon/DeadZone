@@ -1,2 +1,0 @@
-"""Generated Provision smali rules."""
-

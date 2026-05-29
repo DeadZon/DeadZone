@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- EU REFERENCE ONLY — do not ship this file directly into a ROM partition.
-     Source: NothingsVN/eu bin/modfile/Universal/privapp_whitelist_hyperos.xml
-     Porting: convert to a DeadZone patch.yml overlay module targeting /system/etc/permissions/ -->
-<permissions>
-    <!-- placeholder: actual whitelist entries sourced from eu repo -->
-</permissions>

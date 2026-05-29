@@ -1,0 +1,21 @@
+soc: snapdragon
+required_firmware:
+  - abl.img
+  - aop.img
+  - bluetooth.img
+  - cpucp.img
+  - devcfg.img
+  - dsp.img
+  - featenabler.img
+  - hyp.img
+  - imagefv.img
+  - keymaster.img
+  - modem.img
+  - qupfw.img
+  - tz.img
+  - uefi.img
+  - xbl.img
+  - xbl_config.img
+super:
+  default_size: 8500000000
+  vab_zero_b: true

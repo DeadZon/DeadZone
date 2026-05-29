@@ -1,0 +1,18 @@
+soc: mtk
+required_firmware:
+  - preloader_raw.img
+  - lk.img
+  - tee.img
+  - scp.img
+  - sspm.img
+  - spmfw.img
+  - md1img.img
+  - audio_dsp.img
+  - pi_img.img
+  - dpm.img
+  - mcupm.img
+  - gz.img
+  - vcp.img
+super:
+  default_size: 8500000000
+  vab_zero_b: true

@@ -6,4 +6,3 @@ primary_region = "fra"
 
 [env]
   PYTHONUNBUFFERED = "1"
-  FLY_NO_PROMPT = "1"
