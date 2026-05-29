@@ -236,6 +236,8 @@ jobs:
           echo "[FLY] vm_cpus    = $VM_CPUS"
           echo "[FLY] vm_memory  = $VM_MEM MB"
 
+          export FLY_NO_PROMPT=1
+
           flyctl machine run . \
             --app "$RESOLVED_APP" \
             --dockerfile docker/Dockerfile.fly \
