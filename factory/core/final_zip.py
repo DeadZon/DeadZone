@@ -283,6 +283,24 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def _write_sidecars(ws: Workspace, zip_path: Path, sha: str, style: str, codename: str, android: str, build: str) -> None:
+    ws.final.mkdir(parents=True, exist_ok=True)
+    (zip_path.with_name(zip_path.name + ".sha256")).write_text(f"{sha}  {zip_path.name}\n", encoding="utf-8")
+    lines = [
+        "MEZO / DeadZone Build Info",
+        "==========================",
+        f"final ZIP: {zip_path.name}",
+        f"style: {style}",
+        f"codename: {codename}",
+        f"Android version: {android}",
+        f"build version: {build}",
+        f"sha256: {sha}",
+        f"size bytes: {zip_path.stat().st_size}",
+        "",
+    ]
+    (ws.final / "build_info.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
 def _copy_images(ws: Workspace, stage: Path, profile_super: dict[str, Any]) -> tuple[list[str], list[str]]:
     required = list(dict.fromkeys(CORE_IMAGES + list(profile_super.get("required_images") or [])))
     firmware = list(profile_super.get("firmware_images") or [])
@@ -469,6 +487,7 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
         raise RuntimeError("final ZIP validation failed: " + "; ".join(validation_errors))
 
     sha = _sha256(out)
+    _write_sidecars(ws, out, sha, style, codename, android, build)
     write_json(ws.meta / "final_zip.json", {"zip": str(out), "sha256": sha, "images": included_images})
     print(f"[ZIP] {out}")
     return out

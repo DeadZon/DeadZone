@@ -4,6 +4,7 @@ import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from factory.core.workspace import Workspace
 
@@ -30,12 +31,30 @@ def _stage_lines(stages: list[dict[str, Any]]) -> list[str]:
             "{status}: {name} ({duration:.2f}s)".format(
                 status=stage.get("status", "UNKNOWN"),
                 name=stage.get("name", "unknown"),
-                duration=float(stage.get("duration_seconds") or 0.0),
+                duration=float(stage.get("duration_seconds") or stage.get("duration") or 0.0),
             )
         )
         if stage.get("error"):
             lines.append(f"  error: {stage['error']}")
     return lines or ["(none)"]
+
+
+def _safe_rom_source(value: str) -> str:
+    raw = str(value or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.netloc:
+        name = Path(parsed.path).name
+        return f"{parsed.netloc}/{name}" if name else parsed.netloc
+    return Path(raw).name or "(none)"
+
+
+def _zip_size(final_zip: Any) -> str:
+    if not final_zip:
+        return "(none)"
+    path = Path(final_zip)
+    if not path.is_file():
+        return "(missing)"
+    return f"{path.stat().st_size / 1024 / 1024:.1f} MiB"
 
 
 def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
@@ -65,11 +84,16 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     build = _value(rom, "build")
     warnings = list(getattr(ctx, "warnings", []) or [])
 
+    tracker = getattr(ctx, "tracker", None)
+    stage_timeline = tracker.timeline() if tracker else getattr(ctx, "stages", [])
+    if tracker:
+        tracker.write()
+
     build_lines = [
         "MEZO / DeadZone Build Report",
         "============================",
         f"status: {status}",
-        f"ROM URL: {getattr(ctx, 'rom_url', '')}",
+        f"ROM source: {_safe_rom_source(getattr(ctx, 'rom_url', ''))}",
         f"selected codename: {getattr(ctx, 'selected_codename', '') or '(none)'}",
         f"detected codename: {detected_codename}",
         f"resolved codename: {resolved_codename}",
@@ -80,6 +104,8 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"mode: {getattr(ctx, 'mode', '')}",
         f"workspace: {ws.root}",
         f"final ZIP path: {final_zip or '(none)'}",
+        f"final ZIP name: {Path(final_zip).name if final_zip else '(none)'}",
+        f"final ZIP size: {_zip_size(final_zip)}",
         f"upload requested: {getattr(upload_result, 'requested', False)}",
         f"upload provider: {getattr(upload_result, 'provider', 'PixelDrain')}",
         f"upload status: {getattr(upload_result, 'status', 'not requested')}",
@@ -96,7 +122,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"elapsed seconds: {elapsed:.2f}",
         "",
         "stages:",
-        *_stage_lines(getattr(ctx, "stages", [])),
+        *_stage_lines(stage_timeline),
         "",
         "warnings:",
         *(warnings or ["(none)"]),
@@ -109,7 +135,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"started stage: {getattr(ctx, 'started_stage', '(none)')}",
         f"completed stage: {getattr(ctx, 'completed_stage', '(none)')}",
         f"failed stage: {failed_stage}",
-        f"ROM URL: {getattr(ctx, 'rom_url', '')}",
+        f"ROM source: {_safe_rom_source(getattr(ctx, 'rom_url', ''))}",
         f"selected codename: {getattr(ctx, 'selected_codename', '') or '(none)'}",
         f"detected codename: {detected_codename}",
         f"resolved codename: {resolved_codename}",
@@ -118,6 +144,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"style: {getattr(ctx, 'style_label', '')}",
         f"soc: {getattr(ctx, 'soc', '')}",
         f"final ZIP path: {final_zip or '(none)'}",
+        f"final ZIP size: {_zip_size(final_zip)}",
         f"upload status: {getattr(upload_result, 'status', 'not requested')}",
         f"upload URL: {getattr(upload_result, 'url', '') or '(none)'}",
         f"telegram status: {getattr(telegram_result, 'status', 'not requested')}",
@@ -125,7 +152,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"cleanup status: {cleanup_status}",
         "",
         "stage timeline:",
-        *_stage_lines(getattr(ctx, "stages", [])),
+        *_stage_lines(stage_timeline),
         "",
     ]
 
@@ -133,4 +160,11 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     orchestration_path = reports_dir / "orchestration_report.txt"
     build_path.write_text("\n".join(build_lines), encoding="utf-8")
     orchestration_path.write_text("\n".join(orchestration_lines), encoding="utf-8")
-    return {"build": str(build_path), "orchestration": str(orchestration_path)}
+    reports = {"build": str(build_path), "orchestration": str(orchestration_path)}
+    stage_path = reports_dir / "stage_status.json"
+    if stage_path.exists():
+        reports["stage_status"] = str(stage_path)
+    error_path = reports_dir / "error_summary.txt"
+    if error_path.exists():
+        reports["error_summary"] = str(error_path)
+    return reports

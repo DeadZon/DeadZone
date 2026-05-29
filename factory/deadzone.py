@@ -6,14 +6,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from factory.core.artifacts import write_github_summary
 from factory.core.cleanup import cleanup
 from factory.core.detector import detect_rom
 from factory.core.device_registry import list_devices, resolve_device
 from factory.core.downloader import download_rom
+from factory.core.errors import write_error_summary
 from factory.core.final_zip import build_final_zip
 from factory.core.inspector import inspect_workspace
 from factory.core.reports import write_production_reports
 from factory.core.repacker import build_repacked_super, repack_partitions
+from factory.core.status import StageTracker
 from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
 from factory.core.telegram import TelegramResult, TelegramStatus
@@ -48,6 +51,7 @@ class BuildContext:
     upload_result: UploadResult = field(default_factory=UploadResult)
     telegram_result: TelegramResult = field(default_factory=TelegramResult)
     telegram: TelegramStatus | None = None
+    tracker: StageTracker | None = None
     reports: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     status: str = "RUNNING"
@@ -55,6 +59,7 @@ class BuildContext:
     started_stage: str = "(none)"
     completed_stage: str = "(none)"
     failed_stage: str = ""
+    failure_error: str = ""
     stages: list[dict[str, Any]] = field(default_factory=list)
     started_at: float = field(default_factory=time.time)
     completed_at: float | None = None
@@ -127,10 +132,23 @@ def _resolution_codename(ctx: BuildContext) -> str | None:
     return ctx.selected_codename or None
 
 
+def _output_path(result: Any) -> str:
+    if isinstance(result, Path):
+        return str(result)
+    if isinstance(result, dict):
+        for key in ("path", "zip", "output", "report_path", "links_path"):
+            value = result.get(key)
+            if value:
+                return str(value)
+    return ""
+
+
 def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
     ctx.started_stage = name
     print(f"[DeadZone] Stage: {name}")
     print("[MEZO] Status: started")
+    if ctx.tracker:
+        ctx.tracker.start(name)
     if ctx.telegram:
         ctx.telegram_result = ctx.telegram.add_event(name, "RUN")
     started = time.monotonic()
@@ -139,7 +157,10 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
     except Exception as exc:
         duration = time.monotonic() - started
         ctx.failed_stage = name
+        ctx.failure_error = str(exc)
         ctx.status = "FAILED"
+        if ctx.tracker:
+            ctx.tracker.finish(name, "FAILED", error=str(exc))
         ctx.stages.append({
             "name": name,
             "status": "FAILED",
@@ -152,10 +173,14 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
         raise
     duration = time.monotonic() - started
     ctx.completed_stage = name
+    output_path = _output_path(result)
+    if ctx.tracker:
+        ctx.tracker.finish(name, "OK", output_path=output_path)
     ctx.stages.append({
         "name": name,
         "status": "OK",
         "duration_seconds": duration,
+        "output_path": output_path,
     })
     print("[MEZO] Status: completed")
     if ctx.telegram:
@@ -187,12 +212,17 @@ def _prepare_workspace(ctx: BuildContext) -> Workspace:
     return ctx.workspace
 
 
+def _build_super_after_repack(ctx: BuildContext, unpack_result: Any) -> Any:
+    inspection = inspect_workspace(ctx.workspace, ctx.rom_metadata, unpack_result)
+    return build_repacked_super(ctx.workspace, ctx.rom_metadata, inspection)
+
+
 def _run_build(ctx: BuildContext) -> BuildContext:
-    ws = _stage(ctx, "prepare workspace", lambda: _prepare_workspace(ctx))
-    ctx.rom_source = _stage(ctx, "download ROM", lambda: download_rom(ctx.rom_url, ws))
+    ws = _stage(ctx, "prepare", lambda: _prepare_workspace(ctx))
+    ctx.rom_source = _stage(ctx, "download", lambda: download_rom(ctx.rom_url, ws))
     ctx.rom_metadata = _stage(
         ctx,
-        "detect ROM type and metadata",
+        "detect",
         lambda: detect_rom(
             ctx.rom_source,
             ws,
@@ -203,7 +233,7 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     _warn_on_codename_mismatch(ctx)
     ctx.device_profile = _stage(
         ctx,
-        "resolve device from registry",
+        "device",
         lambda: resolve_device(_resolution_codename(ctx), rom_metadata=ctx.rom_metadata, custom_codename=ctx.custom_codename, ws=ws),
     )
     _update_resolved_device_metadata(ctx)
@@ -211,40 +241,103 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     if ctx.telegram:
         codename = ctx.device_profile.get("resolved_codename") or ctx.device_profile.get("codename") or "unknown"
         ctx.telegram.device = str(codename)
+        ctx.telegram.detected_device = str(ctx.device_profile.get("detected_codename") or getattr(ctx.rom_metadata, "codename", "unknown"))
         ctx.telegram_result = ctx.telegram.add_event("device resolved", "OK", str(codename))
     unpack_result = _stage(
         ctx,
-        "unpack ROM into workspace",
+        "unpack",
         lambda: unpack_rom(ctx.rom_source, ctx.rom_metadata, ws),  # type: ignore[arg-type]
     )
     inspection = _stage(
         ctx,
-        "inspect workspace and metadata",
+        "inspect",
         lambda: inspect_workspace(ws, ctx.rom_metadata, unpack_result),  # type: ignore[arg-type]
     )
     ctx.super_profile = _stage(
         ctx,
-        "resolve super profile",
+        "super_profile",
         lambda: build_super_profile(ws, ctx.rom_metadata, inspection, ctx.device_profile),  # type: ignore[arg-type]
     )
-    _stage(ctx, "run style stage", lambda: apply_style(ctx.style, ws, ctx.rom_metadata))  # type: ignore[arg-type]
-    _stage(ctx, "repack partitions", lambda: repack_partitions(ws))
-    inspection = _stage(
-        ctx,
-        "inspect repacked workspace",
-        lambda: inspect_workspace(ws, ctx.rom_metadata, unpack_result),  # type: ignore[arg-type]
-    )
-    _stage(ctx, "build or preserve super", lambda: build_repacked_super(ws, ctx.rom_metadata, inspection))  # type: ignore[arg-type]
+    _stage(ctx, "style", lambda: apply_style(ctx.style, ws, ctx.rom_metadata))  # type: ignore[arg-type]
+    _stage(ctx, "repack", lambda: repack_partitions(ws))
+    _stage(ctx, "super", lambda: _build_super_after_repack(ctx, unpack_result))  # type: ignore[arg-type]
     ctx.final_zip_path = _stage(
         ctx,
-        "generate final ZIP",
+        "final_zip",
         lambda: build_final_zip(ws, ctx.rom_metadata, ctx.style),  # type: ignore[arg-type]
     )
     print(f"[FINAL ZIP] {ctx.final_zip_path}")
-    cleanup_result = _stage(ctx, "cleanup temporary files", lambda: cleanup(ws, keep_workspace=ctx.keep_workspace))
-    ctx.cleanup_status = str(cleanup_result.get("status", "unknown"))
     ctx.status = "OK"
     return ctx
+
+
+def _run_upload(ctx: BuildContext) -> UploadResult:
+    if ctx.upload_pixeldrain:
+        print("[DeadZone] Upload: starting PixelDrain upload")
+        result = upload_final_zip_to_pixeldrain(ctx.final_zip_path, ctx.workspace)
+        ctx.upload_result = result
+        if not result.ok:
+            raise RuntimeError(result.failure_reason or "PixelDrain upload failed")
+        return result
+    ctx.upload_result = write_skipped_upload_report(ctx.workspace, requested=False)
+    return ctx.upload_result
+
+
+def _run_telegram_finish(ctx: BuildContext, final_status: str) -> TelegramResult:
+    if not ctx.telegram:
+        return ctx.telegram_result
+    upload_url = ctx.upload_result.url if ctx.upload_result.ok else ""
+    error_summary = ""
+    error_path = ctx.workspace.reports / "error_summary.txt"
+    if error_path.is_file():
+        error_summary = error_path.read_text(encoding="utf-8", errors="replace")[:800]
+    try:
+        ctx.telegram_result = ctx.telegram.finish(
+            final_status,
+            final_zip=ctx.final_zip_path,
+            upload_url=upload_url,
+            failed_stage=ctx.failed_stage,
+            error_summary=error_summary,
+        )
+        ctx.telegram_result = ctx.telegram.write_report()
+    except Exception as exc:
+        report = ctx.workspace.reports / "telegram_report.txt"
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text(
+            "MEZO / DeadZone Telegram Report\n"
+            "===============================\n"
+            f"requested: {ctx.notify_telegram}\n"
+            "enabled: False\n"
+            "attempted: True\n"
+            "status: failed\n"
+            "message id: (none)\n"
+            f"failure reason: {exc}\n",
+            encoding="utf-8",
+        )
+        ctx.telegram_result = TelegramResult(
+            requested=ctx.notify_telegram,
+            enabled=False,
+            attempted=True,
+            status="failed",
+            failure_reason=str(exc),
+            errors=[str(exc)],
+        )
+    return ctx.telegram_result
+
+
+def _run_cleanup(ctx: BuildContext) -> dict[str, Any]:
+    cleanup_result = cleanup(ctx.workspace, keep_workspace=ctx.keep_workspace)
+    ctx.cleanup_status = str(cleanup_result.get("status", "unknown"))
+    if cleanup_result.get("status") == "FAILED":
+        raise RuntimeError("; ".join(cleanup_result.get("errors") or ["cleanup failed"]))
+    return cleanup_result
+
+
+def _write_final_reports(ctx: BuildContext) -> None:
+    ctx.completed_at = ctx.completed_at or time.time()
+    ctx.reports = write_production_reports(ctx, ctx.workspace)
+    summary = write_github_summary(ctx, ctx.workspace)
+    ctx.reports["github_summary"] = str(summary)
 
 
 def main() -> int:
@@ -278,6 +371,7 @@ def main() -> int:
         notify_telegram=args.notify_telegram,
         workspace=ws,
     )
+    ctx.tracker = StageTracker(ws)
     print("[DeadZone] Stage: production build")
     print("[MEZO] Status: running")
     print(f"[SOC] {ctx.soc}")
@@ -294,44 +388,38 @@ def main() -> int:
         style=ctx.style_label,
         device=ctx.selected_codename or ctx.custom_codename or "unknown",
         workspace=ws,
+        rom_source=ctx.rom_url,
     )
     ctx.telegram_result = ctx.telegram.start()
     try:
         _run_build(ctx)
-    except Exception:
+        _stage(ctx, "upload", lambda: _run_upload(ctx))
+        _stage(ctx, "telegram", lambda: _run_telegram_finish(ctx, "OK"))
+        _stage(ctx, "cleanup", lambda: _run_cleanup(ctx))
+    except Exception as exc:
         ctx.completed_at = time.time()
+        if not ctx.failed_stage:
+            ctx.failed_stage = ctx.started_stage
+        ctx.failure_error = str(exc)
+        if ctx.status == "OK":
+            ctx.status = "FAILED"
         ctx.cleanup_status = "not run after failure"
-        ctx.upload_result = write_skipped_upload_report(ws, requested=ctx.upload_pixeldrain, reason="build failed before final ZIP")
-        if ctx.telegram:
-            ctx.telegram_result = ctx.telegram.finish("FAIL", final_zip=ctx.final_zip_path)
-            ctx.telegram_result = ctx.telegram.write_report()
-        ctx.reports = write_production_reports(ctx, ws)
+        if ctx.failed_stage != "upload":
+            ctx.upload_result = write_skipped_upload_report(ws, requested=ctx.upload_pixeldrain, reason="build failed before final ZIP")
+        write_error_summary(ctx, ws, exc)
+        try:
+            _stage(ctx, "telegram", lambda: _run_telegram_finish(ctx, "FAIL"))
+        except Exception:
+            pass
+        _write_final_reports(ctx)
         print(f"[MEZO] Status: failed at {ctx.failed_stage}")
         return 1
 
-    if ctx.upload_pixeldrain:
-        print("[DeadZone] Upload: starting PixelDrain upload")
-        ctx.upload_result = upload_final_zip_to_pixeldrain(ctx.final_zip_path, ws)
-    else:
-        ctx.upload_result = write_skipped_upload_report(ws, requested=False)
-    upload_url = ctx.upload_result.url if ctx.upload_result.ok else ""
-    if upload_url and ctx.telegram:
-        ctx.telegram_result = ctx.telegram.add_event("upload URL", "OK", upload_url)
-
     ctx.completed_at = time.time()
-    if ctx.upload_pixeldrain and not ctx.upload_result.ok:
-        ctx.status = "UPLOAD_FAILED"
-    if ctx.telegram:
-        final_status = "OK" if ctx.status == "OK" else "FAIL"
-        ctx.telegram_result = ctx.telegram.finish(final_status, final_zip=ctx.final_zip_path, upload_url=upload_url)
-        ctx.telegram_result = ctx.telegram.write_report()
-    ctx.reports = write_production_reports(ctx, ws)
-    if ctx.status == "UPLOAD_FAILED":
-        print("[MEZO] Status: upload failed after build")
-    else:
-        print("[MEZO] Status: completed")
+    _write_final_reports(ctx)
+    print("[MEZO] Status: completed")
     print(f"[FINAL ZIP] {ctx.final_zip_path}")
-    return 0 if ctx.status == "OK" else 1
+    return 0
 
 
 if __name__ == "__main__":

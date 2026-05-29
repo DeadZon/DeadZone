@@ -50,6 +50,8 @@ def _write_upload_reports(ws: Workspace, result: UploadResult) -> UploadResult:
 
     if result.url:
         links_path.write_text(f"{result.url}\n", encoding="utf-8")
+        if ws.final.exists():
+            (ws.final / "upload_links.txt").write_text(f"{result.url}\n", encoding="utf-8")
     else:
         links_path.write_text("", encoding="utf-8")
 

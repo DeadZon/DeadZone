@@ -136,6 +136,8 @@ jobs:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
+          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
           TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
           TELEGRAM_SNAPDRAGON_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
         run: |
@@ -170,7 +172,63 @@ jobs:
           fi
 
           python3 -m factory.deadzone "${ARGS[@]}"
-      - uses: actions/upload-artifact@v4
+
+      - name: Write job summary
+        if: always()
+        run: |
+          if [ -f output/workspace/reports/github_summary.md ]; then
+            cat output/workspace/reports/github_summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## DeadZone Build Summary"
+              echo
+              echo "- status: reports were not generated"
+              echo "- failed stage: startup"
+              echo
+              echo "Check workflow logs and any uploaded artifacts."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: deadzone-snapdragon-output
-          path: output/workspace/final/*
+          name: deadzone-reports
+          path: output/workspace/reports/**
+          if-no-files-found: ignore
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadzone-logs
+          path: output/workspace/logs/**
+          if-no-files-found: ignore
+
+      - name: Upload sidecars
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadzone-sidecars
+          path: |
+            output/workspace/reports/upload_links.txt
+            output/workspace/reports/upload_report.txt
+            output/workspace/reports/telegram_report.txt
+            output/workspace/reports/final_zip_report.txt
+            output/workspace/reports/super_build_report.txt
+            output/workspace/reports/device_registry_report.txt
+            output/workspace/reports/super_profile_report.txt
+            output/workspace/reports/error_summary.txt
+          if-no-files-found: ignore
+
+      - name: Upload final info
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadzone-final-info
+          path: |
+            output/final/*.sha256
+            output/final/build_info.txt
+            output/final/upload_links.txt
+            output/final/*.txt
+          if-no-files-found: ignore

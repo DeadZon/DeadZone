@@ -24,6 +24,9 @@ def create_workspace(root: Path = Path("output/workspace"), clean: bool = True) 
     root = Path(root)
     if clean and root.exists():
         shutil.rmtree(root)
+    final_root = root.parent / "final"
+    if clean and final_root.exists():
+        shutil.rmtree(final_root)
     # Keep all generated state under one Universal Core workspace.
     ws = Workspace(
         root=root,
@@ -34,7 +37,7 @@ def create_workspace(root: Path = Path("output/workspace"), clean: bool = True) 
         meta=root / "meta",
         reports=root / "reports",
         logs=root / "logs",
-        final=root / "final",
+        final=final_root,
     )
     for path in ws.__dict__.values():
         Path(path).mkdir(parents=True, exist_ok=True)

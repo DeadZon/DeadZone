@@ -8,6 +8,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from factory.core.workspace import Workspace
 
@@ -19,6 +20,7 @@ MAX_TEXT_LEN = 4000
 class TelegramResult:
     requested: bool = False
     enabled: bool = False
+    attempted: bool = False
     status: str = "not requested"
     message_id: int | None = None
     failure_reason: str = ""
@@ -54,12 +56,25 @@ def _credentials_for_soc(soc: str) -> tuple[str, str]:
     return (_env_first("TELEGRAM_BOT_TOKEN"), _env_first("TELEGRAM_CHAT_ID"))
 
 
+def _display_source(value: str) -> str:
+    raw = str(value or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme and parsed.netloc:
+        name = Path(parsed.path).name
+        return f"{parsed.netloc}/{name}" if name else parsed.netloc
+    return Path(raw).name or "(none)"
+
+
 class TelegramStatus:
-    def __init__(self, enabled: bool, soc: str, style: str, device: str, workspace: Workspace):
+    def __init__(self, enabled: bool, soc: str, style: str, device: str, workspace: Workspace, rom_source: str = ""):
         self.requested = bool(enabled)
         self.soc = soc
         self.style = style
         self.device = device or "unknown"
+        self.detected_device = "unknown"
+        self.rom_source = _display_source(rom_source)
+        self.failed_stage = ""
+        self.error_summary = ""
         self.workspace = workspace
         self.token, self.chat_id = _credentials_for_soc(soc)
         self.thread_id = _env_first("TELEGRAM_THREAD_ID", "TELEGRAM_MESSAGE_THREAD_ID")
@@ -69,6 +84,7 @@ class TelegramStatus:
         self.errors: list[str] = []
         self.status = "not requested"
         self.enabled = False
+        self.attempted = False
         self.message_id = self._existing_message_id()
 
     def start(self) -> TelegramResult:
@@ -81,6 +97,7 @@ class TelegramStatus:
             return self.result("skipped")
         self.enabled = True
         self.add_event("build started", "RUN")
+        self.attempted = True
         if self.message_id is not None:
             response = self._edit(self._format("RUNNING"))
         else:
@@ -114,7 +131,14 @@ class TelegramStatus:
         print("[TELEGRAM] Status: update failed")
         return self.result("failed")
 
-    def finish(self, final_status: str, final_zip: Path | None = None, upload_url: str = "") -> TelegramResult:
+    def finish(
+        self,
+        final_status: str,
+        final_zip: Path | None = None,
+        upload_url: str = "",
+        failed_stage: str = "",
+        error_summary: str = "",
+    ) -> TelegramResult:
         if not self.requested:
             return self.result("not requested")
         detail = ""
@@ -122,10 +146,13 @@ class TelegramStatus:
             detail = str(final_zip)
         if upload_url:
             detail = f"{detail} | upload: {upload_url}" if detail else f"upload: {upload_url}"
+        self.failed_stage = failed_stage or self.failed_stage
+        self.error_summary = error_summary or self.error_summary
         self.events.append({"name": "final status", "status": final_status.upper(), "detail": detail})
         if not self.enabled:
             return self.result(self.status)
         text = self._format(final_status.upper(), final_zip=final_zip, upload_url=upload_url)
+        self.attempted = True
         response = self._edit(text) if self.message_id is not None else self._send(text)
         if response.get("ok"):
             self.status = "completed" if final_status.upper() == "OK" else "failed"
@@ -147,6 +174,7 @@ class TelegramStatus:
             "===============================",
             f"requested: {result.requested}",
             f"enabled: {result.enabled}",
+            f"attempted: {result.attempted}",
             f"status: {result.status}",
             f"message id: {result.message_id or '(none)'}",
             f"failure reason: {result.failure_reason or '(none)'}",
@@ -171,6 +199,7 @@ class TelegramStatus:
         return TelegramResult(
             requested=self.requested,
             enabled=self.enabled,
+            attempted=self.attempted,
             status=status or self.status,
             message_id=self.message_id,
             failure_reason=failure,
@@ -236,23 +265,41 @@ class TelegramStatus:
             return {"ok": False, "error": str(exc)}
 
     def _format(self, build_status: str, final_zip: Path | None = None, upload_url: str = "") -> str:
+        final_name = final_zip.name if final_zip else ""
+        final_size = ""
+        if final_zip and final_zip.is_file():
+            final_size = f"{final_zip.stat().st_size / 1024 / 1024:.1f} MiB"
+        current = ""
+        for event in reversed(self.events):
+            if event.get("status") == "RUN":
+                current = event.get("name", "")
+                break
         lines = [
             "MEZO DeadZone Production Status",
             f"SoC: {_ascii(self.soc)}",
-            f"Device: {_ascii(self.device)}",
+            f"Selected device: {_ascii(self.device)}",
+            f"Detected device: {_ascii(self.detected_device)}",
             f"Style: {_ascii(self.style)}",
+            f"ROM source: {_ascii(self.rom_source)}",
             f"Status: {_ascii(build_status)}",
-            "",
-            "Stages:",
         ]
+        if current:
+            lines.append(f"Current stage: {_ascii(current)}")
+        if self.failed_stage:
+            lines.append(f"Failed stage: {_ascii(self.failed_stage)}")
+        if self.error_summary:
+            lines.append(f"Error: {_ascii(self.error_summary)[:500]}")
+        lines.extend(["", "Stages:"])
         for event in self.events[-18:]:
             detail = f" - {_ascii(event['detail'])}" if event.get("detail") else ""
             lines.append(f"[{_ascii(event.get('status'))}] {_ascii(event.get('name'))}{detail}")
         elapsed = int(max(0, time.monotonic() - self.started_at))
         minutes, seconds = divmod(elapsed, 60)
         lines.append(f"Elapsed: {minutes:02d}:{seconds:02d}")
-        if final_zip:
-            lines.append(f"Final ZIP: {_ascii(final_zip)}")
+        if final_name:
+            lines.append(f"Final ZIP: {_ascii(final_name)}")
+        if final_size:
+            lines.append(f"Final size: {_ascii(final_size)}")
         if upload_url:
-            lines.append(f"Upload: {_ascii(upload_url)}")
+            lines.append(f"PixelDrain: {_ascii(upload_url)}")
         return "\n".join(lines)
