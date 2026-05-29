@@ -174,71 +174,51 @@ jobs:
       - name: Validate Fly secrets
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_MTK_APP_NAME: ${{ secrets.FLY_MTK_APP_NAME }}
-          FLY_APP_NAME: ${{ secrets.FLY_APP_NAME }}
         run: |
           set -euo pipefail
           if [ -z "${FLY_API_TOKEN:-}" ]; then
             echo "[ERROR] FLY_API_TOKEN secret is not set."
-            echo "Set FLY_API_TOKEN in repository secrets with a Fly.io API token."
             exit 1
           fi
-          RESOLVED_APP="${FLY_MTK_APP_NAME:-${FLY_APP_NAME:-deadzone-fly-mtk}}"
           echo "[OK] FLY_API_TOKEN present."
-          echo "[OK] FLY_APP_NAME = ${RESOLVED_APP}"
+          echo "[OK] FLY_APP_NAME = dz-builder-mtk"
 
       - name: Launch Fly machine (MTK build)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_MTK_APP_NAME: ${{ secrets.FLY_MTK_APP_NAME }}
-          FLY_APP_NAME: ${{ secrets.FLY_APP_NAME }}
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
-          TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_MTK_GROUP_ID: ${{ secrets.TELEGRAM_MTK_GROUP_ID }}
-          TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_GROUP_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN || secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID || secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_GROUP_ID: ${{ secrets.TELEGRAM_MTK_GROUP_ID || secrets.TELEGRAM_GROUP_ID }}
         run: |
           set -euo pipefail
 
-          CODENAME="${{ inputs.codename }}"
-          CODENAME="$(echo "$CODENAME" | xargs)"
+          CODENAME="$(echo "${{ inputs.codename }}" | xargs)"
           EDITION="${{ inputs.edition }}"
           ROM_SOURCE="${{ inputs.rom_source }}"
           ROM_URL="${{ inputs.rom_url }}"
           MODE="${{ inputs.mode }}"
-          UPLOAD_PD="${{ inputs.upload_pixeldrain }}"
-          NOTIFY_TG="${{ inputs.notify_telegram }}"
-          ENABLE_LM="${{ inputs.enable_listmezo }}"
+          UPLOAD_PD="${{ inputs.upload_pixeldrain || 'true' }}"
+          NOTIFY_TG="${{ inputs.notify_telegram || 'true' }}"
+          ENABLE_LM="${{ inputs.enable_listmezo || 'true' }}"
           LM_MODE="${{ inputs.listmezo_mode || 'dry_run' }}"
-          VM_CPUS="${{ inputs.vm_cpus || '8' }}"
-          VM_MEM="${{ inputs.vm_memory || '16384' }}"
-          FLY_REGION="${{ inputs.fly_region || 'iad' }}"
           TG_MSG_ID="${{ inputs.telegram_msg_id }}"
 
-          [ -z "$UPLOAD_PD" ] && UPLOAD_PD="true"
-          [ -z "$NOTIFY_TG" ] && NOTIFY_TG="true"
-          [ -z "$ENABLE_LM" ] && ENABLE_LM="true"
-
-          # Resolve app name and Telegram secrets with shell-side fallback
-          RESOLVED_APP="${FLY_MTK_APP_NAME:-${FLY_APP_NAME:-deadzone-fly-mtk}}"
-          RESOLVED_BOT_TOKEN="${TELEGRAM_MTK_BOT_TOKEN:-${TELEGRAM_BOT_TOKEN:-}}"
-          RESOLVED_CHAT_ID="${TELEGRAM_MTK_CHAT_ID:-${TELEGRAM_CHAT_ID:-}}"
-          RESOLVED_GROUP_ID="${TELEGRAM_MTK_GROUP_ID:-${TELEGRAM_GROUP_ID:-}}"
+          # سحب القيم ديناميكياً من الـ Inputs علطول للـ رام والـ CPU
+          VM_CPUS="${{ inputs.vm_cpus }}"
+          VM_MEM="${{ inputs.vm_memory }}"
+          FLY_REGION="${{ inputs.fly_region }}"
 
           echo "[FLY] Launching MTK build machine"
+          echo "[FLY] App Name   = dz-builder-mtk"
           echo "[FLY] codename   = $CODENAME"
-          echo "[FLY] edition    = $EDITION"
-          echo "[FLY] mode       = $MODE"
-          echo "[FLY] rom_source = $ROM_SOURCE"
           echo "[FLY] region     = $FLY_REGION"
           echo "[FLY] vm_cpus    = $VM_CPUS"
           echo "[FLY] vm_memory  = $VM_MEM MB"
 
+          # التعديل الصريح: الربط المباشر بالـ App والـ Volume بدون لغبطة الـ Env
           flyctl machine run . \
-            --app "$RESOLVED_APP" \
-            --dockerfile docker/Dockerfile.fly \
+            --app dz-builder-mtk \
             --region "$FLY_REGION" \
             --vm-cpu-kind performance \
             --vm-cpus "$VM_CPUS" \
@@ -256,12 +236,13 @@ jobs:
             --env LISTMEZO_MODE="$LM_MODE" \
             --env LISTMEZO_EDITION=free \
             --env PIXELDRAIN_API_KEY="${PIXELDRAIN_API_KEY:-}" \
-            --env TELEGRAM_BOT_TOKEN="$RESOLVED_BOT_TOKEN" \
-            --env TELEGRAM_CHAT_ID="$RESOLVED_CHAT_ID" \
-            --env TELEGRAM_GROUP_ID="$RESOLVED_GROUP_ID" \
+            --env TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN" \
+            --env TELEGRAM_CHAT_ID="$TELEGRAM_CHAT_ID" \
+            --env TELEGRAM_GROUP_ID="$TELEGRAM_GROUP_ID" \
             --env TELEGRAM_MSG_ID="$TG_MSG_ID" \
             --env GITHUB_RUN_ID="$GITHUB_RUN_ID" \
             --env GITHUB_SERVER_URL="$GITHUB_SERVER_URL" \
             --env GITHUB_REPOSITORY="$GITHUB_REPOSITORY" \
             --env GITHUB_ACTOR="$GITHUB_ACTOR" \
             --rm
+            
