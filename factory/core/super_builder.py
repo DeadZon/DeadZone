@@ -42,7 +42,7 @@ def _allocation(part: str, image: Path, layout: dict[str, Any], warnings: list[s
     if original_size:
         image_size = image.stat().st_size
         if image_size > original_size:
-            raise RuntimeError(f"{part}.img is larger than its metadata allocation")
+            raise RuntimeError(f"{part}.img is larger than metadata allocation")
         print(f"[SUPER] Allocation: {part}={original_size} source={entry.get('source')}")
         return original_size
     checked = entry.get("safe_sources_checked") if isinstance(entry.get("safe_sources_checked"), list) else layout.get("metadata_priority")
@@ -179,10 +179,12 @@ def _write_report(
 
 
 def _write_error_summary(ws: Workspace, stage: str, message: str, layout: dict[str, Any] | None = None) -> None:
+    title = "Super metadata allocation missing" if "no metadata allocation" in message.lower() else "Super image build failed"
     lines = [
         "DeadZone Error Summary",
         "======================",
         f"stage: {stage}",
+        f"title: {title}",
         f"error: {message}",
     ]
     if layout:

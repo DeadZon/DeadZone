@@ -11,15 +11,18 @@ def summarize_error(error: object, stage: str = "") -> dict[str, str]:
     lower = raw.lower()
     clean_stage = stage or "unknown"
 
-    if "pixeldrain" in lower or "upload" in lower:
+    if "super" in clean_stage.lower() and "no metadata allocation" in lower:
+        title = "Super metadata allocation missing"
+        hint = "Check payload metadata and the super profile report."
+    elif "super" in clean_stage.lower() or "lpmake" in lower:
+        title = "Super image build failed"
+        hint = "Check super build and super profile reports."
+    elif "pixeldrain" in lower or "upload" in lower:
         title = "PixelDrain upload failed"
         hint = "Check PIXELDRAIN_API_KEY and the network path to PixelDrain."
     elif "payload" in lower:
         title = "ROM payload unpack failed"
         hint = "Check that the ROM URL points to a complete OTA package."
-    elif "super" in lower or "lpmake" in lower:
-        title = "Super image build failed"
-        hint = "Check super build and super profile reports."
     elif "missing" in lower or "not found" in lower or "no such file" in lower:
         title = "Required file is missing"
         hint = "Check the previous stage report and workspace logs."

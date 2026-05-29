@@ -13,7 +13,8 @@ LP_METADATA_OVERHEAD = 4 * 1024 * 1024
 METADATA_SIZE = 65_536
 SAFE_ALLOCATION_SOURCES = [
     "original_super_metadata",
-    "payload_dynamic_partition_metadata",
+    "payload_manifest",
+    "payload_partitions",
     "dynamic_partitions_op_list",
     "device_profile",
     "soc_profile",
@@ -148,10 +149,38 @@ def _size_entries(sizes: dict[str, Any], source_name: str, group_name: str = "")
 
 
 def _read_payload_metadata(ws: Workspace) -> dict[str, Any]:
-    data = read_json(ws.meta / "payload_metadata.json", {})
-    if data:
-        return data
-    return {}
+    merged: dict[str, Any] = {}
+    for name in ["payload_metadata.json", "payload_manifest.json", "payload_partitions.json"]:
+        data = read_json(ws.meta / name, {})
+        if not data:
+            continue
+        if not merged:
+            merged = dict(data)
+            continue
+        for key, value in data.items():
+            if key in {"partitions", "partition_table"} and isinstance(value, list):
+                existing = merged.get(key) if isinstance(merged.get(key), list) else []
+                by_name = {
+                    _base_partition(str(item.get("name") or item.get("partition_name") or "")): item
+                    for item in existing
+                    if isinstance(item, dict)
+                }
+                for item in value:
+                    if isinstance(item, dict):
+                        by_name[_base_partition(str(item.get("name") or item.get("partition_name") or ""))] = item
+                merged[key] = list(by_name.values())
+            elif key == "partition_sizes" and isinstance(value, dict):
+                sizes = merged.get("partition_sizes") if isinstance(merged.get("partition_sizes"), dict) else {}
+                sizes.update(value)
+                merged["partition_sizes"] = sizes
+            elif value not in (None, "", [], {}):
+                merged[key] = value
+    return merged
+
+
+def _read_payload_json(ws: Workspace, filename: str) -> dict[str, Any]:
+    data = read_json(ws.meta / filename, {})
+    return data if isinstance(data, dict) else {}
 
 
 def _parse_dynamic_partitions_op_list(path: Path) -> dict[str, Any]:
@@ -227,6 +256,8 @@ def build_super_profile(
     super_layout = read_json(ws.meta / "super_layout.json", {})
     partition_map = read_json(ws.meta / "partition_map.json", {})
     payload_metadata = _read_payload_metadata(ws)
+    payload_manifest = _read_payload_json(ws, "payload_manifest.json")
+    payload_partitions = _read_payload_json(ws, "payload_partitions.json")
     op_list_metadata = _find_op_list(ws)
     if info is not None:
         rom_info.update({k: v for k, v in info.__dict__.items() if v is not None})
@@ -240,8 +271,9 @@ def build_super_profile(
     device_super = device_config.get("_device_super") if isinstance(device_config.get("_device_super"), dict) else profile_super
 
     detected_sizes = _partition_sizes(super_layout, partition_map)
-    if isinstance(payload_metadata.get("partition_sizes"), dict):
-        detected_sizes.update(_partition_sizes(payload_metadata, {}))
+    for payload_data in [payload_metadata, payload_manifest, payload_partitions]:
+        if isinstance(payload_data.get("partition_sizes"), dict):
+            detected_sizes.update(_partition_sizes(payload_data, {}))
     if isinstance(op_list_metadata.get("partition_sizes"), dict):
         detected_sizes.update(_partition_sizes(op_list_metadata, {}))
     original_metadata = super_layout if super_layout.get("metadata_source") in {
@@ -253,7 +285,8 @@ def build_super_profile(
     payload_source.update(payload_metadata)
     named_sources = [
         ("original_super_metadata", original_metadata),
-        ("payload_dynamic_partition_metadata", payload_source),
+        ("payload_manifest", payload_manifest or payload_source),
+        ("payload_partitions", payload_partitions),
         ("dynamic_partitions_op_list", op_list_metadata),
         ("device_profile", device_super),
         ("soc_profile", soc_super),
@@ -292,18 +325,24 @@ def build_super_profile(
     selected = [name for name in sorted(DYNAMIC_PARTITIONS) if name in images]
     metadata_source = size_source
     if detected_sizes and metadata_source == "unresolved":
-        metadata_source = "payload_dynamic_partition_metadata"
+        metadata_source = "payload_manifest"
 
     allocation_sources: dict[str, dict[str, dict[str, Any]]] = {}
     original_entries = _partition_entries(original_metadata, "original_super_metadata")
     if original_entries:
         allocation_sources["original_super_metadata"] = original_entries
-    payload_entries = _partition_entries(payload_source, "payload_dynamic_partition_metadata")
-    payload_sizes = _partition_sizes(payload_source, {})
-    if payload_sizes:
-        payload_entries.update(_size_entries(payload_sizes, "payload_dynamic_partition_metadata", group_name))
-    if payload_entries:
-        allocation_sources["payload_dynamic_partition_metadata"] = payload_entries
+    manifest_entries = _partition_entries(payload_manifest or payload_source, "payload_manifest")
+    manifest_sizes = _partition_sizes(payload_manifest or payload_source, {})
+    if manifest_sizes:
+        manifest_entries.update(_size_entries(manifest_sizes, "payload_manifest", group_name))
+    if manifest_entries:
+        allocation_sources["payload_manifest"] = manifest_entries
+    partition_entries = _partition_entries(payload_partitions, "payload_partitions")
+    partition_sizes = _partition_sizes(payload_partitions, {})
+    if partition_sizes:
+        partition_entries.update(_size_entries(partition_sizes, "payload_partitions", group_name))
+    if partition_entries:
+        allocation_sources["payload_partitions"] = partition_entries
     op_entries = _size_entries(
         op_list_metadata.get("partition_sizes") if isinstance(op_list_metadata.get("partition_sizes"), dict) else {},
         "dynamic_partitions_op_list",
@@ -430,6 +469,7 @@ def build_super_profile(
             f"[SUPER PROFILE] Partition: {part} allocation={entry.get('allocation_size')} "
             f"source={entry.get('source')}"
         )
+        print(f"[SUPER PROFILE] Allocation source: {part}={entry.get('source')}")
     return profile
 
 
@@ -447,6 +487,8 @@ def write_super_profile_report(ws: Workspace, profile: dict[str, Any]) -> None:
         f"slot mode: {profile.get('slot_mode')} ({profile.get('slot_mode_source')})",
         f"VAB zero-size _b entries: {profile.get('vab_zero_b')}",
         f"partition size source: {profile.get('partition_sizes_source')}",
+        f"payload_manifest.json present: {(ws.meta / 'payload_manifest.json').is_file()}",
+        f"payload_partitions.json present: {(ws.meta / 'payload_partitions.json').is_file()}",
         f"missing metadata: {', '.join(profile.get('missing_metadata') or []) or '(none)'}",
         "",
         "dynamic partition allocations:",
@@ -456,7 +498,8 @@ def write_super_profile_report(ws: Workspace, profile: dict[str, Any]) -> None:
         entry = partitions.get(part, {})
         lines.append(
             f"  - {part}: allocation={entry.get('allocation_size')} "
-            f"image_size={entry.get('image_size')} source={entry.get('source')} group={entry.get('group_name')}"
+            f"image_size={entry.get('image_size')} source={entry.get('source')} "
+            f"group={entry.get('group_name')} checked={', '.join(entry.get('safe_sources_checked') or [])}"
         )
     if not profile.get("selected_partitions"):
         lines.append("  (none)")
