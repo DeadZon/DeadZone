@@ -1,8 +1,14 @@
 soc: snapdragon
 super:
-  default_super_size: 8500000000
+  default_size: 9126805504
+  default_super_size: 9126805504
+  group_name: qti_dynamic_partitions
+  group_size: null
+  metadata_source: soc_profile
   vab_zero_b: true
   dynamic_group_name: qti_dynamic_partitions
+  slot_mode: VAB
+  output_format: sparse
   required_images:
     - super.img
     - boot.img

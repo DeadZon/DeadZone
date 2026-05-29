@@ -1,0 +1,35 @@
+codename: garnet
+name: Redmi Note 13 Pro 5G
+soc: snapdragon
+brand: Redmi
+android_min: null
+android_max: null
+slot_mode: VAB
+dynamic_partitions: true
+default_region: null
+regions: []
+super:
+  default_size: null
+  group_name: qti_dynamic_partitions
+  group_size: null
+  metadata_source: mezo_superconfig
+  vab_zero_b: true
+partitions: []
+required_images:
+- boot.img
+- init_boot.img
+- vendor_boot.img
+- vbmeta.img
+- super.img
+optional_images:
+- dtbo.img
+- logo.img
+- vbmeta_system.img
+- vbmeta_vendor.img
+firmware_images: []
+flash_order: []
+notes:
+- Ported from origin/old registry device file; unsafe or legacy engine fields were
+  intentionally omitted.
+- No explicit super size was present in the old device file; profiles/snapdragon.yml
+  or ROM metadata supplies the target size.

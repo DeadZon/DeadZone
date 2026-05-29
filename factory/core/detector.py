@@ -277,7 +277,8 @@ def detect_rom(path: Path, ws: Workspace, soc: str = "unknown", custom_codename:
             if value and (not meta.get(key) or meta.get(key) == "unknown"):
                 meta[key] = value
 
-    info.codename = custom_codename or meta.get("codename") or "unknown"
+    detected_codename = meta.get("codename") or ""
+    info.codename = detected_codename or custom_codename or "unknown"
     info.android_version = meta.get("android_version") or "unknown"
     info.build = meta.get("build") or "unknown"
     info.region = meta.get("region") or _region_from_build(info.build) or "unknown"

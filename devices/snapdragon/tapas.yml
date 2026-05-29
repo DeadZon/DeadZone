@@ -1,0 +1,24 @@
+codename: tapas
+name: Redmi Note 12 4G
+soc: snapdragon
+brand: Redmi
+android_min: null
+android_max: null
+slot_mode: VAB
+dynamic_partitions: true
+default_region: null
+regions: []
+super:
+  default_size: null
+  group_name: qti_dynamic_partitions
+  group_size: null
+  metadata_source: soc_profile
+  vab_zero_b: true
+partitions: []
+required_images: []
+optional_images: []
+firmware_images: []
+flash_order: []
+notes:
+- Ported from origin/old device group; device-specific super geometry was not present
+  there, so profiles/snapdragon.yml is used unless ROM metadata supplies a safer layout.
