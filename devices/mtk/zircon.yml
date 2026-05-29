@@ -12,6 +12,8 @@ super:
   default_size: 9126805504
   group_name: qti_dynamic_partitions
   group_size: null
+  metadata_slots: 3
+  output_format: sparse
   metadata_source: auto_or_mezo_superconfig
   vab_zero_b: true
 partitions: []

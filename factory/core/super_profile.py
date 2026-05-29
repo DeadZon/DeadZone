@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,13 @@ from factory.core.workspace import Workspace, read_json, write_json
 DEFAULT_SUPER_SIZE = 8_500_000_000
 LP_METADATA_OVERHEAD = 4 * 1024 * 1024
 METADATA_SIZE = 65_536
+SAFE_ALLOCATION_SOURCES = [
+    "original_super_metadata",
+    "payload_dynamic_partition_metadata",
+    "dynamic_partitions_op_list",
+    "device_profile",
+    "soc_profile",
+]
 
 
 def _base_partition(name: str) -> str:
@@ -59,9 +67,17 @@ def dynamic_images(ws: Workspace, partition_map: dict[str, Any]) -> dict[str, Pa
     for name in sorted(DYNAMIC_PARTITIONS):
         mapped = by_partition.get(name)
         if isinstance(mapped, str):
-            mapped_path = ws.partitions / Path(mapped).name
-            if mapped_path.is_file() and mapped_path.stat().st_size > 0:
-                ordered[name] = mapped_path
+            mapped_raw = Path(mapped)
+            candidates = [
+                mapped_raw if mapped_raw.is_absolute() else ws.root / mapped_raw,
+                ws.partitions / mapped_raw.name,
+                ws.images / mapped_raw.name,
+            ]
+            for mapped_path in candidates:
+                if mapped_path.is_file() and mapped_path.stat().st_size > 0:
+                    ordered[name] = mapped_path
+                    break
+            if name in ordered:
                 continue
         found = _image_for_partition(ws, name)
         if found:
@@ -86,6 +102,111 @@ def _partition_sizes(super_layout: dict[str, Any], partition_map: dict[str, Any]
     return result
 
 
+def _partition_entries(source: dict[str, Any], source_name: str) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for key in ("partitions", "partition_table"):
+        entries = source.get(key)
+        if not isinstance(entries, list):
+            continue
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            raw_name = str(item.get("name") or item.get("partition_name") or "")
+            base = _base_partition(raw_name)
+            if base not in DYNAMIC_PARTITIONS or raw_name.endswith("_b"):
+                continue
+            size = _int_value(
+                item.get("allocation_size"),
+                item.get("size_bytes"),
+                item.get("size"),
+                item.get("partition_size"),
+            )
+            if not size:
+                continue
+            result[base] = {
+                "allocation_size": size,
+                "group_name": str(item.get("group_name") or item.get("group") or ""),
+                "readonly": bool(item.get("readonly", True)),
+                "source": source_name,
+            }
+    return result
+
+
+def _size_entries(sizes: dict[str, Any], source_name: str, group_name: str = "") -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for key, value in sizes.items():
+        base = _base_partition(str(key))
+        size = _int_value(value)
+        if base in DYNAMIC_PARTITIONS and size:
+            result[base] = {
+                "allocation_size": size,
+                "group_name": group_name,
+                "readonly": True,
+                "source": source_name,
+            }
+    return result
+
+
+def _read_payload_metadata(ws: Workspace) -> dict[str, Any]:
+    data = read_json(ws.meta / "payload_metadata.json", {})
+    if data:
+        return data
+    return {}
+
+
+def _parse_dynamic_partitions_op_list(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    sizes: dict[str, int] = {}
+    part_groups: dict[str, str] = {}
+    group_sizes: dict[str, int] = {}
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = re.split(r"\s+", line)
+        op = tokens[0].lower()
+        if op in {"resize", "resize_partition"} and len(tokens) >= 3:
+            base = _base_partition(tokens[1])
+            size = _int_value(tokens[2])
+            if base in DYNAMIC_PARTITIONS and size:
+                sizes[base] = size
+        elif op in {"add", "add_partition"} and len(tokens) >= 3:
+            base = _base_partition(tokens[1])
+            if base in DYNAMIC_PARTITIONS:
+                part_groups[base] = str(tokens[2]).removesuffix("_a").removesuffix("_b")
+        elif op in {"add_group", "resize_group"} and len(tokens) >= 3:
+            group = str(tokens[1]).removesuffix("_a").removesuffix("_b")
+            size = _int_value(tokens[2])
+            if group and size:
+                group_sizes[group] = size
+    if not sizes and not group_sizes:
+        return {}
+    group_name = ""
+    group_size = 0
+    if group_sizes:
+        group_name, group_size = max(group_sizes.items(), key=lambda item: item[1])
+    return {
+        "metadata_source": "dynamic_partitions_op_list",
+        "path": str(path),
+        "partition_sizes": sizes,
+        "partition_groups": part_groups,
+        "dynamic_group_name": group_name,
+        "group_size": group_size,
+    }
+
+
+def _find_op_list(ws: Workspace) -> dict[str, Any]:
+    for root in [ws.extracted / "payload", ws.extracted, ws.meta, ws.images]:
+        if not root.exists():
+            continue
+        for path in sorted(root.rglob("dynamic_partitions_op_list") if root.is_dir() else []):
+            parsed = _parse_dynamic_partitions_op_list(path)
+            if parsed:
+                return parsed
+    return {}
+
+
 def _first_source_value(named_sources: list[tuple[str, dict[str, Any]]], *keys: str) -> tuple[Any, str]:
     for source_name, source in named_sources:
         for key in keys:
@@ -105,6 +226,8 @@ def build_super_profile(
     device_info = read_json(ws.meta / "device_info.json", {})
     super_layout = read_json(ws.meta / "super_layout.json", {})
     partition_map = read_json(ws.meta / "partition_map.json", {})
+    payload_metadata = _read_payload_metadata(ws)
+    op_list_metadata = _find_op_list(ws)
     if info is not None:
         rom_info.update({k: v for k, v in info.__dict__.items() if v is not None})
 
@@ -117,15 +240,21 @@ def build_super_profile(
     device_super = device_config.get("_device_super") if isinstance(device_config.get("_device_super"), dict) else profile_super
 
     detected_sizes = _partition_sizes(super_layout, partition_map)
+    if isinstance(payload_metadata.get("partition_sizes"), dict):
+        detected_sizes.update(_partition_sizes(payload_metadata, {}))
+    if isinstance(op_list_metadata.get("partition_sizes"), dict):
+        detected_sizes.update(_partition_sizes(op_list_metadata, {}))
     original_metadata = super_layout if super_layout.get("metadata_source") in {
         "original_super_metadata",
         "super_metadata",
         "lpdump",
     } else {}
-    payload_metadata = super_layout if detected_sizes else {}
+    payload_source = dict(super_layout) if detected_sizes else {}
+    payload_source.update(payload_metadata)
     named_sources = [
         ("original_super_metadata", original_metadata),
-        ("payload_dynamic_partition_metadata", payload_metadata),
+        ("payload_dynamic_partition_metadata", payload_source),
+        ("dynamic_partitions_op_list", op_list_metadata),
         ("device_profile", device_super),
         ("soc_profile", soc_super),
     ]
@@ -165,14 +294,96 @@ def build_super_profile(
     if detected_sizes and metadata_source == "unresolved":
         metadata_source = "payload_dynamic_partition_metadata"
 
+    allocation_sources: dict[str, dict[str, dict[str, Any]]] = {}
+    original_entries = _partition_entries(original_metadata, "original_super_metadata")
+    if original_entries:
+        allocation_sources["original_super_metadata"] = original_entries
+    payload_entries = _partition_entries(payload_source, "payload_dynamic_partition_metadata")
+    payload_sizes = _partition_sizes(payload_source, {})
+    if payload_sizes:
+        payload_entries.update(_size_entries(payload_sizes, "payload_dynamic_partition_metadata", group_name))
+    if payload_entries:
+        allocation_sources["payload_dynamic_partition_metadata"] = payload_entries
+    op_entries = _size_entries(
+        op_list_metadata.get("partition_sizes") if isinstance(op_list_metadata.get("partition_sizes"), dict) else {},
+        "dynamic_partitions_op_list",
+        str(op_list_metadata.get("dynamic_group_name") or group_name),
+    )
+    for part, entry in op_entries.items():
+        groups = op_list_metadata.get("partition_groups") if isinstance(op_list_metadata.get("partition_groups"), dict) else {}
+        entry["group_name"] = str(groups.get(part) or entry.get("group_name") or group_name)
+    if op_entries:
+        allocation_sources["dynamic_partitions_op_list"] = op_entries
+    device_sizes = device_super.get("partition_sizes") if isinstance(device_super.get("partition_sizes"), dict) else {}
+    device_entries = _size_entries(device_sizes, "device_profile", group_name)
+    if device_entries:
+        allocation_sources["device_profile"] = device_entries
+    soc_sizes = soc_super.get("partition_sizes") if isinstance(soc_super.get("partition_sizes"), dict) else {}
+    soc_entries = _size_entries(soc_sizes, "soc_profile", group_name)
+    if soc_entries:
+        allocation_sources["soc_profile"] = soc_entries
+
+    partitions: dict[str, dict[str, Any]] = {}
+    missing_metadata: list[str] = []
+    for part in selected:
+        image = images[part]
+        chosen: dict[str, Any] | None = None
+        checked: list[str] = []
+        for source_name in SAFE_ALLOCATION_SOURCES:
+            checked.append(source_name)
+            entry = allocation_sources.get(source_name, {}).get(part)
+            if entry and _int_value(entry.get("allocation_size")):
+                chosen = dict(entry)
+                break
+        if chosen is None:
+            missing_metadata.append(part)
+            partitions[part] = {
+                "name": part,
+                "slot_suffix": "_a" if is_vab else "",
+                "image_path": str(image),
+                "image_size": image.stat().st_size,
+                "allocation_size": None,
+                "group_name": group_name,
+                "readonly": True,
+                "source": "unresolved",
+                "safe_sources_checked": checked,
+            }
+            continue
+        partitions[part] = {
+            "name": part,
+            "slot_suffix": "_a" if is_vab else "",
+            "image_path": str(image),
+            "image_size": image.stat().st_size,
+            "allocation_size": _int_value(chosen.get("allocation_size")),
+            "group_name": str(chosen.get("group_name") or group_name),
+            "readonly": bool(chosen.get("readonly", True)),
+            "source": str(chosen.get("source") or "unresolved"),
+            "safe_sources_checked": checked,
+        }
+    vab_zero_b = [
+        {
+            "name": f"{part}_b",
+            "base_name": part,
+            "allocation_size": 0,
+            "group_name": f"{group_name}_b",
+            "readonly": True,
+            "source": "VAB zero_b",
+        }
+        for part in selected
+    ] if is_vab else []
+    resolved_sources = [
+        str(entry.get("source"))
+        for entry in partitions.values()
+        if entry.get("allocation_size") and entry.get("source")
+    ]
+    allocation_metadata_source = resolved_sources[0] if resolved_sources else "unresolved"
+
     profile = {
-        "metadata_source": metadata_source,
-        "metadata_priority": [
-            "original_super_metadata",
-            "payload_dynamic_partition_metadata",
-            "device_profile",
-            "soc_profile",
-        ],
+        "metadata_source": allocation_metadata_source if allocation_metadata_source != "unresolved" else metadata_source,
+        "geometry_metadata_source": metadata_source,
+        "allocation_metadata_source": allocation_metadata_source,
+        "metadata_priority": SAFE_ALLOCATION_SOURCES,
+        "super_size": target_size,
         "target_super_size": target_size,
         "block_device_name": str(super_layout.get("block_device_name") or "super"),
         "metadata_size": _int_value(super_layout.get("metadata_size"), METADATA_SIZE),
@@ -193,6 +404,9 @@ def build_super_profile(
         "output_format_source": output_source,
         "partition_sizes": detected_sizes,
         "partition_sizes_source": "detected_metadata" if detected_sizes else "unavailable",
+        "partitions": partitions,
+        "missing_metadata": missing_metadata,
+        "vab_zero_b_partitions": vab_zero_b,
         "selected_partitions": selected,
         "dynamic_images": {name: str(path) for name, path in images.items()},
         "allow_image_size_allocations": False,
@@ -205,8 +419,17 @@ def build_super_profile(
         },
         "inspection_needs_rebuild": bool((inspection or {}).get("needs_super_rebuild")),
     }
+    if missing_metadata:
+        profile["metadata_source"] = metadata_source or "partial"
     write_json(ws.meta / "super_profile.json", profile)
     write_super_profile_report(ws, profile)
+    print(f"[SUPER PROFILE] Source: {profile.get('metadata_source')}")
+    print(f"[SUPER PROFILE] Group: {profile.get('dynamic_group_name')} size={profile.get('group_size')}")
+    for part, entry in partitions.items():
+        print(
+            f"[SUPER PROFILE] Partition: {part} allocation={entry.get('allocation_size')} "
+            f"source={entry.get('source')}"
+        )
     return profile
 
 
@@ -217,15 +440,40 @@ def write_super_profile_report(ws: Workspace, profile: dict[str, Any]) -> None:
         f"device: {profile.get('device', {}).get('codename')} ({profile.get('device', {}).get('name')})",
         f"soc: {profile.get('device', {}).get('soc')}",
         f"source: {profile.get('metadata_source')}",
+        f"allocation source: {profile.get('allocation_metadata_source')}",
         f"target super size: {profile.get('target_super_size')}",
         f"group name: {profile.get('dynamic_group_name')} ({profile.get('group_name_source')})",
         f"group size: {profile.get('group_size')} ({profile.get('group_size_source')})",
         f"slot mode: {profile.get('slot_mode')} ({profile.get('slot_mode_source')})",
         f"VAB zero-size _b entries: {profile.get('vab_zero_b')}",
         f"partition size source: {profile.get('partition_sizes_source')}",
+        f"missing metadata: {', '.join(profile.get('missing_metadata') or []) or '(none)'}",
         "",
-        "selected partitions:",
+        "dynamic partition allocations:",
     ]
-    lines.extend([f"  - {part}" for part in profile.get("selected_partitions", [])] or ["  (none)"])
+    partitions = profile.get("partitions") if isinstance(profile.get("partitions"), dict) else {}
+    for part in profile.get("selected_partitions", []):
+        entry = partitions.get(part, {})
+        lines.append(
+            f"  - {part}: allocation={entry.get('allocation_size')} "
+            f"image_size={entry.get('image_size')} source={entry.get('source')} group={entry.get('group_name')}"
+        )
+    if not profile.get("selected_partitions"):
+        lines.append("  (none)")
+    lines += ["", "mi_ext allocation status:"]
+    mi_ext = partitions.get("mi_ext")
+    if mi_ext:
+        lines.append(
+            f"  allocation={mi_ext.get('allocation_size')} source={mi_ext.get('source')} "
+            f"image={mi_ext.get('image_path')}"
+        )
+    else:
+        lines.append("  (no mi_ext image selected)")
+    lines += ["", "VAB zero-size _b entries:"]
+    zero_entries = profile.get("vab_zero_b_partitions") or []
+    lines.extend(
+        [f"  - {entry.get('name')}: allocation={entry.get('allocation_size')} group={entry.get('group_name')}" for entry in zero_entries]
+        or ["  (not VAB)"]
+    )
     lines.append("")
     (ws.reports / "super_profile_report.txt").write_text("\n".join(lines), encoding="utf-8")

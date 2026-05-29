@@ -36,17 +36,18 @@ def _int_value(*values: Any) -> int:
 
 
 def _allocation(part: str, image: Path, layout: dict[str, Any], warnings: list[str]) -> int:
-    sizes = layout.get("partition_sizes") if isinstance(layout.get("partition_sizes"), dict) else {}
-    original_size = _int_value(sizes.get(part))
+    partitions = layout.get("partitions") if isinstance(layout.get("partitions"), dict) else {}
+    entry = partitions.get(part) if isinstance(partitions.get(part), dict) else {}
+    original_size = _int_value(entry.get("allocation_size"))
     if original_size:
         image_size = image.stat().st_size
         if image_size > original_size:
-            raise RuntimeError(
-                f"{image.name} size {image_size} exceeds metadata allocation {original_size} bytes"
-            )
+            raise RuntimeError(f"{part}.img is larger than its metadata allocation")
+        print(f"[SUPER] Allocation: {part}={original_size} source={entry.get('source')}")
         return original_size
+    checked = entry.get("safe_sources_checked") if isinstance(entry.get("safe_sources_checked"), list) else layout.get("metadata_priority")
     raise RuntimeError(
-        f"{part}.img has no metadata allocation; refusing to guess super layout from image size only"
+        f"{part}.img has no metadata allocation; checked safe sources: {', '.join(str(item) for item in checked or [])}"
     )
 
 
@@ -88,6 +89,7 @@ def _build_lpmake_command(
         command += ["--group", f"{layout['group_b_name']}:{group_size}"]
         for part in selected:
             command += ["--partition", f"{part}_b:readonly:0:{layout['group_b_name']}"]
+            print(f"[SUPER] VAB zero_b: {part}_b=0")
         command.append("--virtual-ab")
     else:
         command += ["--group", f"{layout['group_a_name']}:{group_size}"]
@@ -133,6 +135,7 @@ def _write_report(
         f"action: {result.get('action')}",
         f"reason: {result.get('reason')}",
         f"input metadata source: {layout.get('metadata_source')}",
+        f"allocation metadata source: {layout.get('allocation_metadata_source')}",
         f"target super size: {layout.get('target_super_size')}",
         f"group name: {layout.get('dynamic_group_name')}",
         f"group size: {layout.get('group_size')}",
@@ -142,12 +145,14 @@ def _write_report(
     ]
     for part in layout.get("selected_partitions", []):
         image = layout.get("dynamic_images", {}).get(part, "")
-        size = layout.get("partition_sizes", {}).get(part, "image-size")
-        lines.append(f"  - {part}: image={image} allocation={size}")
+        entry = (layout.get("partitions") or {}).get(part, {})
+        size = entry.get("allocation_size")
+        source = entry.get("source", "unresolved")
+        lines.append(f"  - {part}: image={image} allocation={size} source={source}")
     lines += ["", "_b zero-size entries for VAB:"]
     if layout.get("virtual_ab"):
-        for part in layout.get("selected_partitions", []):
-            lines.append(f"  - {part}_b: 0")
+        for entry in layout.get("vab_zero_b_partitions", []):
+            lines.append(f"  - {entry.get('name')}: {entry.get('allocation_size')} group={entry.get('group_name')}")
     else:
         lines.append("  (not VAB)")
     lines += [
@@ -171,6 +176,24 @@ def _write_report(
     lines.extend([f"  - {error}" for error in errors] or ["  (none)"])
     lines.append("")
     (ws.reports / "super_build_report.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _write_error_summary(ws: Workspace, stage: str, message: str, layout: dict[str, Any] | None = None) -> None:
+    lines = [
+        "DeadZone Error Summary",
+        "======================",
+        f"stage: {stage}",
+        f"error: {message}",
+    ]
+    if layout:
+        missing = layout.get("missing_metadata") or []
+        lines += [
+            f"metadata source: {layout.get('metadata_source')}",
+            f"safe sources checked: {', '.join(layout.get('metadata_priority') or [])}",
+            f"missing metadata: {', '.join(missing) if missing else '(none)'}",
+        ]
+    lines.append("")
+    (ws.reports / "error_summary.txt").write_text("\n".join(lines), encoding="utf-8")
 
 
 def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -216,6 +239,7 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
                 "super_img": str(final_super),
                 "super_size": final_super.stat().st_size if final_super.is_file() else None,
                 "input_metadata_source": layout.get("metadata_source"),
+                "allocation_metadata_source": layout.get("allocation_metadata_source"),
                 "target_super_size": layout.get("target_super_size"),
                 "group_name": layout.get("dynamic_group_name"),
                 "group_size": layout.get("group_size"),
@@ -231,11 +255,41 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
             }
             write_json(ws.meta / "super_build_result.json", result)
             _write_report(ws, result, layout, result["validation"])
+            _write_error_summary(ws, "super", message, layout)
             raise RuntimeError(message)
         reason = "dynamic partition content requires a new super.img"
         if not final_super.is_file():
             reason = "no original super.img is available and dynamic partition images exist"
-        command = _build_lpmake_command(final_super, layout, dynamic_images, lpmake, warnings)
+        try:
+            command = _build_lpmake_command(final_super, layout, dynamic_images, lpmake, warnings)
+        except RuntimeError as exc:
+            message = str(exc)
+            errors.append(message)
+            result = {
+                "status": "FAILED",
+                "action": "failed",
+                "reason": message,
+                "super_img": str(final_super),
+                "super_size": final_super.stat().st_size if final_super.is_file() else None,
+                "input_metadata_source": layout.get("metadata_source"),
+                "allocation_metadata_source": layout.get("allocation_metadata_source"),
+                "target_super_size": layout.get("target_super_size"),
+                "group_name": layout.get("dynamic_group_name"),
+                "group_size": layout.get("group_size"),
+                "slot_mode": layout.get("slot_mode"),
+                "partition_list": layout.get("selected_partitions"),
+                "vab_zero_size_b_partitions": [entry.get("name") for entry in layout.get("vab_zero_b_partitions", [])],
+                "lpmake_command": command,
+                "tools": {name: str(status.path) if status.path else None for name, status in toolchain.tools.items()},
+                "toolchain_report": str(toolchain.report_path),
+                "validation": {"status": "FAILED", "reason": message, "output": ""},
+                "warnings": warnings,
+                "errors": errors,
+            }
+            write_json(ws.meta / "super_build_result.json", result)
+            _write_report(ws, result, layout, result["validation"])
+            _write_error_summary(ws, "super", message, layout)
+            raise
         final_super.parent.mkdir(parents=True, exist_ok=True)
         if final_super.exists():
             final_super.unlink()
@@ -255,6 +309,7 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
         "super_img": str(final_super),
         "super_size": final_super.stat().st_size if final_super.is_file() else None,
         "input_metadata_source": layout.get("metadata_source"),
+        "allocation_metadata_source": layout.get("allocation_metadata_source"),
         "target_super_size": layout.get("target_super_size"),
         "group_name": layout.get("dynamic_group_name"),
         "group_size": layout.get("group_size"),
@@ -272,6 +327,7 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     write_json(ws.meta / "super_build_result.json", result)
     _write_report(ws, result, layout, validation)
     if errors:
+        _write_error_summary(ws, "super", "; ".join(errors), layout)
         raise RuntimeError("; ".join(errors))
     print(f"[SUPER] {action}")
     return result

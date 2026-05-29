@@ -7,6 +7,7 @@ import subprocess
 import sys
 import stat
 from pathlib import Path
+from typing import Any
 
 from factory.adapters.common import copy_images
 from factory.core.workspace import Workspace, read_json, write_json
@@ -15,7 +16,11 @@ from factory.core.workspace import Workspace, read_json, write_json
 MISSING_TOOL_MESSAGE = "payload-dumper-go is missing. Add it to tools/helper or install it in Docker/GitHub runner."
 
 
-def _payload_sizes(payload_bin: Path) -> dict[str, int]:
+def _base_partition(name: str) -> str:
+    return Path(str(name)).stem.removesuffix("_a").removesuffix("_b")
+
+
+def _payload_metadata(payload_bin: Path) -> dict[str, Any]:
     third_party = Path("third_party/mezo_core/src").resolve()
     if third_party.exists() and str(third_party) not in sys.path:
         sys.path.insert(0, str(third_party))
@@ -23,13 +28,42 @@ def _payload_sizes(payload_bin: Path) -> dict[str, int]:
         from core.payload_extract import init_payload_info  # type: ignore
         with payload_bin.open("rb") as fh:
             manifest = init_payload_info(fh)
-        return {
-            p.partition_name: int(p.new_partition_info.size)
-            for p in manifest.partitions
-            if p.HasField("new_partition_info") and p.new_partition_info.size > 0
-        }
-    except Exception:
-        return {}
+    except Exception as exc:
+        return {"metadata_source": "unavailable", "error": str(exc), "partition_sizes": {}}
+
+    partition_sizes: dict[str, int] = {}
+    for part in getattr(manifest, "partitions", []) or []:
+        if not part.HasField("new_partition_info"):
+            continue
+        size = int(part.new_partition_info.size)
+        if size > 0:
+            partition_sizes[_base_partition(part.partition_name)] = size
+
+    group_name = ""
+    group_size = 0
+    group_partitions: list[str] = []
+    dpm = getattr(manifest, "dynamic_partition_metadata", None)
+    groups = list(getattr(dpm, "groups", []) or []) if dpm is not None else []
+    real_groups = [g for g in groups if getattr(g, "name", "") and getattr(g, "name", "") != "default"]
+    if real_groups:
+        group = max(real_groups, key=lambda item: int(getattr(item, "size", 0) or 0))
+        group_name = str(getattr(group, "name", "")).removesuffix("_a").removesuffix("_b")
+        group_size = int(getattr(group, "size", 0) or 0)
+        seen: set[str] = set()
+        for raw in list(getattr(group, "partition_names", []) or []):
+            base = _base_partition(str(raw))
+            if base and base not in seen:
+                seen.add(base)
+                group_partitions.append(base)
+
+    return {
+        "metadata_source": "payload_manifest",
+        "manifest_path": str(payload_bin),
+        "dynamic_group_name": group_name,
+        "group_size": group_size,
+        "group_partitions": group_partitions,
+        "partition_sizes": dict(sorted(partition_sizes.items())),
+    }
 
 
 def _helper_candidates(tool: str) -> list[Path]:
@@ -121,12 +155,19 @@ def _write_payload_report(
     return report_path
 
 
-def _update_payload_metadata(ws: Workspace, images: list[Path], dumped: bool) -> None:
+def _update_payload_metadata(ws: Workspace, images: list[Path], dumped: bool, payload_metadata: dict[str, Any]) -> None:
     image_names = [p.name for p in images]
     partition_map = read_json(ws.meta / "partition_map.json", {})
     by_partition = partition_map.get("by_partition") if isinstance(partition_map.get("by_partition"), dict) else {}
     by_partition.update({p.stem.removesuffix("_a").removesuffix("_b"): str(p.relative_to(ws.root)) for p in images})
     partition_map["by_partition"] = dict(sorted(by_partition.items()))
+    if payload_metadata.get("partition_sizes"):
+        partition_map["partition_sizes"] = payload_metadata["partition_sizes"]
+        partition_map["partition_size_source"] = "payload_manifest"
+    if payload_metadata.get("dynamic_group_name"):
+        partition_map["dynamic_group_name"] = payload_metadata["dynamic_group_name"]
+    if payload_metadata.get("group_size"):
+        partition_map["group_size"] = payload_metadata["group_size"]
     seen = set(partition_map.get("source_images_seen") or [])
     seen.update(image_names)
     partition_map["source_images_seen"] = sorted(seen)
@@ -140,10 +181,25 @@ def _update_payload_metadata(ws: Workspace, images: list[Path], dumped: bool) ->
     })
     write_json(ws.meta / "rom_info.json", rom_info)
 
+    write_json(ws.meta / "payload_metadata.json", payload_metadata)
+    super_layout = read_json(ws.meta / "super_layout.json", {})
+    if payload_metadata.get("partition_sizes"):
+        super_layout["partition_sizes"] = payload_metadata["partition_sizes"]
+        super_layout["partition_size_source"] = "payload_manifest"
+        super_layout["metadata_source"] = "payload_dynamic_partition_metadata"
+    if payload_metadata.get("dynamic_group_name"):
+        super_layout["dynamic_group_name"] = payload_metadata["dynamic_group_name"]
+    if payload_metadata.get("group_size"):
+        super_layout["group_size"] = payload_metadata["group_size"]
+    if payload_metadata.get("group_partitions"):
+        super_layout["dynamic_group_partitions"] = payload_metadata["group_partitions"]
+    write_json(ws.meta / "super_layout.json", super_layout)
+
 
 def adapt(extracted: Path, ws: Workspace) -> dict:
     payload_bin = _stage_payload_files(extracted, ws)
-    sizes = _payload_sizes(payload_bin)
+    payload_metadata = _payload_metadata(payload_bin)
+    sizes = payload_metadata.get("partition_sizes") if isinstance(payload_metadata.get("partition_sizes"), dict) else {}
     stdout_path = ws.logs / "payload_dump_stdout.log"
     stderr_path = ws.logs / "payload_dump_stderr.log"
     stdout_path.write_text("", encoding="utf-8")
@@ -154,7 +210,7 @@ def adapt(extracted: Path, ws: Workspace) -> dict:
     exit_code: int | None = None
     if tool is None:
         images = _dumped_images(ws)
-        _update_payload_metadata(ws, images, dumped=False)
+        _update_payload_metadata(ws, images, dumped=False, payload_metadata=payload_metadata)
         _write_payload_report(ws, tool=tool, command=command, exit_code=exit_code, images=images, error=MISSING_TOOL_MESSAGE)
         print("[PAYLOAD] Tool: (missing)")
         print("[PAYLOAD] Command: (not run)")
@@ -172,7 +228,7 @@ def adapt(extracted: Path, ws: Workspace) -> dict:
     ok = exit_code == 0 and bool(_dumped_images(ws))
 
     images = _dumped_images(ws)
-    _update_payload_metadata(ws, images, dumped=ok)
+    _update_payload_metadata(ws, images, dumped=ok, payload_metadata=payload_metadata)
     _write_payload_report(ws, tool=tool, command=command, exit_code=exit_code, images=images)
     print(f"[PAYLOAD] Images dumped: {len(images)}")
     if not ok:
