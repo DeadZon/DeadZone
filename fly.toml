@@ -1,32 +1,9 @@
-# fly.toml — DeadZone ROM factory builder
-# app name is passed via --app flag in deploy workflow (dz-builder-mtk or dz-builder-snap)
-primary_region = "iad"
+app = "deadzone-builder"
+primary_region = "fra"
 
 [build]
-  dockerfile = "docker/Dockerfile.builder"
-
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 0
-
-  [http_service.concurrency]
-    type = "requests"
-    hard_limit = 10
-    soft_limit = 7
-
-[[vm]]
-  size = "performance-4x"
-  memory = "8gb"
-
-[[mounts]]
-  source = "factory_data"
-  destination = "/data"
-  initial_size = "250gb"
+  dockerfile = "Dockerfile"
 
 [env]
-  PORT = "8080"
   PYTHONUNBUFFERED = "1"
-  PYTHONDONTWRITEBYTECODE = "1"
+  FLY_NO_PROMPT = "1"
