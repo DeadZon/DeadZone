@@ -236,8 +236,6 @@ jobs:
           echo "[FLY] vm_cpus    = $VM_CPUS"
           echo "[FLY] vm_memory  = $VM_MEM MB"
 
-          export FLY_NO_PROMPT=1
-
           flyctl machine run . \
             --app "$RESOLVED_APP" \
             --dockerfile docker/Dockerfile.fly \
@@ -245,6 +243,7 @@ jobs:
             --vm-cpu-kind performance \
             --vm-cpus "$VM_CPUS" \
             --vm-memory "$VM_MEM" \
+            --volume factory_data:/data \
             --env DEADZONE_SOC=mtk \
             --env DEADZONE_DEVICE_CODENAME="$CODENAME" \
             --env DEADZONE_EDITION="$EDITION" \
