@@ -24,6 +24,17 @@ on:
         default: build
         options:
           - build
+          - production
+      upload_pixeldrain:
+        description: Reserve PixelDrain upload wiring
+        required: false
+        type: boolean
+        default: false
+      notify_telegram:
+        description: Reserve Telegram notification wiring
+        required: false
+        type: boolean
+        default: false
       custom_codename:
         description: Optional fallback codename when detection fails
         required: false
@@ -35,7 +46,7 @@ jobs:
     env:
       ROM_URL: ${{ inputs.rom_url }}
       STYLE: ${{ inputs.style }}
-      SOC: mtk
+      MODE: ${{ inputs.mode }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,11 +58,16 @@ jobs:
           python3 -m pip install -r requirements.txt || true
       - name: Build DeadZone
         run: |
-          ARGS=(python3 -m factory.deadzone --rom-url "$ROM_URL" --style "$STYLE" --soc "$SOC" --mode "${{ inputs.mode }}")
+          CUSTOM_CODENAME_FLAG=()
           if [ -n "${{ inputs.custom_codename }}" ]; then
-            ARGS+=(--custom-codename "${{ inputs.custom_codename }}")
+            CUSTOM_CODENAME_FLAG=(--custom-codename "${{ inputs.custom_codename }}")
           fi
-          "${ARGS[@]}"
+          python3 -m factory.deadzone \
+            --rom-url "$ROM_URL" \
+            --style "$STYLE" \
+            --soc mtk \
+            --mode "$MODE" \
+            "${CUSTOM_CODENAME_FLAG[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: deadzone-mtk-output
