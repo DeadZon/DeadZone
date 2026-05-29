@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import shutil
+from typing import Any
 
+from factory.core.detector import RomInfo
+from factory.core.super_builder import DYNAMIC_IMAGES, build_super_image
 from factory.core.workspace import Workspace, write_json
-
-DYNAMIC_IMAGES = {
-    "system.img", "product.img", "vendor.img", "odm.img", "mi_ext.img",
-    "system_ext.img", "vendor_dlkm.img", "system_dlkm.img", "odm_dlkm.img",
-}
 
 
 def repack_partitions(ws: Workspace) -> dict:
@@ -24,3 +22,7 @@ def repack_partitions(ws: Workspace) -> dict:
     write_json(ws.meta / "repack_result.json", result)
     print(f"[REPACK] Dynamic images staged: {len(staged)}")
     return result
+
+
+def build_repacked_super(ws: Workspace, info: RomInfo, inspection: dict[str, Any]) -> dict[str, Any]:
+    return build_super_image(ws, info, inspection)

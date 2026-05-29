@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 from factory.core.detector import RomInfo
+from factory.core.super_builder import DYNAMIC_IMAGES
 from factory.core.style_runner import STYLE_LABELS
 from factory.core.workspace import Workspace, write_json
 
@@ -15,10 +16,6 @@ CORE_IMAGES = {
     "super.img", "boot.img", "init_boot.img", "vendor_boot.img", "vbmeta.img",
     "vbmeta_system.img", "vbmeta_vendor.img", "dtbo.img", "logo.img",
 }
-DYNAMIC_IMAGES = {
-    "system.img", "product.img", "vendor.img", "odm.img", "mi_ext.img", "system_ext.img",
-}
-
 PROFILE_FIRMWARE = {
     "mtk": {
         "preloader_raw.img", "lk.img", "tee.img", "scp.img", "sspm.img", "spmfw.img",

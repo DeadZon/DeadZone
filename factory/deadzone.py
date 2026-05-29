@@ -8,9 +8,8 @@ from factory.core.detector import detect_rom
 from factory.core.downloader import download_rom
 from factory.core.final_zip import build_final_zip
 from factory.core.inspector import inspect_workspace
-from factory.core.repacker import repack_partitions
+from factory.core.repacker import build_repacked_super, repack_partitions
 from factory.core.style_runner import apply_style, normalize_style
-from factory.core.super_builder import build_super
 from factory.core.unpacker import unpack_rom
 from factory.core.workspace import create_workspace
 
@@ -38,7 +37,7 @@ def main() -> int:
     apply_style(style_key, ws, info)
     repack_partitions(ws)
     inspection = inspect_workspace(ws, info, unpack_result)
-    build_super(ws, info, inspection)
+    build_repacked_super(ws, info, inspection)
     final_zip = build_final_zip(ws, info, style_key)
     cleanup(ws, keep_workspace=True)
     print(f"[DONE] {final_zip}")

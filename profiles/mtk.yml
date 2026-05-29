@@ -1,18 +1,58 @@
 soc: mtk
-required_firmware:
-  - preloader_raw.img
-  - lk.img
-  - tee.img
-  - scp.img
-  - sspm.img
-  - spmfw.img
-  - md1img.img
-  - audio_dsp.img
-  - pi_img.img
-  - dpm.img
-  - mcupm.img
-  - gz.img
-  - vcp.img
 super:
-  default_size: 8500000000
+  default_super_size: 8500000000
   vab_zero_b: true
+  dynamic_group_name: qti_dynamic_partitions
+  required_images:
+    - super.img
+    - boot.img
+    - init_boot.img
+    - vendor_boot.img
+    - vbmeta.img
+    - vbmeta_system.img
+    - vbmeta_vendor.img
+    - dtbo.img
+  optional_images:
+    - logo.img
+    - recovery.img
+    - cust.img
+    - persist.img
+  firmware_images:
+    - preloader_raw.img
+    - lk.img
+    - tee.img
+    - scp.img
+    - sspm.img
+    - spmfw.img
+    - md1img.img
+    - audio_dsp.img
+    - pi_img.img
+    - dpm.img
+    - mcupm.img
+    - gz.img
+    - vcp.img
+    - connsys_bt.img
+    - connsys_wifi.img
+    - connsys_gnss.img
+  flash_order:
+    - preloader_raw.img
+    - lk.img
+    - tee.img
+    - scp.img
+    - sspm.img
+    - spmfw.img
+    - md1img.img
+    - audio_dsp.img
+    - pi_img.img
+    - dpm.img
+    - mcupm.img
+    - gz.img
+    - vcp.img
+    - boot.img
+    - init_boot.img
+    - vendor_boot.img
+    - dtbo.img
+    - vbmeta.img
+    - vbmeta_system.img
+    - vbmeta_vendor.img
+    - super.img
