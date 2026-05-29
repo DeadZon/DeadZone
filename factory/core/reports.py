@@ -52,19 +52,25 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     completed_at = getattr(ctx, "completed_at", None)
     elapsed = (completed_at or time.time()) - started_at
 
-    codename = (
+    resolved_codename = (
         str(device.get("resolved_codename") or device.get("codename") or "")
         or _value(rom, "codename")
     )
+    detected_codename = str(device.get("detected_codename") or "")
+    if not detected_codename or detected_codename == "unknown":
+        detected_codename = _value(rom, "codename")
     android = _value(rom, "android_version")
     build = _value(rom, "build")
+    warnings = list(getattr(ctx, "warnings", []) or [])
 
     build_lines = [
         "MEZO / DeadZone Build Report",
         "============================",
         f"status: {status}",
         f"ROM URL: {getattr(ctx, 'rom_url', '')}",
-        f"detected codename: {codename}",
+        f"selected codename: {getattr(ctx, 'selected_codename', '') or '(none)'}",
+        f"detected codename: {detected_codename}",
+        f"resolved codename: {resolved_codename}",
         f"Android version: {android}",
         f"build version: {build}",
         f"style: {getattr(ctx, 'style_label', '')}",
@@ -81,6 +87,9 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         "stages:",
         *_stage_lines(getattr(ctx, "stages", [])),
         "",
+        "warnings:",
+        *(warnings or ["(none)"]),
+        "",
     ]
 
     orchestration_lines = [
@@ -90,7 +99,9 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"completed stage: {getattr(ctx, 'completed_stage', '(none)')}",
         f"failed stage: {failed_stage}",
         f"ROM URL: {getattr(ctx, 'rom_url', '')}",
-        f"detected codename: {codename}",
+        f"selected codename: {getattr(ctx, 'selected_codename', '') or '(none)'}",
+        f"detected codename: {detected_codename}",
+        f"resolved codename: {resolved_codename}",
         f"Android version: {android}",
         f"build version: {build}",
         f"style: {getattr(ctx, 'style_label', '')}",

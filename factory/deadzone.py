@@ -32,6 +32,8 @@ class BuildContext:
     soc: str
     mode: str
     workspace: Workspace
+    device_codename: str = ""
+    selected_codename: str = ""
     custom_codename: str = ""
     keep_workspace: bool = False
     rom_source: Path | None = None
@@ -40,6 +42,7 @@ class BuildContext:
     super_profile: dict[str, Any] | None = None
     final_zip_path: Path | None = None
     reports: dict[str, str] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
     status: str = "RUNNING"
     cleanup_status: str = "not run"
     started_stage: str = "(none)"
@@ -55,6 +58,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rom-url")
     parser.add_argument("--style", choices=["Stable", "Legend", "Gaming", "EPiC", "stable", "legend", "gaming", "epic"])
     parser.add_argument("--soc", choices=ALLOWED_SOCS)
+    parser.add_argument("--device-codename", default="")
     parser.add_argument("--custom-codename", default="")
     parser.add_argument("--mode", choices=ALLOWED_MODES, default="build")
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
@@ -81,6 +85,37 @@ def _print_device_list() -> None:
         print(f"[{soc}] {len(devices)}")
         for device in devices:
             print(f"  {device.get('codename')} | {device.get('name')}")
+
+
+def _selected_codename(device_codename: str, custom_codename: str) -> str:
+    device = device_codename.strip().lower()
+    custom = custom_codename.strip().lower()
+    if device and device != "custom":
+        return device
+    if device == "custom":
+        return custom
+    return ""
+
+
+def _warn_on_codename_mismatch(ctx: BuildContext) -> None:
+    selected = ctx.selected_codename.strip().lower()
+    detected = str(getattr(ctx.rom_metadata, "codename", "") or "").strip().lower()
+    if not selected or not detected or detected == "unknown" or selected == detected:
+        return
+    message = (
+        "[WARNING] Selected device codename "
+        f"'{selected}' differs from detected ROM codename '{detected}'. "
+        "DeadZone will keep the selected device and will not switch silently."
+    )
+    ctx.warnings.append(message)
+    print(message)
+
+
+def _resolution_codename(ctx: BuildContext) -> str | None:
+    device = ctx.device_codename.strip().lower()
+    if device == "custom":
+        return "custom"
+    return ctx.selected_codename or None
 
 
 def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
@@ -143,12 +178,18 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     ctx.rom_metadata = _stage(
         ctx,
         "detect ROM type and metadata",
-        lambda: detect_rom(ctx.rom_source, ws, soc=ctx.soc, custom_codename=ctx.custom_codename),  # type: ignore[arg-type]
+        lambda: detect_rom(
+            ctx.rom_source,
+            ws,
+            soc=ctx.soc,
+            custom_codename=ctx.custom_codename if ctx.device_codename.strip().lower() == "custom" else "",
+        ),  # type: ignore[arg-type]
     )
+    _warn_on_codename_mismatch(ctx)
     ctx.device_profile = _stage(
         ctx,
         "resolve device from registry",
-        lambda: resolve_device(rom_metadata=ctx.rom_metadata, custom_codename=ctx.custom_codename, ws=ws),
+        lambda: resolve_device(_resolution_codename(ctx), rom_metadata=ctx.rom_metadata, custom_codename=ctx.custom_codename, ws=ws),
     )
     _update_resolved_device_metadata(ctx)
     _print_device(ctx.device_profile)
@@ -203,12 +244,15 @@ def main() -> int:
     style_key, style_label = normalize_style(args.style)
     output_dir = args.output_dir
     ws = create_workspace(output_dir / "workspace", clean=True)
+    selected_codename = _selected_codename(args.device_codename, args.custom_codename)
     ctx = BuildContext(
         rom_url=args.rom_url,
         style=style_key,
         style_label=style_label,
         soc=args.soc,
         mode=args.mode,
+        device_codename=args.device_codename,
+        selected_codename=selected_codename,
         custom_codename=args.custom_codename,
         keep_workspace=args.keep_workspace,
         workspace=ws,
@@ -217,6 +261,8 @@ def main() -> int:
     print("[MEZO] Status: running")
     print(f"[SOC] {ctx.soc}")
     print(f"[STYLE] {ctx.style_label}")
+    if ctx.selected_codename:
+        print(f"[SELECTED DEVICE] {ctx.selected_codename}")
     try:
         _run_build(ctx)
     except Exception:

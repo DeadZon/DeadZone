@@ -3,6 +3,84 @@ name: DeadZone Snapdragon
 on:
   workflow_dispatch:
     inputs:
+      device_codename:
+        description: Device codename
+        required: true
+        type: choice
+        default: garnet
+        options:
+          - amethyst
+          - aurora
+          - babylon
+          - breeze
+          - chenfeng
+          - cupid
+          - dada
+          - dagu
+          - diting
+          - dizi
+          - flame
+          - fuxi
+          - garnet
+          - goku
+          - haotian
+          - haydn
+          - houji
+          - ingres
+          - ishtar
+          - lisa
+          - liuqin
+          - marble
+          - mayfly
+          - miro
+          - mondrian
+          - moonstone
+          - munch
+          - muyu
+          - myron
+          - nezha
+          - nuwa
+          - odin
+          - onyx
+          - pandora
+          - peridot
+          - piano
+          - pipa
+          - popsicle
+          - pudding
+          - redwood
+          - ruan
+          - sapphire
+          - sapphiren
+          - sheng
+          - shennong
+          - sky
+          - socrates
+          - star
+          - sunstone
+          - taoyao
+          - tapas
+          - thor
+          - topaz
+          - uke
+          - unicorn
+          - venus
+          - vermeer
+          - vili
+          - xuanyuan
+          - xun
+          - yudi
+          - yupei
+          - zeus
+          - zijin
+          - ziyi
+          - zizhan
+          - zorn
+          - custom
+      custom_codename:
+        description: Custom codename when device_codename is custom
+        required: false
+        type: string
       rom_url:
         description: ROM URL or path
         required: true
@@ -26,27 +104,24 @@ on:
           - build
           - production
       upload_pixeldrain:
-        description: Reserve PixelDrain upload wiring
+        description: Upload to PixelDrain after build
         required: false
         type: boolean
         default: false
       notify_telegram:
-        description: Reserve Telegram notification wiring
+        description: Send Telegram notification after build
         required: false
         type: boolean
         default: false
-      custom_codename:
-        description: Optional fallback codename when detection fails
+      keep_workspace:
+        description: Keep workspace for debugging
         required: false
-        type: string
+        type: boolean
+        default: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ROM_URL: ${{ inputs.rom_url }}
-      STYLE: ${{ inputs.style }}
-      MODE: ${{ inputs.mode }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,16 +133,37 @@ jobs:
           python3 -m pip install -r requirements.txt || true
       - name: Build DeadZone
         run: |
-          CUSTOM_CODENAME_FLAG=()
-          if [ -n "${{ inputs.custom_codename }}" ]; then
-            CUSTOM_CODENAME_FLAG=(--custom-codename "${{ inputs.custom_codename }}")
+          ROM_URL="${{ inputs.rom_url }}"
+          STYLE="${{ inputs.style }}"
+          MODE="${{ inputs.mode }}"
+          DEVICE="${{ inputs.device_codename }}"
+          CUSTOM="${{ inputs.custom_codename }}"
+
+          ARGS=(
+            --rom-url "$ROM_URL"
+            --style "$STYLE"
+            --soc snapdragon
+            --mode "$MODE"
+            --device-codename "$DEVICE"
+          )
+
+          if [ "$DEVICE" = "custom" ] && [ -n "$CUSTOM" ]; then
+            ARGS+=(--custom-codename "$CUSTOM")
           fi
-          python3 -m factory.deadzone \
-            --rom-url "$ROM_URL" \
-            --style "$STYLE" \
-            --soc snapdragon \
-            --mode "$MODE" \
-            "${CUSTOM_CODENAME_FLAG[@]}"
+
+          if [ "${{ inputs.keep_workspace }}" = "true" ]; then
+            ARGS+=(--keep-workspace)
+          fi
+
+          if [ "${{ inputs.upload_pixeldrain }}" = "true" ]; then
+            echo "[DeadZone] PixelDrain upload is reserved for the next stage and is not wired yet."
+          fi
+
+          if [ "${{ inputs.notify_telegram }}" = "true" ]; then
+            echo "[DeadZone] Telegram notification is reserved for the next stage and is not wired yet."
+          fi
+
+          python3 -m factory.deadzone "${ARGS[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: deadzone-snapdragon-output

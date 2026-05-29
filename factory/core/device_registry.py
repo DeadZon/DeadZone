@@ -104,9 +104,23 @@ def resolve_device(
 ) -> dict[str, Any]:
     rom = _rom_dict(rom_metadata)
     devices = load_devices()
-    detected = str(codename or _detected_codename(rom, ws) or "").strip().lower()
+    selected = str(codename or "").strip().lower()
+    detected = str(_detected_codename(rom, ws) or "").strip().lower()
     fallback = custom_codename.strip().lower()
-    resolved_codename = detected if detected and detected in devices else fallback
+    if selected and selected != "custom":
+        resolved_codename = selected
+        resolution_source = "selected"
+    elif selected == "custom":
+        if not fallback:
+            raise DeviceRegistryError("device_codename is custom, but no custom_codename was provided")
+        resolved_codename = fallback
+        resolution_source = "custom_codename"
+    elif detected:
+        resolved_codename = detected
+        resolution_source = "detected"
+    else:
+        resolved_codename = ""
+        resolution_source = "detected"
     if not resolved_codename:
         raise DeviceRegistryError("unknown device codename and no custom_codename fallback was provided")
     if resolved_codename not in devices:
@@ -121,10 +135,11 @@ def resolve_device(
     merged["_device_super"] = deepcopy(device.get("super") or {})
     merged["resolved_codename"] = resolved_codename
     merged["detected_codename"] = detected or "unknown"
+    merged["selected_codename"] = selected or "unknown"
     merged["custom_codename"] = fallback
     merged["profile_source"] = soc_profile.get("profile_source")
     merged["device_source"] = device.get("device_source")
-    merged["resolution_source"] = "detected" if detected == resolved_codename else "custom_codename"
+    merged["resolution_source"] = resolution_source
 
     if ws and write_report:
         write_json(ws.meta / "device_registry.json", merged)
@@ -142,6 +157,7 @@ def write_device_report(ws: Workspace, resolved: dict[str, Any]) -> None:
         f"profile source: {resolved.get('profile_source')}",
         f"device source: {resolved.get('device_source')}",
         f"resolution source: {resolved.get('resolution_source')}",
+        f"selected codename: {resolved.get('selected_codename')}",
         f"detected codename: {resolved.get('detected_codename')}",
         f"custom fallback: {resolved.get('custom_codename') or '(none)'}",
         "",
