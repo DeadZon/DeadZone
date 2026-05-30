@@ -93,6 +93,7 @@ class BuildContext:
     build_id: str = ""
     smart_unpack_result: dict = field(default_factory=dict)
     smart_unpack_route: str = ""
+    stop_after: str = ""
     reports: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     status: str = "RUNNING"
@@ -134,6 +135,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stable-normalize-mode", choices=["plan", "apply"], default="apply")
     parser.add_argument("--live-screen", nargs="?", const="true", default=None,
                         help="Enable animated live screen (true/false)")
+    parser.add_argument(
+        "--stop-after",
+        choices=["smart_unpack"],
+        default="",
+        dest="stop_after",
+        help="Stop the build pipeline after the specified stage (no repack/super/mods)",
+    )
     return parser.parse_args()
 
 
@@ -394,6 +402,70 @@ def _run_smart_unpack_stage(ctx: BuildContext, ws: Workspace) -> dict:
     return result
 
 
+def _annotate_smart_unpack_only_stop(ctx: BuildContext, ws: Workspace) -> None:
+    """Stamp stopped_after_smart_unpack=True into the JSON and txt report."""
+    result = ctx.smart_unpack_result
+    if not result:
+        return
+    result["stopped_after_smart_unpack"] = True
+    write_json(ws.meta / "smart_unpack.json", result)
+    report_path = ws.reports / "deadzone_smart_unpack_report.txt"
+    if report_path.is_file():
+        existing = report_path.read_text(encoding="utf-8")
+        if "stopped after smart_unpack" not in existing:
+            report_path.write_text(
+                existing + "stopped after smart_unpack : True\n",
+                encoding="utf-8",
+            )
+
+
+def _run_smart_unpack_only(ctx: BuildContext) -> BuildContext:
+    """Minimal pipeline that stops safely after the unpack stage.
+
+    Runs: prepare → download → detect → device → unpack.
+    Does NOT run inspect, image extraction, app policy, stable partition
+    rebuild, style, repack, super build, final ZIP, or any mod step.
+    """
+    ws = _stage(ctx, "prepare", lambda: _prepare_workspace(ctx))
+    ctx.rom_source = _stage(ctx, "download", lambda: download_rom(ctx.rom_url, ws))
+    ctx.rom_metadata = _stage(
+        ctx,
+        "detect",
+        lambda: detect_rom(
+            ctx.rom_source,
+            ws,
+            soc=ctx.soc,
+            custom_codename=ctx.custom_codename if ctx.device_codename.strip().lower() == "custom" else "",
+        ),
+    )
+    _warn_on_codename_mismatch(ctx)
+    ctx.device_profile = _stage(
+        ctx,
+        "device",
+        lambda: resolve_device(
+            _resolution_codename(ctx),
+            rom_metadata=ctx.rom_metadata,
+            custom_codename=ctx.custom_codename,
+            ws=ws,
+        ),
+    )
+    _update_resolved_device_metadata(ctx)
+    _print_device(ctx.device_profile)
+    _sync_device_to_state(ctx)
+    if ctx.telegram:
+        codename = ctx.device_profile.get("resolved_codename") or ctx.device_profile.get("codename") or "unknown"
+        ctx.telegram.device = str(codename)
+        ctx.telegram.detected_device = str(
+            ctx.device_profile.get("detected_codename") or getattr(ctx.rom_metadata, "codename", "unknown")
+        )
+        ctx.telegram_result = ctx.telegram.add_event("device resolved", "OK", str(codename))
+    _acquire_build_lock(ctx)
+    _stage(ctx, "unpack", lambda: _run_smart_unpack_stage(ctx, ws))
+    _annotate_smart_unpack_only_stop(ctx, ws)
+    ctx.status = "OK"
+    return ctx
+
+
 def _build_super_after_repack(ctx: BuildContext, unpack_result: Any) -> Any:
     inspection = inspect_workspace(ctx.workspace, ctx.rom_metadata, unpack_result)
     return build_repacked_super(ctx.workspace, ctx.rom_metadata, inspection)
@@ -608,7 +680,8 @@ def _write_final_reports(ctx: BuildContext) -> None:
 
 def _validate_build_args(args: argparse.Namespace) -> None:
     errors: list[str] = []
-    if not args.style:
+    stop_after = getattr(args, "stop_after", "") or ""
+    if not args.style and stop_after != "smart_unpack":
         errors.append("--style is required (stable, legend, gaming, epic)")
     if not args.soc:
         errors.append("--soc is required (mtk, snapdragon)")
@@ -638,6 +711,8 @@ def _print_startup_banner(ctx: BuildContext, args: argparse.Namespace, run_norma
     print(f"  SoC            : {ctx.soc}", flush=True)
     print(f"  Mode           : {ctx.mode}", flush=True)
     print(f"  Build ID       : {ctx.build_id}", flush=True)
+    if ctx.stop_after:
+        print(f"  Stop After     : {ctx.stop_after}", flush=True)
     print("=" * 60, flush=True)
     print(f"[MEZO] Status: running", flush=True)
     if ctx.upload_pixeldrain:
@@ -665,13 +740,17 @@ def main() -> int:
         _print_toolchain()
         return 0
     _validate_build_args(args)
-    style_key, style_label = normalize_style(args.style)
+    stop_after = getattr(args, "stop_after", "") or ""
+    if args.style:
+        style_key, style_label = normalize_style(args.style)
+    else:
+        style_key, style_label = "stable", "Stable"
     output_dir = args.output_dir
     ws = create_workspace(output_dir / "workspace", clean=True)
     selected_codename = _selected_codename(args.device_codename, args.custom_codename)
     super_target_bytes = bytes_from_decimal_gb(args.super_target_gb, 8_500_000_000)
     final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
-    generate_inventory = not args.skip_app_inventory
+    generate_inventory = (not args.skip_app_inventory) and stop_after != "smart_unpack"
     run_normalize = bool(style_key != "stable" and not args.skip_stable_app_normalize)
     live_screen_enabled = _bool_arg(getattr(args, "live_screen", None), False)
 
@@ -706,6 +785,7 @@ def main() -> int:
         generate_app_inventory=generate_inventory,
         run_stable_normalize=run_normalize,
         stable_normalize_mode=args.stable_normalize_mode,
+        stop_after=stop_after,
         build_state=build_state,
         event_bus=event_bus,
         build_id=build_state.build_id,
@@ -727,14 +807,22 @@ def main() -> int:
         ctx.live_screen.start()
     try:
         try:
-            _run_build(ctx)
+            if ctx.stop_after == "smart_unpack":
+                _run_smart_unpack_only(ctx)
+            else:
+                _run_build(ctx)
         except BuildAlreadyRunningError as lock_exc:
             print(f"[BUILD LOCK] {lock_exc}")
             print("[MEZO] Status: blocked by existing build lock")
             if ctx.live_screen:
                 ctx.live_screen.stop("BLOCKED")
             return 1
-        _stage(ctx, "upload", lambda: _run_upload(ctx))
+        if ctx.stop_after == "smart_unpack":
+            ctx.upload_result = write_skipped_upload_report(
+                ws, requested=False, reason="smart_unpack_only mode: no final ZIP produced"
+            )
+        else:
+            _stage(ctx, "upload", lambda: _run_upload(ctx))
         _stage(ctx, "telegram", lambda: _run_telegram_finish(ctx, "OK"))
         _stage(ctx, "cleanup", lambda: _run_cleanup(ctx))
     except Exception as exc:
@@ -772,7 +860,10 @@ def main() -> int:
         ctx.live_screen.stop("DONE")
     _write_final_reports(ctx)
     print("[MEZO] Status: completed")
-    print(f"[FINAL ZIP] {ctx.final_zip_path}")
+    if ctx.final_zip_path:
+        print(f"[FINAL ZIP] {ctx.final_zip_path}")
+    if ctx.stop_after == "smart_unpack":
+        print(f"[SMART UNPACK ONLY] route={ctx.smart_unpack_route} — stopped before repack/super/mods")
     return 0
 
 
