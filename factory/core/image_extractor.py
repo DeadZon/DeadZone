@@ -480,6 +480,22 @@ def extract_partition_images(ws: Workspace, info: RomInfo, inspection: dict[str,
     failed = sum(1 for item in results if item["status"] == "failed")
     skipped = sum(1 for item in results if item["status"] == "skipped")
 
+    # Regenerate fs_config and file_contexts for each successfully extracted partition.
+    fs_meta_results: list[dict] = []
+    if extracted:
+        from factory.core.fs_config import mezo_regenerate_fs_metadata
+        for item in results:
+            if item.get("status") != "extracted":
+                continue
+            part_name = str(item.get("partition") or "")
+            part_dir = ws.partitions / part_name
+            if not part_dir.is_dir():
+                part_dir = Path(str(item.get("extracted_path") or ""))
+            fs_result = mezo_regenerate_fs_metadata(ws, part_name, part_dir)
+            fs_meta_results.append(fs_result)
+        if fs_meta_results:
+            write_json(ws.meta / "fs_metadata.json", {"results": fs_meta_results})
+
     data = {
         "feature": "Stable App Inventory",
         "status": "ok" if extracted or listed else "no_extractable_partitions",

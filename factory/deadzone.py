@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from factory.core.artifacts import write_github_summary
 from factory.core.app_inventory import generate_app_inventory
+from factory.core.base_port_reports import deadzone_write_base_port_reports
 from factory.core.build_lock import BuildAlreadyRunningError, BuildLock, make_lock_key
 from factory.core.cleanup import cleanup
 from factory.core.error_classifier import classify_from_context
@@ -563,6 +564,8 @@ def _write_final_reports(ctx: BuildContext) -> None:
     ctx.reports = write_production_reports(ctx, ctx.workspace)
     summary = write_github_summary(ctx, ctx.workspace)
     ctx.reports["github_summary"] = str(summary)
+    base_port = deadzone_write_base_port_reports(ctx.workspace, ctx)
+    ctx.reports.update({f"base_port_{k}": v for k, v in base_port.items()})
 
 
 def _validate_build_args(args: argparse.Namespace) -> None:

@@ -6,6 +6,27 @@ from pathlib import Path
 from factory.core.workspace import Workspace, write_json
 
 
+def deadzone_safe_delete(path: Path, workspace_root: Path) -> None:
+    """Delete a path only when it is strictly inside workspace_root.
+
+    Raises RuntimeError if the resolved target escapes the workspace so that
+    cleanup can never silently delete files outside the build directory.
+    """
+    root_abs = workspace_root.resolve()
+    target_abs = path.resolve()
+    try:
+        target_abs.relative_to(root_abs)
+    except ValueError:
+        raise RuntimeError(
+            f"[SAFETY] Refusing to delete path outside workspace: "
+            f"{target_abs} is not under {root_abs}"
+        )
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.exists():
+        path.unlink()
+
+
 def cleanup(ws: Workspace, keep_workspace: bool = True) -> dict:
     removed: list[str] = []
     kept: list[str] = []
@@ -30,17 +51,23 @@ def cleanup(ws: Workspace, keep_workspace: bool = True) -> dict:
         "size_reduction_report.txt",
         "app_inventory_report.txt",
         "image_extraction_report.txt",
+        "deadzone_base_port_audit.txt",
+        "deadzone_rom_intake_report.txt",
+        "deadzone_partition_extract_report.txt",
+        "deadzone_fs_metadata_report.txt",
+        "deadzone_super_layout_report.txt",
+        "deadzone_repack_report.txt",
+        "deadzone_final_zip_report.txt",
     }
 
     def _remove(path: Path) -> None:
         if not path.exists():
             return
         try:
-            if path.is_dir():
-                shutil.rmtree(path)
-            else:
-                path.unlink()
+            deadzone_safe_delete(path, ws.root)
             removed.append(str(path))
+        except RuntimeError as exc:
+            errors.append(str(exc))
         except Exception as exc:
             errors.append(f"{path}: {exc}")
 
