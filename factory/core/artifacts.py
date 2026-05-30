@@ -42,9 +42,13 @@ def write_github_summary(ctx: Any, ws: Workspace) -> Path:
     selected = getattr(ctx, "selected_codename", "") or "(none)"
     resolved = str(device.get("resolved_codename") or device.get("codename") or selected)
     size_policy = read_json(ws.meta / "size_policy.json", {})
+    size_reduction = read_json(ws.meta / "size_reduction.json", {})
     final_zip_bytes = size_policy.get("final_zip_size") or (final_path.stat().st_size if final_path and final_path.is_file() else 0)
     final_max = size_policy.get("final_zip_max_allowed") or size_policy.get("final_zip_max_bytes") or 4_500_000_000
     size_reason = size_policy.get("reason") or "(none)"
+    size_reduction_level = size_reduction.get("level") or "(none)"
+    size_reduction_removed = size_reduction.get("removed_bytes") or 0
+    size_recommendation = size_policy.get("recommendation") or size_reduction.get("recommendation") or "(none)"
 
     lines = [
         "## DeadZone Build Summary",
@@ -60,7 +64,10 @@ def write_github_summary(ctx: Any, ws: Workspace) -> Path:
         f"- final ZIP size: {_size(final_path)}",
         f"- final ZIP bytes: {final_zip_bytes}",
         f"- final ZIP max allowed: {final_max}",
+        f"- size reduction level: {size_reduction_level}",
+        f"- size reduction removed bytes: {size_reduction_removed}",
         f"- size policy reason: {size_reason}",
+        f"- recommendation: {size_recommendation}",
         f"- PixelDrain link: {getattr(upload, 'url', '') or '(none)'}",
         f"- Telegram status: {getattr(telegram, 'status', 'not requested')}",
         f"- failed stage: {getattr(ctx, 'failed_stage', '') or '(none)'}",

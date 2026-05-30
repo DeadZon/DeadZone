@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from factory.core.workspace import Workspace
+from factory.core.workspace import Workspace, read_json
 
 
 MAX_TEXT_LEN = 4000
@@ -300,6 +300,14 @@ class TelegramStatus:
             lines.append(f"Final ZIP: {_ascii(final_name)}")
         if final_size:
             lines.append(f"Final size: {_ascii(final_size)}")
+        size_policy = read_json(self.workspace.meta / "size_policy.json", {})
+        size_reduction = read_json(self.workspace.meta / "size_reduction.json", {})
+        if build_status != "OK" and size_policy:
+            lines.append(f"Max allowed: {_ascii(size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes') or '')}")
+            lines.append(f"Size reduction: {_ascii(size_reduction.get('level') or '(none)')} / removed {_ascii(size_reduction.get('removed_bytes') or 0)} bytes")
+            recommendation = size_policy.get("recommendation") or size_reduction.get("recommendation")
+            if recommendation:
+                lines.append(f"Recommendation: {_ascii(recommendation)}")
         if upload_url:
             lines.append(f"PixelDrain: {_ascii(upload_url)}")
         return "\n".join(lines)

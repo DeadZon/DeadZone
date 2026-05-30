@@ -14,8 +14,8 @@ def summarize_error(error: object, stage: str = "") -> dict[str, str]:
 
     if clean_stage.lower() == "size_policy":
         title = "Final ZIP size policy failed"
-        hint = "Check size_policy_report.txt and final_zip_report.txt."
-        recommendation = "Enable size-reduction/debloat style to reach 4.5GB"
+        hint = "Check size_policy_report.txt, size_reduction_report.txt, and final_zip_report.txt."
+        recommendation = "Run base size reduction on writable partition trees and rebuild dynamic partition images"
     elif "super" in clean_stage.lower() and "no metadata allocation" in lower:
         title = "Super metadata allocation missing"
         hint = "Check payload metadata and the super profile report."

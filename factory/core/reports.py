@@ -70,6 +70,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     telegram_result = getattr(ctx, "telegram_result", None)
     status = getattr(ctx, "status", "UNKNOWN")
     size_policy = read_json(ws.meta / "size_policy.json", {})
+    size_reduction = read_json(ws.meta / "size_reduction.json", {})
     failed_stage = getattr(ctx, "failed_stage", "") or "(none)"
     started_at = getattr(ctx, "started_at", time.time())
     completed_at = getattr(ctx, "completed_at", None)
@@ -109,6 +110,9 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"final ZIP name: {Path(final_zip).name if final_zip else '(none)'}",
         f"final ZIP size: {_zip_size(final_zip)}",
         f"final ZIP max allowed: {size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes') or '(unknown)'}",
+        f"size reduction status: {size_reduction.get('status') or 'not run'}",
+        f"size reduction level: {size_reduction.get('level') or '(none)'}",
+        f"size reduction removed bytes: {size_reduction.get('removed_bytes') or 0}",
         f"size policy reason: {size_policy.get('reason') or '(none)'}",
         f"upload requested: {getattr(upload_result, 'requested', False)}",
         f"upload provider: {getattr(upload_result, 'provider', 'PixelDrain')}",
@@ -150,6 +154,9 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"final ZIP path: {final_zip or '(none)'}",
         f"final ZIP size: {_zip_size(final_zip)}",
         f"final ZIP max allowed: {size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes') or '(unknown)'}",
+        f"size reduction status: {size_reduction.get('status') or 'not run'}",
+        f"size reduction level: {size_reduction.get('level') or '(none)'}",
+        f"size reduction removed bytes: {size_reduction.get('removed_bytes') or 0}",
         f"size policy reason: {size_policy.get('reason') or '(none)'}",
         f"upload status: {getattr(upload_result, 'status', 'not requested')}",
         f"upload URL: {getattr(upload_result, 'url', '') or '(none)'}",
@@ -176,4 +183,10 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     toolchain_path = reports_dir / "toolchain_report.txt"
     if toolchain_path.exists():
         reports["toolchain"] = str(toolchain_path)
+    size_reduction_path = reports_dir / "size_reduction_report.txt"
+    if size_reduction_path.exists():
+        reports["size_reduction"] = str(size_reduction_path)
+    partition_size_path = reports_dir / "partition_size_report.txt"
+    if partition_size_path.exists():
+        reports["partition_size"] = str(partition_size_path)
     return reports

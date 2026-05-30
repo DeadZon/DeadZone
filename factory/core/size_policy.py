@@ -199,6 +199,24 @@ def _zip_totals(zip_path: Path | None) -> tuple[int, int, float]:
     return compressed, uncompressed, ratio
 
 
+def _zip_top_entries(zip_path: Path | None, limit: int = 50) -> list[dict[str, Any]]:
+    if not zip_path or not zip_path.is_file():
+        return []
+    import zipfile
+
+    with zipfile.ZipFile(zip_path) as zf:
+        entries = [
+            {
+                "path": item.filename,
+                "size": int(item.file_size),
+                "compressed_size": int(item.compress_size),
+            }
+            for item in zf.infolist()
+            if not item.is_dir()
+        ]
+    return sorted(entries, key=lambda item: int(item["size"]), reverse=True)[:limit]
+
+
 def collect_size_policy(
     ws: Workspace,
     final_zip: Path | None = None,
@@ -209,6 +227,7 @@ def collect_size_policy(
     super_layout = read_json(ws.meta / "super_layout.json", {})
     super_result = read_json(ws.meta / "super_build_result.json", {})
     final_meta = read_json(ws.meta / "final_zip.json", {})
+    size_reduction = read_json(ws.meta / "size_reduction.json", {})
     if final_zip is None and final_meta.get("zip"):
         final_zip = Path(str(final_meta["zip"]))
 
@@ -221,9 +240,17 @@ def collect_size_policy(
     selected_super_size = _int_value(super_layout.get("selected_super_size_bytes"), super_layout.get("target_super_size"))
     stock_super_size = _int_value(super_layout.get("stock_super_size_bytes"), super_layout.get("stock_super_size"), super_layout.get("target_super_size"))
     passed = final_size <= max_allowed if final_size else False
+    reduction_status = str(size_reduction.get("status") or "not run")
+    reduction_removed = _int_value(size_reduction.get("removed_bytes"))
+    reduction_level = str(size_reduction.get("level") or "")
+    excess = max(0, final_size - max_allowed) if final_size else 0
     if status == "FAILED":
         passed = False
-    recommendation = "Enable size-reduction/debloat style to reach 4.5GB" if not passed else "Current package meets the 4.5GB policy"
+    recommendation = "Current package meets the 4.5GB policy" if passed else "Run base size reduction on writable partition trees and rebuild dynamic partition images"
+    if reduction_status == "skipped":
+        recommendation = str(size_reduction.get("recommendation") or recommendation)
+    elif reduction_status == "ran" and excess > 0 and reduction_removed < excess:
+        recommendation = "More base removal or deeper partition rebuild is required to reach 4.5GB"
     if not reason and final_size and not passed:
         reason = f"Final ZIP is {final_size} bytes, max allowed is {max_allowed} bytes"
 
@@ -248,6 +275,14 @@ def collect_size_policy(
         "final_zip_max_bytes": max_allowed,
         "final_zip_max_allowed": max_allowed,
         "compression_ratio": ratio,
+        "size_reduction_status": reduction_status,
+        "size_reduction_level": reduction_level,
+        "size_reduction_removed_bytes": reduction_removed,
+        "size_reduction_reason": size_reduction.get("reason") or "",
+        "size_reduction_recommendation": size_reduction.get("recommendation") or "",
+        "target_excess_bytes": excess,
+        "target_possible_after_reported_reduction": bool(final_size and final_size - reduction_removed <= max_allowed),
+        "top_size_contributors": size_reduction.get("largest_remaining") or _zip_top_entries(final_zip),
         "pass": passed,
         "status": "PASSED" if passed else status,
         "reason": reason,
@@ -278,12 +313,28 @@ def write_size_policy_report(ws: Workspace, data: dict[str, Any]) -> None:
         f"final ZIP max bytes: {data.get('final_zip_max_bytes')}",
         f"final ZIP max allowed: {data.get('final_zip_max_allowed')}",
         f"compression ratio: {float(data.get('compression_ratio') or 0.0):.6f}",
+        f"size reduction status: {data.get('size_reduction_status')}",
+        f"size reduction level: {data.get('size_reduction_level') or '(none)'}",
+        f"size reduction removed bytes: {data.get('size_reduction_removed_bytes')}",
+        f"size reduction reason: {data.get('size_reduction_reason') or '(none)'}",
+        f"target excess bytes: {data.get('target_excess_bytes')}",
+        f"target possible after reported reduction: {data.get('target_possible_after_reported_reduction')}",
         f"pass/fail: {'PASS' if data.get('pass') else 'FAIL'}",
         f"reason: {data.get('reason') or '(none)'}",
         f"pass/fail reason: {data.get('pass_fail_reason') or '(none)'}",
         f"recommendation: {data.get('recommendation')}",
         "",
+        "top size contributors:",
     ]
+    for item in data.get("top_size_contributors") or []:
+        if isinstance(item, dict):
+            path = item.get("path", "")
+            partition = item.get("partition")
+            prefix = f"{partition}/" if partition else ""
+            lines.append(f"  - {prefix}{path}: {item.get('size')}")
+    if not data.get("top_size_contributors"):
+        lines.append("  (none)")
+    lines.append("")
     ws.reports.mkdir(parents=True, exist_ok=True)
     (ws.reports / "size_policy_report.txt").write_text("\n".join(lines), encoding="utf-8")
 
@@ -305,7 +356,12 @@ def enforce_final_zip_policy(ws: Workspace, final_zip: Path, allow_oversized_fin
     data["status"] = "PASSED" if passed else status
     if not passed:
         data["reason"] = reason
-        data["recommendation"] = "Enable size-reduction/debloat style to reach 4.5GB"
+        if data.get("size_reduction_status") == "skipped":
+            data["recommendation"] = data.get("size_reduction_recommendation") or "Run base size reduction on writable partition trees and rebuild dynamic partition images"
+        elif int(data.get("size_reduction_removed_bytes") or 0) < int(data.get("target_excess_bytes") or 0):
+            data["recommendation"] = "More base removal or deeper partition rebuild is required to reach 4.5GB"
+        else:
+            data["recommendation"] = "Rebuild dynamic partition images from reduced trees before final packaging"
     write_size_policy_report(ws, data)
     print(f"[SIZE] Super display target: {data.get('requested_super_target_bytes')}")
     print(f"[SIZE] Stock-safe super: {data.get('stock_super_size_bytes')}")
@@ -315,6 +371,7 @@ def enforce_final_zip_policy(ws: Workspace, final_zip: Path, allow_oversized_fin
     print(f"[SIZE] Dynamic allocation: {data.get('dynamic_allocation_total')}")
     print(f"[SIZE] Sparse super: {data.get('sparse_super_size')}")
     print(f"[SIZE] Final ZIP: {data.get('final_zip_size')}")
+    print(f"[SIZE] Max allowed: {data.get('final_zip_max_allowed')}")
     print(f"[SIZE] Policy: {data.get('status')}")
     if not passed and not policy.get("allow_oversized_final"):
         raise SizePolicyError(reason)

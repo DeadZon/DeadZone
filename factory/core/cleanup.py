@@ -25,6 +25,9 @@ def cleanup(ws: Workspace, keep_workspace: bool = True) -> dict:
         "upload_links.txt",
         "upload_report.txt",
         "github_summary.md",
+        "partition_size_report.txt",
+        "size_policy_report.txt",
+        "size_reduction_report.txt",
     }
 
     def _remove(path: Path) -> None:

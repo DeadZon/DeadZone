@@ -16,6 +16,8 @@ from factory.core.final_zip import build_final_zip
 from factory.core.inspector import inspect_workspace
 from factory.core.reports import write_production_reports
 from factory.core.repacker import build_repacked_super, repack_partitions
+from factory.core.size_reducer import LEVELS as SIZE_REDUCTION_LEVELS
+from factory.core.size_reducer import reduce_workspace_size
 from factory.core.size_policy import SUPER_SIZE_POLICIES, bytes_from_decimal_gb, default_policy, enforce_final_zip_policy, write_policy_config
 from factory.core.status import StageTracker
 from factory.core.super_profile import build_super_profile
@@ -52,6 +54,8 @@ class BuildContext:
     final_zip_max_bytes: int = 4_500_000_000
     super_size_policy: str = "stock_safe"
     allow_oversized_final: bool = False
+    enable_size_reduction: bool = True
+    size_reduction_level: str = "balanced"
     upload_pixeldrain: bool = False
     notify_telegram: bool = False
     upload_result: UploadResult = field(default_factory=UploadResult)
@@ -90,6 +94,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--final-zip-max-gb", default="4.5")
     parser.add_argument("--super-size-policy", choices=SUPER_SIZE_POLICIES, default="stock_safe")
     parser.add_argument("--allow-oversized-final", action="store_true")
+    parser.add_argument("--enable-size-reduction", nargs="?", const="true", default="true")
+    parser.add_argument("--size-reduction-level", choices=SIZE_REDUCTION_LEVELS, default="balanced")
     return parser.parse_args()
 
 
@@ -128,6 +134,17 @@ def _selected_codename(device_codename: str, custom_codename: str) -> str:
     if device == "custom":
         return custom
     return ""
+
+
+def _bool_arg(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    raw = str(value or "").strip().lower()
+    if raw in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if raw in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return default
 
 
 def _warn_on_codename_mismatch(ctx: BuildContext) -> None:
@@ -282,6 +299,15 @@ def _run_build(ctx: BuildContext) -> BuildContext:
         "inspect",
         lambda: inspect_workspace(ws, ctx.rom_metadata, unpack_result),  # type: ignore[arg-type]
     )
+    _stage(
+        ctx,
+        "size_reduction",
+        lambda: reduce_workspace_size(
+            ws,
+            enabled=ctx.enable_size_reduction,
+            level=ctx.size_reduction_level,
+        ),
+    )
     ctx.super_profile = _stage(
         ctx,
         "super_profile",
@@ -413,6 +439,8 @@ def main() -> int:
         final_zip_max_bytes=final_zip_max_bytes,
         super_size_policy=args.super_size_policy,
         allow_oversized_final=args.allow_oversized_final,
+        enable_size_reduction=_bool_arg(args.enable_size_reduction, True),
+        size_reduction_level=args.size_reduction_level,
     )
     ctx.tracker = StageTracker(ws)
     print("[DeadZone] Stage: production build")
@@ -429,6 +457,8 @@ def main() -> int:
     print("[SIZE] Stock-safe super: pending metadata")
     print("[SIZE] Selected super: pending metadata")
     print(f"[SIZE] Super policy: {ctx.super_size_policy}")
+    print(f"[SIZE REDUCTION] Level: {ctx.size_reduction_level}")
+    print(f"[SIZE REDUCTION] Enabled: {ctx.enable_size_reduction}")
     print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}")
     print(f"[SIZE] Allow oversized final: {ctx.allow_oversized_final}")
     ctx.telegram = TelegramStatus(

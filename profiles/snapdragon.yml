@@ -65,3 +65,69 @@ super:
     - vbmeta_system.img
     - vbmeta_vendor.img
     - super.img
+size_reduction:
+  rules:
+    - name: ota_updater_product_app
+      reason: Remove stock OTA updater package from final base build.
+      source: old_branch_profile
+      scope: product_app
+      partition: product
+      pattern: app/Updater
+      safety_level: balanced
+      kind: profile_path
+    - name: ota_updater_product_priv_app
+      reason: Remove stock OTA updater privileged package from final base build.
+      source: old_branch_profile
+      scope: product_priv_app
+      partition: product
+      pattern: priv-app/Updater
+      safety_level: balanced
+      kind: profile_path
+    - name: ota_updater_system_ext
+      reason: Remove stock OTA updater package from final base build.
+      source: old_branch_profile
+      scope: system_ext_app
+      partition: system_ext
+      pattern: app/Updater
+      safety_level: balanced
+      kind: profile_path
+    - name: ota_update_center
+      reason: Remove stock update center package from final base build.
+      source: old_branch_profile
+      scope: app_package
+      partition: "*"
+      pattern: "app/*Update*"
+      safety_level: balanced
+      kind: profile_path
+    - name: ota_update_center_priv
+      reason: Remove stock update center privileged package from final base build.
+      source: old_branch_profile
+      scope: priv_app_package
+      partition: "*"
+      pattern: "priv-app/*Update*"
+      safety_level: balanced
+      kind: profile_path
+    - name: analytics_core
+      reason: Remove non-essential analytics package.
+      source: old_branch_profile
+      scope: app_package
+      partition: product
+      pattern: "*/AnalyticsCore"
+      safety_level: aggressive
+      kind: profile_path
+    - name: advertising_service
+      reason: Remove non-essential advertising service package.
+      source: old_branch_profile
+      scope: app_package
+      partition: product
+      pattern: "*/MSA*"
+      safety_level: aggressive
+      kind: profile_path
+    - name: game_center
+      reason: Remove optional game center package.
+      source: old_branch_profile
+      scope: app_package
+      partition: product
+      pattern: "*/GameCenter*"
+      safety_level: aggressive
+      kind: profile_path

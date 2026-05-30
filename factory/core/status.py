@@ -16,6 +16,7 @@ STAGE_NAMES = [
     "device",
     "unpack",
     "inspect",
+    "size_reduction",
     "super_profile",
     "style",
     "repack",
