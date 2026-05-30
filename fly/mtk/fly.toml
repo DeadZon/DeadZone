@@ -1,0 +1,9 @@
+app = "deadzone-mtk-builder"
+primary_region = "fra"
+
+[build]
+  dockerfile = "dockerfile"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+  SOC = "mtk"

@@ -1,0 +1,159 @@
+name: fly_deadzone_snapdragon
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_codename:
+        description: Choose device
+        required: true
+        type: choice
+        default: garnet
+        options:
+          - amethyst
+          - aurora
+          - babylon
+          - breeze
+          - chenfeng
+          - cupid
+          - dada
+          - dagu
+          - diting
+          - dizi
+          - flame
+          - fuxi
+          - garnet
+          - goku
+          - haotian
+          - haydn
+          - houji
+          - ingres
+          - ishtar
+          - lisa
+          - liuqin
+          - marble
+          - mayfly
+          - miro
+          - mondrian
+          - moonstone
+          - munch
+          - muyu
+          - myron
+          - nezha
+          - nuwa
+          - odin
+          - onyx
+          - pandora
+          - peridot
+          - piano
+          - pipa
+          - popsicle
+          - pudding
+          - redwood
+          - ruan
+          - sapphire
+          - sapphiren
+          - sheng
+          - shennong
+          - sky
+          - socrates
+          - star
+          - sunstone
+          - taoyao
+          - tapas
+          - thor
+          - topaz
+          - uke
+          - unicorn
+          - venus
+          - vermeer
+          - vili
+          - xuanyuan
+          - xun
+          - yudi
+          - yupei
+          - zeus
+          - zijin
+          - ziyi
+          - zizhan
+          - zorn
+          - custom
+      custom_codename:
+        description: Custom codename when device_codename is custom
+        required: false
+        type: string
+      rom_url:
+        description: ROM URL or path
+        required: true
+        type: string
+      style:
+        description: DeadZone style
+        required: true
+        type: choice
+        default: Stable
+        options:
+          - Stable
+          - Legend
+          - Gaming
+          - EPiC
+      mode:
+        description: Build mode
+        required: true
+        type: choice
+        default: build
+        options:
+          - build
+          - production
+      upload_pixeldrain:
+        description: Upload to PixelDrain after build
+        required: false
+        type: boolean
+        default: false
+      allow_oversized_final:
+        description: Allow final ZIP over 4.5GB
+        required: false
+        type: boolean
+        default: false
+      VM_CPUS:
+        description: Fly.io VM CPUs
+        required: true
+        default: '8'
+      VM_MEMORY:
+        description: Fly.io VM Memory in MB
+        required: true
+        default: '65536'
+
+jobs:
+  launch_server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_SNAPDRAGON_API_TOKEN }}
+
+      - name: Run Build on Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_SNAPDRAGON_API_TOKEN }}
+        run: |
+          flyctl machine run . \
+            --app deadzone-snapdragon-builder \
+            --region fra \
+            --vm-cpu-kind performance \
+            --vm-cpus ${{ inputs.VM_CPUS }} \
+            --vm-memory ${{ inputs.VM_MEMORY }} \
+            --volume dz_snapdragon_data:/mnt/dz_data \
+            --env DEVICE_CODENAME=${{ inputs.device_codename }} \
+            --env CUSTOM_CODENAME=${{ inputs.custom_codename }} \
+            --env ROM_URL=${{ inputs.rom_url }} \
+            --env STYLE=${{ inputs.style }} \
+            --env MODE=${{ inputs.mode }} \
+            --env UPLOAD_PIXELDRAIN=${{ inputs.upload_pixeldrain }} \
+            --env ALLOW_OVERSIZED=${{ inputs.allow_oversized_final }} \
+            --env TELEGRAM_SNAPDRAGON_BOT_TOKEN=${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }} \
+            --env TELEGRAM_SNAPDRAGON_CHAT_ID=${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }} \
+            --env TELEGRAM_SNAPDRAGON_GROUP_ID=${{ secrets.TELEGRAM_SNAPDRAGON_GROUP_ID }} \
+            --env GITHUB_REPOSITORY=${{ github.repository }} \
+            --rm
