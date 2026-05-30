@@ -55,6 +55,22 @@ def _extract_archive(src: Path, dst: Path) -> None:
 
 
 def unpack_rom(source: Path, info: RomInfo, ws: Workspace) -> dict:
+    """Unpack *source* into *ws* using the adapter selected by *info.rom_type*.
+
+    Compatibility note (Phase 4):
+    This function remains the entry point for callers that have already run
+    ``detect_rom`` and have a ``RomInfo`` object.  It is intentionally left
+    unchanged so that existing tests and pipeline code continue to work.
+
+    For all new Phase 4+ pipeline code, use ``deadzone_smart_unpack`` from
+    ``factory.core.smart_unpack`` instead.  That function detects the input
+    type automatically, plans the best route, and returns the canonical
+    smart-unpack result dict without requiring a pre-built RomInfo.
+
+    The two paths coexist without conflict: unpack_rom operates on a
+    fully-classified RomInfo, while deadzone_smart_unpack auto-detects and
+    routes any supported ROM input type through one unified pipeline.
+    """
     print("[UNPACK] normalizing source into output/workspace")
     _extract_archive(source, ws.extracted)
     if info.rom_type == ROM_PAYLOAD:
