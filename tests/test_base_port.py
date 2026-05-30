@@ -47,6 +47,7 @@ def _ported_module_paths() -> list[Path]:
     return [
         base / "fs_config.py",
         base / "base_port_reports.py",
+        base / "rom_intake.py",
     ]
 
 
