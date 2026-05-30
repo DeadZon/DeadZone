@@ -2,7 +2,8 @@ app = "deadzone-snapdragon-builder"
 primary_region = "fra"
 
 [build]
-  dockerfile = "dockerfile"
+  dockerfile = "../../Dockerfile"
+  build-args = { SOC = "snapdragon" }
 
 [env]
   PYTHONUNBUFFERED = "1"

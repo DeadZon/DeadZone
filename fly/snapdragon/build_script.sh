@@ -52,14 +52,14 @@ echo "[SETUP] Cloning DeadZone repository..."
 mkdir -p /mnt/dz_data/build
 cd /mnt/dz_data/build
 
-if [ ! -d "DeadZone-main/.git" ]; then
-    rm -rf DeadZone-main
+if [ ! -d "DeadZone/.git" ]; then
+    rm -rf DeadZone
     git clone https://github.com/${GITHUB_REPOSITORY}.git --depth 1 temp_repo
-    mv temp_repo/DeadZone-main . 2>/dev/null || mv temp_repo/* . 2>/dev/null || true
+    mv temp_repo/DeadZone . 2>/dev/null || mv temp_repo/* . 2>/dev/null || true
     rm -rf temp_repo
 fi
 
-cd DeadZone-main
+cd DeadZone
 
 # ── Install Python deps ──────────────────────────────────────────────────────
 echo "[SETUP] Installing Python dependencies..."
