@@ -8,7 +8,10 @@ from typing import Any, Callable
 
 from factory.core.artifacts import write_github_summary
 from factory.core.app_inventory import generate_app_inventory
+from factory.core.build_lock import BuildAlreadyRunningError, BuildLock, make_lock_key
 from factory.core.cleanup import cleanup
+from factory.core.error_classifier import classify_from_context
+from factory.core.event_bus import EventBus
 from factory.core.stable_app_normalizer import normalize_stable_apps
 from factory.core.detector import detect_rom
 from factory.core.device_registry import list_devices, resolve_device
@@ -31,6 +34,9 @@ from factory.core.toolchain import resolve_toolchain
 from factory.core.unpacker import unpack_rom
 from factory.core.uploader import UploadResult, upload_final_zip_to_pixeldrain, write_skipped_upload_report
 from factory.core.workspace import Workspace, create_workspace, read_json, write_json
+from factory.live.live_screen import LiveScreen
+from factory.reports.app_inventory import compare_app_policy
+from factory.state.build_state import BuildState, create_build_state
 
 
 ALLOWED_SOCS = ("mtk", "snapdragon")
@@ -63,16 +69,23 @@ class BuildContext:
     generate_app_inventory: bool = True
     app_inventory_zip_path: Path | None = None
     app_inventory: dict[str, Any] = field(default_factory=dict)
+    app_policy: dict[str, Any] = field(default_factory=dict)
     image_extraction: dict[str, Any] = field(default_factory=dict)
     stable_normalize: dict[str, Any] = field(default_factory=dict)
     stable_normalize_mode: str = "apply"
     run_stable_normalize: bool = True
     upload_pixeldrain: bool = False
     notify_telegram: bool = False
+    live_screen_enabled: bool = False
     upload_result: UploadResult = field(default_factory=UploadResult)
     telegram_result: TelegramResult = field(default_factory=TelegramResult)
     telegram: TelegramStatus | None = None
     tracker: StageTracker | None = None
+    build_state: BuildState | None = None
+    event_bus: EventBus | None = None
+    live_screen: LiveScreen | None = None
+    build_lock: BuildLock | None = None
+    build_id: str = ""
     reports: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     status: str = "RUNNING"
@@ -112,6 +125,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stable-app-normalize", action="store_true")
     parser.add_argument("--skip-stable-app-normalize", action="store_true")
     parser.add_argument("--stable-normalize-mode", choices=["plan", "apply"], default="apply")
+    parser.add_argument("--live-screen", nargs="?", const="true", default=None,
+                        help="Enable animated live screen (true/false)")
     return parser.parse_args()
 
 
@@ -201,6 +216,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
     print("[MEZO] Status: started")
     if ctx.tracker:
         ctx.tracker.start(name)
+    if ctx.event_bus:
+        ctx.event_bus.emit_event(name, "RUN", f"Stage started: {name}")
     if ctx.telegram:
         ctx.telegram_result = ctx.telegram.add_event(name, "RUN")
     started = time.monotonic()
@@ -220,6 +237,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
             "error": str(exc),
         })
         print("[MEZO] Status: failed")
+        if ctx.event_bus:
+            ctx.event_bus.emit_event(name, "FAIL", str(exc))
         if ctx.telegram:
             detail = "Final ZIP exceeds 4.5GB policy" if name == "size_policy" else str(exc)
             ctx.telegram_result = ctx.telegram.add_event(name, "FAIL", detail)
@@ -236,6 +255,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
         "output_path": output_path,
     })
     print("[MEZO] Status: completed")
+    if ctx.event_bus:
+        ctx.event_bus.emit_event(name, "OK", f"Stage completed: {name}", file=output_path or None)
     if ctx.telegram:
         ctx.telegram_result = ctx.telegram.add_event(name, "OK")
     return result
@@ -274,6 +295,62 @@ def _prepare_workspace(ctx: BuildContext) -> Workspace:
     return ctx.workspace
 
 
+def _sync_device_to_state(ctx: BuildContext) -> None:
+    if ctx.build_state is None:
+        return
+    device = ctx.device_profile or {}
+    info = ctx.rom_metadata
+    codename = str(device.get("resolved_codename") or device.get("codename") or "unknown")
+    ctx.build_state.device = codename
+    ctx.build_state.android_version = str(getattr(info, "android_version", ctx.build_state.android_version) or "unknown")
+    ctx.build_state.rom_version = str(getattr(info, "build", ctx.build_state.rom_version) or "unknown")
+    if ctx.live_screen:
+        ctx.live_screen.update_rom_info(
+            device=codename,
+            rom_version=ctx.build_state.rom_version,
+            android_version=ctx.build_state.android_version,
+        )
+    ctx.build_state.save()
+
+
+def _acquire_build_lock(ctx: BuildContext) -> None:
+    device = ctx.device_profile or {}
+    info = ctx.rom_metadata
+    codename = str(device.get("resolved_codename") or device.get("codename") or "unknown")
+    build_ver = str(getattr(info, "build", "") or "unknown")
+    ws = ctx.workspace
+    key = make_lock_key(ctx.soc, ctx.style, codename, build_ver)
+    lock = BuildLock(ws.root.parent, key)
+    lock.acquire()
+    ctx.build_lock = lock
+
+
+def _run_app_policy_compare(ctx: BuildContext) -> None:
+    scanned_apps = (ctx.app_inventory or {}).get("apps") or []
+    if not scanned_apps:
+        return
+    try:
+        if ctx.event_bus:
+            ctx.event_bus.emit_event("app_policy_compare", "RUN", "Comparing apps against policy list")
+        ctx.app_policy = compare_app_policy(
+            ctx.workspace.reports,
+            scanned_apps,
+            build_state=ctx.build_state,
+        )
+        if ctx.event_bus:
+            counters = (ctx.app_policy or {}).get("counters", {})
+            ctx.event_bus.emit_event(
+                "app_policy_compare",
+                "OK",
+                "App policy comparison complete",
+                data=counters,
+            )
+    except Exception as exc:
+        print(f"[APP POLICY] Warning: comparison failed (non-fatal): {exc}")
+        if ctx.event_bus:
+            ctx.event_bus.emit_event("app_policy_compare", "WARN", f"App policy compare failed: {exc}")
+
+
 def _build_super_after_repack(ctx: BuildContext, unpack_result: Any) -> Any:
     inspection = inspect_workspace(ctx.workspace, ctx.rom_metadata, unpack_result)
     return build_repacked_super(ctx.workspace, ctx.rom_metadata, inspection)
@@ -300,11 +377,13 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     )
     _update_resolved_device_metadata(ctx)
     _print_device(ctx.device_profile)
+    _sync_device_to_state(ctx)
     if ctx.telegram:
         codename = ctx.device_profile.get("resolved_codename") or ctx.device_profile.get("codename") or "unknown"
         ctx.telegram.device = str(codename)
         ctx.telegram.detected_device = str(ctx.device_profile.get("detected_codename") or getattr(ctx.rom_metadata, "codename", "unknown"))
         ctx.telegram_result = ctx.telegram.add_event("device resolved", "OK", str(codename))
+    _acquire_build_lock(ctx)
     unpack_result = _stage(
         ctx,
         "unpack",
@@ -337,6 +416,7 @@ def _run_build(ctx: BuildContext) -> BuildContext:
             "inventory_package",
             lambda: build_inventory_package(ws, ctx.rom_metadata, ctx.app_inventory),  # type: ignore[arg-type]
         )
+        _run_app_policy_compare(ctx)
     _stage(
         ctx,
         "size_reduction",
@@ -393,12 +473,19 @@ def _run_telegram_finish(ctx: BuildContext, final_status: str) -> TelegramResult
     if error_path.is_file():
         error_summary = error_path.read_text(encoding="utf-8", errors="replace")[:800]
     try:
+        classified_error: dict[str, Any] = {}
+        if final_status.upper() != "OK":
+            try:
+                classified_error = classify_from_context(ctx)
+            except Exception:
+                pass
         ctx.telegram_result = ctx.telegram.finish(
             final_status,
             final_zip=ctx.final_zip_path,
             upload_url=upload_url,
             failed_stage=ctx.failed_stage,
             error_summary=error_summary,
+            classified_error=classified_error,
         )
         if ctx.generate_app_inventory:
             norm = ctx.stable_normalize or {}
@@ -481,6 +568,16 @@ def main() -> int:
     final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
     generate_inventory = not args.skip_app_inventory
     run_normalize = not args.skip_stable_app_normalize
+    live_screen_enabled = _bool_arg(getattr(args, "live_screen", None), False)
+
+    build_state = create_build_state(
+        output_dir,
+        soc=args.soc,
+        edition=style_label,
+        device=selected_codename or args.custom_codename or "unknown",
+    )
+    event_bus = EventBus(output_dir, build_state)
+
     ctx = BuildContext(
         rom_url=args.rom_url,
         style=style_key,
@@ -493,6 +590,7 @@ def main() -> int:
         keep_workspace=args.keep_workspace,
         upload_pixeldrain=args.upload_pixeldrain,
         notify_telegram=args.notify_telegram,
+        live_screen_enabled=live_screen_enabled,
         workspace=ws,
         super_target_bytes=super_target_bytes,
         final_zip_max_bytes=final_zip_max_bytes,
@@ -503,8 +601,12 @@ def main() -> int:
         generate_app_inventory=generate_inventory,
         run_stable_normalize=run_normalize,
         stable_normalize_mode=args.stable_normalize_mode,
+        build_state=build_state,
+        event_bus=event_bus,
+        build_id=build_state.build_id,
     )
     ctx.tracker = StageTracker(ws)
+    ctx.live_screen = LiveScreen(build_state, enabled=live_screen_enabled)
     print("[DeadZone] Stage: production build")
     print("[MEZO] Status: running")
     print(f"[SOC] {ctx.soc}")
@@ -534,8 +636,18 @@ def main() -> int:
         rom_source=ctx.rom_url,
     )
     ctx.telegram_result = ctx.telegram.start()
+    ctx.event_bus.emit_event("build", "RUN", f"Build started: {ctx.style_label} {ctx.soc}")
+    if ctx.live_screen:
+        ctx.live_screen.start()
     try:
-        _run_build(ctx)
+        try:
+            _run_build(ctx)
+        except BuildAlreadyRunningError as lock_exc:
+            print(f"[BUILD LOCK] {lock_exc}")
+            print("[MEZO] Status: blocked by existing build lock")
+            if ctx.live_screen:
+                ctx.live_screen.stop("BLOCKED")
+            return 1
         _stage(ctx, "upload", lambda: _run_upload(ctx))
         _stage(ctx, "telegram", lambda: _run_telegram_finish(ctx, "OK"))
         _stage(ctx, "cleanup", lambda: _run_cleanup(ctx))
@@ -547,6 +659,12 @@ def main() -> int:
         if ctx.status == "OK":
             ctx.status = "FAILED"
         ctx.cleanup_status = "not run after failure"
+        if ctx.build_state:
+            ctx.build_state.finish("FAILED")
+        if ctx.build_lock:
+            ctx.build_lock.release()
+        if ctx.live_screen:
+            ctx.live_screen.stop("FAILED")
         if ctx.failed_stage != "upload":
             reason = "build failed after final ZIP; upload skipped" if ctx.final_zip_path else "build failed before final ZIP"
             ctx.upload_result = write_skipped_upload_report(ws, requested=ctx.upload_pixeldrain, reason=reason)
@@ -560,6 +678,12 @@ def main() -> int:
         return 1
 
     ctx.completed_at = time.time()
+    if ctx.build_state:
+        ctx.build_state.finish("OK")
+    if ctx.build_lock:
+        ctx.build_lock.release()
+    if ctx.live_screen:
+        ctx.live_screen.stop("DONE")
     _write_final_reports(ctx)
     print("[MEZO] Status: completed")
     print(f"[FINAL ZIP] {ctx.final_zip_path}")

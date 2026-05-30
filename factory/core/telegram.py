@@ -16,6 +16,7 @@ from factory.core.workspace import Workspace, read_json
 
 MAX_TEXT_LEN = 4000
 MAX_DOCUMENT_BYTES = int(os.environ.get("TELEGRAM_MAX_DOCUMENT_BYTES", str(50 * 1024 * 1024)))
+_TELEGRAM_THROTTLE_SECONDS = float(os.environ.get("TELEGRAM_THROTTLE_SECONDS", "5"))
 
 
 @dataclass
@@ -81,6 +82,7 @@ class TelegramStatus:
         self.token, self.chat_id = _credentials_for_soc(soc)
         self.thread_id = _env_first("TELEGRAM_THREAD_ID", "TELEGRAM_MESSAGE_THREAD_ID")
         self.started_at = time.monotonic()
+        self._classified_error: dict = {}
         self.events: list[dict[str, str]] = []
         self.warnings: list[str] = []
         self.errors: list[str] = []
@@ -88,6 +90,7 @@ class TelegramStatus:
         self.enabled = False
         self.attempted = False
         self.message_id = self._existing_message_id()
+        self._last_edit_at: float = 0.0
 
     def start(self) -> TelegramResult:
         if not self.requested:
@@ -124,8 +127,12 @@ class TelegramStatus:
         self.events.append({"name": name, "status": clean_status, "detail": detail})
         if not self.enabled or self.message_id is None:
             return self.result(self.status)
+        now = time.monotonic()
+        if now - self._last_edit_at < _TELEGRAM_THROTTLE_SECONDS:
+            return self.result(self.status)
         response = self._edit(self._format("RUNNING"))
         if response.get("ok"):
+            self._last_edit_at = time.monotonic()
             self.status = "updated"
             return self.result("updated")
         self.errors.append(str(response.get("error") or "Telegram update failed"))
@@ -140,6 +147,7 @@ class TelegramStatus:
         upload_url: str = "",
         failed_stage: str = "",
         error_summary: str = "",
+        classified_error: dict | None = None,
     ) -> TelegramResult:
         if not self.requested:
             return self.result("not requested")
@@ -150,6 +158,7 @@ class TelegramStatus:
             detail = f"{detail} | upload: {upload_url}" if detail else f"upload: {upload_url}"
         self.failed_stage = failed_stage or self.failed_stage
         self.error_summary = error_summary or self.error_summary
+        self._classified_error = classified_error or {}
         self.events.append({"name": "final status", "status": final_status.upper(), "detail": detail})
         if not self.enabled:
             return self.result(self.status)
@@ -419,4 +428,25 @@ class TelegramStatus:
                 lines.append(f"Recommendation: {_ascii(recommendation)}")
         if upload_url:
             lines.append(f"PixelDrain: {_ascii(upload_url)}")
+
+        # Enrich with build_state counters when available
+        state_data = read_json(self.workspace.root.parent / "state" / "build_state.json", {})
+        counters = state_data.get("counters", {})
+        if any(counters.values()):
+            lines.append(
+                f"Apps: found={counters.get('default_found', 0)} "
+                f"extra={counters.get('extra_apps', 0)} "
+                f"missing={counters.get('missing_apps', 0)}"
+            )
+
+        # Classified error on failure
+        if build_status.upper() not in {"OK", "RUNNING"} and self._classified_error:
+            ce = self._classified_error
+            lines.extend([
+                "",
+                f"Error type   : {_ascii(ce.get('error_type', ''))}",
+                f"Cause        : {_ascii(ce.get('cause', '')[:200])}",
+                f"Suggested fix: {_ascii(ce.get('suggested_fix', '')[:200])}",
+            ])
+
         return "\n".join(lines)
