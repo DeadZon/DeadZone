@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from factory.core.workspace import Workspace, read_json
+from factory.core.workspace import Workspace, read_json, write_json
 
 
 MAX_TEXT_LEN = 4000
@@ -113,6 +113,7 @@ def _stage_title(stage_id: str) -> str:
     return STAGE_DISPLAY.get(stage_id, {}).get("title", stage_id)
 MAX_DOCUMENT_BYTES = int(os.environ.get("TELEGRAM_MAX_DOCUMENT_BYTES", str(50 * 1024 * 1024)))
 _TELEGRAM_THROTTLE_SECONDS = float(os.environ.get("TELEGRAM_THROTTLE_SECONDS", "5"))
+_TELEGRAM_MIN_UPDATE_SECONDS = 8.0
 
 
 @dataclass
@@ -164,6 +165,45 @@ def _display_source(value: str) -> str:
     return Path(raw).name or "(none)"
 
 
+def _float_env(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _default_update_interval() -> float:
+    default = 20.0 if os.environ.get("GITHUB_ACTIONS", "").lower() == "true" else 15.0
+    stage_raw = os.environ.get("DEADZONE_TELEGRAM_STAGE_UPDATE_INTERVAL_SECONDS", "").strip()
+    if stage_raw:
+        return _float_env("DEADZONE_TELEGRAM_STAGE_UPDATE_INTERVAL_SECONDS", default)
+    return _float_env("DEADZONE_TELEGRAM_UPDATE_INTERVAL_SECONDS", default)
+
+
+def _parse_error_summary(text: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in str(text or "").splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        key = key.strip().lower()
+        if key in {"status", "failed stage", "title", "reason", "recommendation", "hint"}:
+            fields[key] = value.strip()
+    return fields
+
+
+def _meaningful_hint(value: object) -> str:
+    hint = _ascii(value).strip()
+    if len(hint) <= 1:
+        return ""
+    if ":" in hint and hint.lower().split(":", 1)[0] in {"status", "failed stage", "title", "reason", "recommendation", "hint"}:
+        return ""
+    return hint
+
+
 class TelegramStatus:
     def __init__(self, enabled: bool, soc: str, style: str, device: str, workspace: Workspace, rom_source: str = ""):
         self.requested = bool(enabled)
@@ -187,6 +227,8 @@ class TelegramStatus:
         self.attempted = False
         self.message_id = self._existing_message_id()
         self._last_edit_at: float = 0.0
+        self._last_stage: str = ""
+        self._update_interval_seconds = _default_update_interval()
 
     def start(self) -> TelegramResult:
         if not self.requested:
@@ -209,6 +251,8 @@ class TelegramStatus:
                 message_id = response["result"].get("message_id")
                 if message_id is not None:
                     self.message_id = int(message_id)
+            self._last_edit_at = time.monotonic()
+            self._save_message_id()
             print("[TELEGRAM] Status: running")
             return self.result("running")
         self.status = "failed"
@@ -224,8 +268,23 @@ class TelegramStatus:
         if not self.enabled or self.message_id is None:
             return self.result(self.status)
         now = time.monotonic()
-        if now - self._last_edit_at < _TELEGRAM_THROTTLE_SECONDS:
+        stage_changed = clean_status == "RUN" and name != self._last_stage
+        stable_summary_ready = name == "stable_app_policy" and clean_status == "OK"
+        if stage_changed:
+            self._last_stage = name
+        elapsed = now - self._last_edit_at if self._last_edit_at else self._update_interval_seconds
+        force = stage_changed or stable_summary_ready
+        reason = "stable_app_policy_summary" if stable_summary_ready else ("stage_changed" if stage_changed else "interval")
+        min_seconds = max(_TELEGRAM_MIN_UPDATE_SECONDS, float(_TELEGRAM_THROTTLE_SECONDS))
+        if not force and elapsed < min_seconds:
+            print(f"[TELEGRAM] skipped update: reason=throttle elapsed={elapsed:.0f}s")
             return self.result(self.status)
+        if not force and elapsed < self._update_interval_seconds:
+            return self.result(self.status)
+        if reason == "interval":
+            print(f"[TELEGRAM] edit live message: reason=interval stage={name} elapsed={elapsed:.0f}s")
+        else:
+            print(f"[TELEGRAM] edit live message: reason={reason} stage={name}")
         response = self._edit(self._format("RUNNING"))
         if response.get("ok"):
             self._last_edit_at = time.monotonic()
@@ -260,11 +319,18 @@ class TelegramStatus:
             return self.result(self.status)
         text = self._format(final_status.upper(), final_zip=final_zip, upload_url=upload_url)
         self.attempted = True
-        response = self._edit(text) if self.message_id is not None else self._send(text)
+        reason = "final_success" if final_status.upper() == "OK" else "final_failure"
+        print(f"[TELEGRAM] edit live message: reason={reason}")
+        if self.message_id is None:
+            self.errors.append("Telegram final update skipped because no live message_id exists")
+            self.status = "failed"
+            return self.result("failed")
+        response = self._edit(text)
         if response.get("ok"):
             self.status = "completed" if final_status.upper() == "OK" else "failed"
             if isinstance(response.get("result"), dict) and response["result"].get("message_id") is not None:
                 self.message_id = int(response["result"]["message_id"])
+            self._save_message_id()
             print(f"[TELEGRAM] Status: {self.status}")
             return self.result(self.status)
         self.errors.append(str(response.get("error") or "Telegram final update failed"))
@@ -377,12 +443,27 @@ class TelegramStatus:
     def _existing_message_id(self) -> int | None:
         raw = os.environ.get("DEADZONE_TELEGRAM_MESSAGE_ID", "").strip()
         if not raw:
+            stored = read_json(self.workspace.meta / "telegram_status.json", {})
+            raw = str(stored.get("message_id") or "").strip()
+        if not raw:
             return None
         try:
             return int(raw)
         except ValueError:
             self.warnings.append("DEADZONE_TELEGRAM_MESSAGE_ID is not an integer; sending a new message")
             return None
+
+    def _save_message_id(self) -> None:
+        if self.message_id is None:
+            return
+        write_json(
+            self.workspace.meta / "telegram_status.json",
+            {
+                "message_id": self.message_id,
+                "chat_id": self.chat_id,
+                "status": self.status,
+            },
+        )
 
     def _base_payload(self, text: str) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -407,8 +488,8 @@ class TelegramStatus:
         response = self._post("editMessageText", payload)
         if response.get("ok"):
             return response
-        self.warnings.append("Telegram edit failed; sent a new status message")
-        return self._send(text)
+        self.warnings.append("Telegram edit failed; live status message was not replaced")
+        return response
 
     def _post(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = f"https://api.telegram.org/bot{self.token}/{method}"
@@ -612,14 +693,21 @@ class TelegramStatus:
             if failed_stage:
                 lines.append("")
                 lines.append(f"Failed stage: {_stage_title(failed_stage)}")
-            if self.error_summary:
-                lines.append(f"Error: {_ascii(self.error_summary)[:300]}")
-            if self._classified_error:
-                ce = self._classified_error
-                lines.append(f"Error type: {_ascii(ce.get('error_type', ''))}")
-                lines.append(f"Cause: {_ascii(ce.get('cause', ''))[:200]}")
-                lines.append(f"Suggested fix: {_ascii(ce.get('suggested_fix', ''))[:200]}")
-                suggested_check = ce.get("suggested_check") or ce.get("suggested_fix", "")
-                lines.append(f"Suggested check: {_ascii(suggested_check)[:200]}")
+            parsed = _parse_error_summary(self.error_summary)
+            ce = self._classified_error or {}
+            error_type = _ascii(ce.get("error_type", "") or "BUILD_FAILED")
+            cause = _ascii(ce.get("cause", "") or parsed.get("reason", "") or self.error_summary).strip()
+            suggested_fix = _ascii(ce.get("suggested_fix", "") or parsed.get("recommendation", "")).strip()
+            suggested_check = _meaningful_hint(ce.get("suggested_check") or parsed.get("hint"))
+            if not suggested_check:
+                suggested_check = suggested_fix
+            if error_type:
+                lines.append(f"Error type: {error_type}")
+            if cause:
+                lines.append(f"Cause: {cause[:200]}")
+            if suggested_fix:
+                lines.append(f"Suggested fix: {suggested_fix[:200]}")
+            if suggested_check:
+                lines.append(f"Suggested check: {suggested_check[:200]}")
 
         return "\n".join(lines)

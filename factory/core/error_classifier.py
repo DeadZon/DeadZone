@@ -90,11 +90,45 @@ _SIGNATURES: list[dict[str, Any]] = [
     },
 ]
 
+_ROM_MISSING_STAGES = {"download", "prepare", "rom_detect"}
+
+
+def _is_apps_list_missing(raw: str, stage: str) -> bool:
+    lower = raw.lower()
+    return (
+        stage.lower() == "stable_app_policy"
+        and (
+            "apps.list" in lower
+            or "listmezo/free/apps.list" in lower
+            or "stable app policy requires" in lower
+        )
+    )
+
+
+def _is_rom_missing_context(raw: str, stage: str) -> bool:
+    stage_lower = stage.lower()
+    lower = raw.lower()
+    if stage_lower in _ROM_MISSING_STAGES:
+        return True
+    if stage_lower == "payload_unpack":
+        return any(token in lower for token in ("rom", "ota", ".zip", "payload.bin", "rom source", "rom url"))
+    return any(token in lower for token in ("rom path", "rom url", "rom source"))
+
 
 def classify_error(error: str, stage: str = "") -> dict[str, Any]:
     raw = str(error or "").strip()
     lower = raw.lower()
     stage_lower = stage.lower()
+
+    if _is_apps_list_missing(raw, stage_lower):
+        return {
+            "error_type": "APPS_LIST_MISSING",
+            "stage": stage or "stable_app_policy",
+            "cause": "ListMezo/free/apps.list was not found",
+            "suggested_fix": "Add ListMezo/free/apps.list to the repository",
+            "suggested_check": "Verify the file exists at repo root before Stable App Policy runs",
+            "raw_error": raw[:800],
+        }
 
     for sig in _SIGNATURES:
         stage_hint = sig["stage_hint"]
@@ -102,6 +136,9 @@ def classify_error(error: str, stage: str = "") -> dict[str, Any]:
 
         stage_match = stage_hint in stage_lower or not stage_lower
         pattern_match = any(p in lower for p in patterns)
+
+        if sig["error_type"] == "MISSING_ROM" and not _is_rom_missing_context(raw, stage_lower):
+            continue
 
         if pattern_match or (stage_match and stage_hint in stage_lower):
             return {

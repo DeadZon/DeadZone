@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 _APPS_LIST_ENV = "LISTMEZO_APPS_LIST"
 _APPS_LIST_RELATIVE = "ListMezo/free/apps.list"
-_APPS_LIST_ABSOLUTE = "/home/mezo/Desktop/MEZO/ListMezo/free/apps.list"
+_APPS_LIST_ABSOLUTE = ""
 
 
 # ---------------------------------------------------------------------------
@@ -101,10 +101,12 @@ def _parse_apps_list(path: Path) -> list[dict[str, str]]:
 
 
 def _find_apps_list() -> Path | None:
+    override = os.environ.get(_APPS_LIST_ENV, "").strip()
+    if override:
+        p = Path(override)
+        return p if p.is_file() else None
     candidates = [
-        os.environ.get(_APPS_LIST_ENV, ""),
         _APPS_LIST_RELATIVE,
-        _APPS_LIST_ABSOLUTE,
     ]
     for candidate in candidates:
         if not candidate:

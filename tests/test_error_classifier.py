@@ -10,6 +10,34 @@ def test_classify_missing_rom():
     assert result["suggested_fix"]
 
 
+def test_classify_stable_app_policy_missing_apps_list():
+    result = classify_error(
+        "Stable App Policy requires ListMezo/free/apps.list but the file was not found",
+        "stable_app_policy",
+    )
+    assert result["error_type"] == "APPS_LIST_MISSING"
+    assert result["stage"] == "stable_app_policy"
+    assert result["cause"] == "ListMezo/free/apps.list was not found"
+    assert result["suggested_fix"] == "Add ListMezo/free/apps.list to the repository"
+    assert result["suggested_check"] == "Verify the file exists at repo root before Stable App Policy runs"
+
+
+def test_classify_stable_app_policy_apps_list_never_missing_rom():
+    result = classify_error("ListMezo/free/apps.list: no such file or directory", "stable_app_policy")
+    assert result["error_type"] == "APPS_LIST_MISSING"
+    assert result["error_type"] != "MISSING_ROM"
+
+
+def test_classify_generic_file_not_found_in_download_can_be_missing_rom():
+    result = classify_error("No such file or directory", "download")
+    assert result["error_type"] == "MISSING_ROM"
+
+
+def test_classify_generic_file_not_found_in_stable_policy_not_missing_rom():
+    result = classify_error("No such file or directory", "stable_app_policy")
+    assert result["error_type"] != "MISSING_ROM"
+
+
 def test_classify_payload_unpack():
     result = classify_error("payload.bin extraction failed: bad magic", "unpack")
     assert result["error_type"] == "PAYLOAD_UNPACK_FAILED"

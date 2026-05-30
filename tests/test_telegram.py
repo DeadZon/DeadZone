@@ -276,6 +276,60 @@ def test_telegram_failed_message_fallback_suggested_check(tmp_path):
     assert "Suggested check: Check PIXELDRAIN_API_KEY" in text
 
 
+def test_telegram_failed_message_cleans_structured_error_summary(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws, style="Stable", device="zircon", soc="mtk")
+    tg.failed_stage = "stable_app_policy"
+    tg.error_summary = "\n".join(
+        [
+            "MEZO / DeadZone Error Summary",
+            "status: FAILED",
+            "failed stage: stable_app_policy",
+            "title: Required file is missing",
+            "reason: Stable App Policy requires ListMezo/free/apps.list but the file was not found",
+            "recommendation: Check the previous stage report and workspace logs.",
+            "hint: C",
+        ]
+    )
+    tg._classified_error = {
+        "error_type": "APPS_LIST_MISSING",
+        "cause": "ListMezo/free/apps.list was not found",
+        "suggested_fix": "Add ListMezo/free/apps.list to the repository",
+        "suggested_check": "Verify the file exists at repo root before Stable App Policy runs",
+    }
+
+    text = tg._format("FAILED")
+
+    assert "MEZO / DeadZone Error Summary" not in text
+    for raw in ("status:", "failed stage:", "title:", "reason:", "recommendation:", "hint:"):
+        assert raw not in text
+    assert "Failed stage: Applying Stable App Policy" in text
+    assert "Error type: APPS_LIST_MISSING" in text
+    assert "Cause: ListMezo/free/apps.list was not found" in text
+    assert "Suggested fix: Add ListMezo/free/apps.list to the repository" in text
+    assert "Suggested check: Verify the file exists at repo root before Stable App Policy runs" in text
+    assert "Suggested check: C" not in text
+
+
+def test_telegram_failed_message_omits_malformed_hint(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.failed_stage = "stable_app_policy"
+    tg.error_summary = "\n".join(
+        [
+            "reason: ListMezo/free/apps.list was not found",
+            "recommendation: Add ListMezo/free/apps.list to the repository",
+            "hint: C",
+        ]
+    )
+    tg._classified_error = {}
+
+    text = tg._format("FAILED")
+
+    assert "Suggested check: Add ListMezo/free/apps.list to the repository" in text
+    assert "Suggested check: C" not in text
+
+
 # ---------------------------------------------------------------------------
 # test_telegram_edits_same_message_id
 # ---------------------------------------------------------------------------
@@ -310,3 +364,96 @@ def test_telegram_edits_same_message_id(tmp_path):
     assert len(sends) == 1, f"Expected 1 sendMessage, got {len(sends)}: {api_calls}"
     assert len(edits) >= 1, f"Expected at least 1 editMessageText, got {len(edits)}: {api_calls}"
     assert tg.message_id == 42
+
+
+def test_telegram_stage_change_forces_update_immediately(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.message_id = 42
+    tg._last_edit_at = 99.0
+    api_calls: list[tuple[str, dict]] = []
+    tg._post = lambda method, payload: api_calls.append((method, payload)) or {"ok": True, "result": {"message_id": 42}}  # type: ignore[assignment]
+
+    with patch("factory.core.telegram.time.monotonic", return_value=100.0):
+        tg.add_event("super", "RUN")
+
+    assert [m for m, _ in api_calls] == ["editMessageText"]
+
+
+def test_telegram_long_stage_updates_after_configured_interval(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.message_id = 42
+    tg._last_stage = "super"
+    tg._last_edit_at = 80.0
+    tg._update_interval_seconds = 20.0
+    api_calls: list[str] = []
+    tg._post = lambda method, payload: api_calls.append(method) or {"ok": True, "result": {"message_id": 42}}  # type: ignore[assignment]
+
+    with patch("factory.core.telegram.time.monotonic", return_value=100.0):
+        tg.add_event("super", "OK")
+
+    assert api_calls == ["editMessageText"]
+
+
+def test_telegram_throttle_blocks_too_fast_updates(tmp_path, capsys):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.message_id = 42
+    tg._last_stage = "super"
+    tg._last_edit_at = 96.0
+    api_calls: list[str] = []
+    tg._post = lambda method, payload: api_calls.append(method) or {"ok": True, "result": {"message_id": 42}}  # type: ignore[assignment]
+
+    with patch("factory.core.telegram.time.monotonic", return_value=100.0):
+        tg.add_event("super", "OK")
+
+    assert api_calls == []
+    assert "[TELEGRAM] skipped update: reason=throttle elapsed=4s" in capsys.readouterr().out
+
+
+def test_telegram_github_actions_default_interval_is_20_seconds(tmp_path, monkeypatch):
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("DEADZONE_TELEGRAM_UPDATE_INTERVAL_SECONDS", raising=False)
+    monkeypatch.delenv("DEADZONE_TELEGRAM_STAGE_UPDATE_INTERVAL_SECONDS", raising=False)
+    ws = _make_ws(tmp_path)
+
+    tg = _make_tg(ws)
+
+    assert tg._update_interval_seconds == 20.0
+
+
+def test_telegram_local_default_interval_is_15_seconds(tmp_path, monkeypatch):
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("DEADZONE_TELEGRAM_UPDATE_INTERVAL_SECONDS", raising=False)
+    monkeypatch.delenv("DEADZONE_TELEGRAM_STAGE_UPDATE_INTERVAL_SECONDS", raising=False)
+    ws = _make_ws(tmp_path)
+
+    tg = _make_tg(ws)
+
+    assert tg._update_interval_seconds == 15.0
+
+
+def test_telegram_update_interval_env_override(tmp_path, monkeypatch):
+    monkeypatch.setenv("DEADZONE_TELEGRAM_UPDATE_INTERVAL_SECONDS", "11")
+    monkeypatch.delenv("DEADZONE_TELEGRAM_STAGE_UPDATE_INTERVAL_SECONDS", raising=False)
+    ws = _make_ws(tmp_path)
+
+    tg = _make_tg(ws)
+
+    assert tg._update_interval_seconds == 11.0
+
+
+def test_telegram_success_and_failure_force_final_edit(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.message_id = 42
+    tg._last_edit_at = 99.0
+    api_calls: list[tuple[str, int | None]] = []
+    tg._post = lambda method, payload: api_calls.append((method, payload.get("message_id"))) or {"ok": True, "result": {"message_id": 42}}  # type: ignore[assignment]
+
+    with patch("factory.core.telegram.time.monotonic", return_value=100.0):
+        tg.finish("OK")
+        tg.finish("FAIL")
+
+    assert api_calls == [("editMessageText", 42), ("editMessageText", 42)]
