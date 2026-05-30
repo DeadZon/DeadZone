@@ -52,16 +52,16 @@ echo "[SETUP] Cloning DeadZone repository..."
 mkdir -p /mnt/dz_data/build
 cd /mnt/dz_data/build
 
-if [ ! -d "DeadZone-main/.git" ]; then
-    rm -rf DeadZone-main
+if [ ! -d "DeadZone/.git" ]; then
+    rm -rf DeadZone
     if [ -n "${GITHUB_TOKEN}" ]; then
-        git clone https://x-access-token:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git --depth 1 DeadZone-main
+        git clone https://x-access-token:${GITHUB_TOKEN}@github.com/DeadZon/DeadZone.git --depth 1 DeadZone
     else
-        git clone https://github.com/DeadZon/DeadZone.git --depth 1 DeadZone-main
+        git clone https://github.com/DeadZon/DeadZone.git --depth 1 DeadZone
     fi
 fi
 
-cd DeadZone-main
+cd DeadZone
 
 # ── Install Python deps ──────────────────────────────────────────────────────
 echo "[SETUP] Installing Python dependencies..."
