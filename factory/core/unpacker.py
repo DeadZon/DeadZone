@@ -6,17 +6,7 @@ import tarfile
 import zipfile
 from pathlib import Path
 
-from factory.core.detector import (
-    ROM_EU,
-    ROM_FASTBOOT_TGZ,
-    ROM_FASTBOOT_ZIP,
-    ROM_IMAGES,
-    ROM_NEW_DAT,
-    ROM_PAYLOAD,
-    ROM_RAW_SUPER,
-    ROM_SPLIT_SUPER,
-    RomInfo,
-)
+from factory.core.detector import RomInfo
 from factory.core.workspace import Workspace, write_json
 
 
@@ -55,40 +45,42 @@ def _extract_archive(src: Path, dst: Path) -> None:
 
 
 def unpack_rom(source: Path, info: RomInfo, ws: Workspace) -> dict:
-    """Unpack *source* into *ws* using the adapter selected by *info.rom_type*.
+    """Compatibility wrapper: delegates to deadzone_smart_unpack (Phase 5).
 
-    Compatibility note (Phase 4):
-    This function remains the entry point for callers that have already run
-    ``detect_rom`` and have a ``RomInfo`` object.  It is intentionally left
-    unchanged so that existing tests and pipeline code continue to work.
+    Old callers that pass a RomInfo continue to work.  The RomInfo argument
+    is accepted but not used for routing — deadzone_smart_unpack auto-detects
+    the input type and selects the correct route, so the two paths no longer
+    compete.
 
-    For all new Phase 4+ pipeline code, use ``deadzone_smart_unpack`` from
-    ``factory.core.smart_unpack`` instead.  That function detects the input
-    type automatically, plans the best route, and returns the canonical
-    smart-unpack result dict without requiring a pre-built RomInfo.
+    Returns a legacy-compatible dict with keys:
+      adapter         – "smart_unpack:<route>"
+      images          – list of image filenames found in ws.images
+      partition_sizes – {} (sizes are not carried through the smart unpack path;
+                        inspect_workspace falls back to workspace_scan mode)
+      smart_unpack    – full deadzone_smart_unpack result dict
 
-    The two paths coexist without conflict: unpack_rom operates on a
-    fully-classified RomInfo, while deadzone_smart_unpack auto-detects and
-    routes any supported ROM input type through one unified pipeline.
+    Raises RuntimeError with a clear message if the input is unsupported or
+    required partitions are missing.
     """
-    print("[UNPACK] normalizing source into output/workspace")
-    _extract_archive(source, ws.extracted)
-    if info.rom_type == ROM_PAYLOAD:
-        from factory.adapters import payload as adapter
-    elif info.rom_type in {ROM_FASTBOOT_TGZ, ROM_FASTBOOT_ZIP}:
-        from factory.adapters import fastboot as adapter
-    elif info.rom_type == ROM_EU:
-        from factory.adapters import eu as adapter
-    elif info.rom_type in {ROM_RAW_SUPER, ROM_SPLIT_SUPER}:
-        from factory.adapters import super as adapter
-    elif info.rom_type == ROM_NEW_DAT:
-        from factory.adapters import new_dat as adapter
-    elif info.rom_type == ROM_IMAGES:
-        from factory.adapters import images as adapter
-    else:
-        raise RuntimeError(f"unsupported ROM type: {info.rom_type}")
-    result = adapter.adapt(ws.extracted, ws)
-    write_json(ws.meta / "unpack_result.json", result)
-    print(f"[UNPACK] Adapter: {result.get('adapter')}")
-    print(f"[UNPACK] Images: {len(result.get('images') or [])}")
-    return result
+    from factory.core.smart_unpack import deadzone_smart_unpack as _smart_unpack
+    print("[UNPACK] delegating to deadzone_smart_unpack")
+    result = _smart_unpack(source, ws)
+    status = result.get("status", "FAILED")
+    if status in ("FAILED", "UNSUPPORTED"):
+        error = result.get("error") or f"smart unpack status: {status}"
+        missing = result.get("missing_required") or []
+        if missing:
+            error += f" — missing required: {', '.join(sorted(missing))}"
+        raise RuntimeError(f"[UNPACK] {error}")
+    images_dict = result.get("images") or {}
+    images_list = [Path(v).name for v in images_dict.values() if v]
+    legacy = {
+        "adapter": f"smart_unpack:{result.get('route', 'unknown')}",
+        "images": images_list,
+        "partition_sizes": {},
+        "smart_unpack": result,
+    }
+    write_json(ws.meta / "unpack_result.json", legacy)
+    print(f"[UNPACK] Adapter: {legacy['adapter']}")
+    print(f"[UNPACK] Images: {len(images_list)}")
+    return legacy

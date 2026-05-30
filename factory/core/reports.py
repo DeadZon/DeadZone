@@ -93,10 +93,16 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     if tracker:
         tracker.write()
 
+    smart_unpack_route = str(getattr(ctx, "smart_unpack_route", "") or "")
+    if not smart_unpack_route:
+        su_meta = read_json(ws.meta / "smart_unpack.json", {})
+        smart_unpack_route = str(su_meta.get("route") or "")
+
     build_lines = [
         "MEZO / DeadZone Build Report",
         "============================",
         f"status: {status}",
+        f"smart unpack route: {smart_unpack_route or '(none)'}",
         f"ROM source: {_safe_rom_source(getattr(ctx, 'rom_url', ''))}",
         f"selected codename: {getattr(ctx, 'selected_codename', '') or '(none)'}",
         f"detected codename: {detected_codename}",
@@ -240,9 +246,15 @@ def _write_build_summary(ctx: Any, ws: Workspace, reports_dir: Path) -> tuple[Pa
     build_state_data = read_json(ws.root.parent / "state" / "build_state.json", {})
     counters = build_state_data.get("counters", {})
 
+    su_route = str(getattr(ctx, "smart_unpack_route", "") or "")
+    if not su_route:
+        su_meta = read_json(ws.meta / "smart_unpack.json", {})
+        su_route = str(su_meta.get("route") or "")
+
     summary: dict[str, Any] = {
         "build_id": build_id,
         "status": status,
+        "smart_unpack_route": su_route,
         "soc": getattr(ctx, "soc", ""),
         "style": getattr(ctx, "style_label", ""),
         "device": resolved_codename,
@@ -277,6 +289,7 @@ def _write_build_summary(ctx: Any, ws: Workspace, reports_dir: Path) -> tuple[Pa
         "==============================",
         f"build_id         : {summary['build_id']}",
         f"status           : {summary['status']}",
+        f"smart_unpack_route: {summary['smart_unpack_route'] or '(none)'}",
         f"device           : {summary['device']}",
         f"android_version  : {summary['android_version']}",
         f"rom_version      : {summary['rom_version']}",

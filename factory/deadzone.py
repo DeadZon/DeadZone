@@ -34,7 +34,7 @@ from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
 from factory.core.telegram import TelegramResult, TelegramStatus
 from factory.core.toolchain import resolve_toolchain
-from factory.core.unpacker import unpack_rom
+from factory.core.smart_unpack import deadzone_smart_unpack
 from factory.core.uploader import UploadResult, upload_final_zip_to_pixeldrain, write_skipped_upload_report
 from factory.core.workspace import Workspace, create_workspace, read_json, write_json
 from factory.live.live_screen import LiveScreen
@@ -91,6 +91,8 @@ class BuildContext:
     live_screen: LiveScreen | None = None
     build_lock: BuildLock | None = None
     build_id: str = ""
+    smart_unpack_result: dict = field(default_factory=dict)
+    smart_unpack_route: str = ""
     reports: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     status: str = "RUNNING"
@@ -356,6 +358,42 @@ def _run_app_policy_compare(ctx: BuildContext) -> None:
             ctx.event_bus.emit_event("app_policy_compare", "WARN", f"App policy compare failed: {exc}")
 
 
+def _run_smart_unpack_stage(ctx: BuildContext, ws: Workspace) -> dict:
+    """Run deadzone_smart_unpack and store the result on ctx.
+
+    Emits smart_unpack events to the EventBus (in addition to the outer
+    'unpack' stage events emitted by _stage).  Raises RuntimeError with a
+    clear message if the selected route fails or the input is unsupported so
+    that _stage surfaces the failure correctly.
+    """
+    if ctx.event_bus:
+        ctx.event_bus.emit_event("smart_unpack", "RUN", "Starting smart unpack orchestration")
+    result = deadzone_smart_unpack(ctx.rom_source, ws)  # type: ignore[arg-type]
+    ctx.smart_unpack_result = result
+    ctx.smart_unpack_route = result.get("route", "unknown")
+    status = result.get("status", "FAILED")
+    if status in ("FAILED", "UNSUPPORTED"):
+        error = result.get("error") or f"smart unpack route '{ctx.smart_unpack_route}' returned status: {status}"
+        missing = result.get("missing_required") or []
+        if missing:
+            error += f" — missing required partitions: {', '.join(sorted(missing))}"
+        if ctx.event_bus:
+            ctx.event_bus.emit_event("smart_unpack", "FAIL", error)
+        raise RuntimeError(error)
+    if ctx.event_bus:
+        ctx.event_bus.emit_event(
+            "smart_unpack", "OK",
+            f"route={ctx.smart_unpack_route}",
+            file=str(ws.meta / "smart_unpack.json"),
+        )
+    if ctx.telegram:
+        ctx.telegram_result = ctx.telegram.add_event(
+            "smart_unpack", "OK", f"route={ctx.smart_unpack_route}"
+        )
+    print(f"[SMART UNPACK] Selected route: {ctx.smart_unpack_route}")
+    return result
+
+
 def _build_super_after_repack(ctx: BuildContext, unpack_result: Any) -> Any:
     inspection = inspect_workspace(ctx.workspace, ctx.rom_metadata, unpack_result)
     return build_repacked_super(ctx.workspace, ctx.rom_metadata, inspection)
@@ -392,7 +430,7 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     unpack_result = _stage(
         ctx,
         "unpack",
-        lambda: unpack_rom(ctx.rom_source, ctx.rom_metadata, ws),  # type: ignore[arg-type]
+        lambda: _run_smart_unpack_stage(ctx, ws),
     )
     inspection = _stage(
         ctx,
