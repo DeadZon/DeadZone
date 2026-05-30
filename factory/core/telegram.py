@@ -230,8 +230,9 @@ class TelegramStatus:
             return self.result(self.status)
         summary = extraction_summary or {}
         norm = normalize_summary or {}
+        style_label = _ascii(self.style) or "Unknown"
         caption_parts = [
-            "Stable App Inventory generated",
+            f"{style_label} App Inventory generated",
             f"device: {_ascii(self.device)}",
             f"android version: {_ascii(android_version)}",
             f"total apps found: {_ascii(total_apps)}",
@@ -444,9 +445,10 @@ class TelegramStatus:
             ce = self._classified_error
             lines.extend([
                 "",
-                f"Error type   : {_ascii(ce.get('error_type', ''))}",
-                f"Cause        : {_ascii(ce.get('cause', '')[:200])}",
-                f"Suggested fix: {_ascii(ce.get('suggested_fix', '')[:200])}",
+                f"Error type     : {_ascii(ce.get('error_type', ''))}",
+                f"Cause          : {_ascii(ce.get('cause', '')[:200])}",
+                f"Suggested fix  : {_ascii(ce.get('suggested_fix', '')[:200])}",
+                f"Suggested check: {_ascii(ce.get('suggested_check', '') or ce.get('suggested_fix', '')[:200])}",
             ])
 
         return "\n".join(lines)

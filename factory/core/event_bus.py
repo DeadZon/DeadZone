@@ -80,6 +80,8 @@ class EventBus:
         state.current_action = message
         if file:
             state.last_file = file
+        if message:
+            state.last_event = f"[{stage}] {message}"
 
         upper = status.upper()
         if upper in {"OK", "DONE", "COMPLETE", "SUCCESS"}:

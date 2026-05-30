@@ -544,6 +544,51 @@ def _write_final_reports(ctx: BuildContext) -> None:
     ctx.reports["github_summary"] = str(summary)
 
 
+def _validate_build_args(args: argparse.Namespace) -> None:
+    errors: list[str] = []
+    if not args.style:
+        errors.append("--style is required (stable, legend, gaming, epic)")
+    if not args.soc:
+        errors.append("--soc is required (mtk, snapdragon)")
+    if not args.rom_url:
+        errors.append("--rom-url is required")
+    if not args.device_codename and not args.custom_codename:
+        print(
+            "[WARNING] No --device-codename supplied; "
+            "device will be auto-detected from ROM metadata.",
+            flush=True,
+        )
+    if errors:
+        for msg in errors:
+            print(f"[ERROR] {msg}", flush=True)
+        raise SystemExit("Build validation failed — see errors above")
+
+
+def _print_startup_banner(ctx: BuildContext, args: argparse.Namespace, run_normalize: bool) -> None:
+    device_display = ctx.selected_codename or ctx.custom_codename or "Detecting..."
+    rom_display = ctx.rom_url or "(not provided)"
+    print("=" * 60, flush=True)
+    print("  DeadZone Factory", flush=True)
+    print("  Developer: Mezo", flush=True)
+    print(f"  Selected Style : {ctx.style_label}", flush=True)
+    print(f"  Device         : {device_display}", flush=True)
+    print(f"  ROM            : {rom_display}", flush=True)
+    print(f"  SoC            : {ctx.soc}", flush=True)
+    print(f"  Mode           : {ctx.mode}", flush=True)
+    print(f"  Build ID       : {ctx.build_id}", flush=True)
+    print("=" * 60, flush=True)
+    print(f"[MEZO] Status: running", flush=True)
+    if ctx.upload_pixeldrain:
+        print("[DeadZone] Upload: PixelDrain requested", flush=True)
+    if ctx.notify_telegram:
+        print("[DeadZone] Telegram: notifications requested", flush=True)
+    print(f"[SIZE] Super policy: {ctx.super_size_policy}", flush=True)
+    print(f"[SIZE REDUCTION] Level: {ctx.size_reduction_level}, enabled: {ctx.enable_size_reduction and not ctx.generate_app_inventory}", flush=True)
+    print(f"[APP INVENTORY] Enabled: {ctx.generate_app_inventory}", flush=True)
+    print(f"[STABLE APPS] Normalize: {run_normalize}, mode: {args.stable_normalize_mode}", flush=True)
+    print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}", flush=True)
+
+
 def main() -> int:
     args = parse_args()
     if args.list_devices:
@@ -557,9 +602,7 @@ def main() -> int:
     if args.check_toolchain:
         _print_toolchain()
         return 0
-    if not args.rom_url or not args.style or not args.soc:
-        raise SystemExit("--rom-url, --style, and --soc are required for build mode")
-
+    _validate_build_args(args)
     style_key, style_label = normalize_style(args.style)
     output_dir = args.output_dir
     ws = create_workspace(output_dir / "workspace", clean=True)
@@ -574,7 +617,7 @@ def main() -> int:
         output_dir,
         soc=args.soc,
         edition=style_label,
-        device=selected_codename or args.custom_codename or "unknown",
+        device=selected_codename or args.custom_codename or "Detecting...",
     )
     event_bus = EventBus(output_dir, build_state)
 
@@ -607,31 +650,12 @@ def main() -> int:
     )
     ctx.tracker = StageTracker(ws)
     ctx.live_screen = LiveScreen(build_state, enabled=live_screen_enabled)
-    print("[DeadZone] Stage: production build")
-    print("[MEZO] Status: running")
-    print(f"[SOC] {ctx.soc}")
-    print(f"[STYLE] {ctx.style_label}")
-    if ctx.upload_pixeldrain:
-        print("[DeadZone] Upload: PixelDrain requested")
-    if ctx.notify_telegram:
-        print("[DeadZone] Telegram: notifications requested")
-    if ctx.selected_codename:
-        print(f"[SELECTED DEVICE] {ctx.selected_codename}")
-    print(f"[SIZE] Super display target: {ctx.super_target_bytes}")
-    print("[SIZE] Stock-safe super: pending metadata")
-    print("[SIZE] Selected super: pending metadata")
-    print(f"[SIZE] Super policy: {ctx.super_size_policy}")
-    print(f"[SIZE REDUCTION] Level: {ctx.size_reduction_level}")
-    print(f"[SIZE REDUCTION] Enabled: {ctx.enable_size_reduction and not ctx.generate_app_inventory}")
-    print(f"[APP INVENTORY] Enabled: {ctx.generate_app_inventory}")
-    print(f"[STABLE APPS] Normalize: {run_normalize}, mode: {args.stable_normalize_mode}")
-    print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}")
-    print(f"[SIZE] Allow oversized final: {ctx.allow_oversized_final}")
+    _print_startup_banner(ctx, args, run_normalize)
     ctx.telegram = TelegramStatus(
         enabled=ctx.notify_telegram,
         soc=ctx.soc,
         style=ctx.style_label,
-        device=ctx.selected_codename or ctx.custom_codename or "unknown",
+        device=ctx.selected_codename or ctx.custom_codename or "Detecting...",
         workspace=ws,
         rom_source=ctx.rom_url,
     )

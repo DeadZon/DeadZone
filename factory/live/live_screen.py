@@ -11,6 +11,9 @@ if TYPE_CHECKING:
 
 _RICH_AVAILABLE: bool | None = None
 
+_DETECTING = "Detecting..."
+_UNKNOWN = "Unknown"
+
 
 def _try_import_rich() -> bool:
     global _RICH_AVAILABLE
@@ -46,13 +49,21 @@ def _elapsed_str(started_at_ts: float) -> str:
     return f"{m:02d}:{s:02d}"
 
 
+def _display(value: str, in_progress: bool = True) -> str:
+    """Return the value for display; blank/unknown becomes Detecting... or Unknown."""
+    v = (value or "").strip()
+    if not v or v.lower() == "unknown":
+        return _DETECTING if in_progress else _UNKNOWN
+    return v
+
+
 class LiveScreen:
     def __init__(
         self,
         build_state: "BuildState",
         *,
         enabled: bool = True,
-        gha_interval: float = 30.0,
+        gha_interval: float = 120.0,
         interactive_interval: float = 2.0,
     ) -> None:
         self._state = build_state
@@ -65,6 +76,7 @@ class LiveScreen:
         self._thread: threading.Thread | None = None
         self._monotonic_start = time.monotonic()
         self._last_stage_printed: str = ""
+        self._last_gha_print: float = 0.0
 
     def start(self) -> None:
         if not self._enabled:
@@ -93,8 +105,6 @@ class LiveScreen:
         try:
             from rich.console import Console
             from rich.live import Live
-            from rich.panel import Panel
-            from rich.text import Text
 
             console = Console(stderr=True, highlight=False)
             with Live(console=console, refresh_per_second=1, transient=False) as live:
@@ -108,12 +118,9 @@ class LiveScreen:
     def _rich_panel(self) -> Any:
         try:
             from rich.panel import Panel
-            from rich.text import Text
         except ImportError:
             return None
-        state = self._state
-        lines = self._status_lines()
-        body = "\n".join(lines)
+        body = "\n".join(self._status_lines())
         return Panel(
             body,
             title="[bold cyan]DeadZone Factory Live[/bold cyan]",
@@ -122,35 +129,49 @@ class LiveScreen:
         )
 
     # ------------------------------------------------------------------
-    # Simple mode — periodic one-liner to stderr (GitHub Actions / no TTY)
+    # Simple mode — stage-change or timed one-liner to stderr
+    # GitHub Actions: only print when stage changes or 2-min timeout
     # ------------------------------------------------------------------
 
     def _run_simple(self) -> None:
         while not self._stop.is_set():
-            self._print_tick()
-            self._stop.wait(self._interval)
+            self._maybe_print_tick()
+            self._stop.wait(min(self._interval, 15.0))
+
+    def _maybe_print_tick(self) -> None:
+        state = self._state
+        current_stage = state.current_stage or ""
+        now = time.monotonic()
+        stage_changed = current_stage != self._last_stage_printed
+        timeout_elapsed = (now - self._last_gha_print) >= self._interval
+        if self._gha and not stage_changed and not timeout_elapsed:
+            return
+        self._last_stage_printed = current_stage
+        self._last_gha_print = now
+        self._print_tick()
 
     def _print_tick(self) -> None:
         state = self._state
         elapsed = _elapsed_str(self._monotonic_start)
+        stage = state.current_stage or "(init)"
+        action = state.current_action or "..."
         line = (
             f"[LIVE | {elapsed}] "
-            f"Stage: {state.current_stage or '(init)'} | "
+            f"Stage: {stage} | "
+            f"Style: {state.edition or _DETECTING} | "
             f"Status: {state.status} | "
             f"Progress: {state.progress:.0f}% {_bar(state.progress, 20)} | "
-            f"Action: {state.current_action or '...'}"
+            f"Action: {action}"
         )
         counters = state.counters
         if counters.default_found or counters.extra_apps or counters.missing_apps:
             line += (
-                f" | Apps: found={counters.default_found} "
-                f"extra={counters.extra_apps} "
-                f"missing={counters.missing_apps}"
+                f" | Apps: found={counters.default_found}"
+                f" extra={counters.extra_apps}"
+                f" missing={counters.missing_apps}"
             )
         if counters.images_total:
-            line += (
-                f" | Images: {counters.images_extracted}/{counters.images_total}"
-            )
+            line += f" | Images: {counters.images_extracted}/{counters.images_total}"
         print(line, file=sys.stderr, flush=True)
 
     # ------------------------------------------------------------------
@@ -163,11 +184,11 @@ class LiveScreen:
             "=" * 60,
             "  DeadZone Factory Live",
             "  Developer: Mezo",
-            f"  Edition   : {state.edition or 'unknown'}",
-            f"  Device    : {state.device or 'unknown'}",
-            f"  ROM       : {state.rom_version or 'pending detection'}",
-            f"  Android   : {state.android_version or 'pending detection'}",
-            f"  SoC       : {state.soc or 'unknown'}",
+            f"  Style     : {state.edition or _DETECTING}",
+            f"  Device    : {_display(state.device)}",
+            f"  ROM       : {_display(state.rom_version)}",
+            f"  Android   : {_display(state.android_version)}",
+            f"  SoC       : {_display(state.soc)}",
             f"  Build ID  : {state.build_id}",
             "=" * 60,
         ]
@@ -181,12 +202,22 @@ class LiveScreen:
         lines = [
             "=" * 60,
             f"  DeadZone Factory {status} — {elapsed}",
-            f"  Final stage : {state.current_stage}",
+            f"  Style       : {state.edition or _UNKNOWN}",
+            f"  Device      : {_display(state.device, in_progress=False)}",
+            f"  Final stage : {state.current_stage or _UNKNOWN}",
             f"  Progress    : {state.progress:.0f}% {_bar(state.progress, 20)}",
-            f"  Apps found  : {counters.default_found} | extra: {counters.extra_apps} | missing: {counters.missing_apps}",
-            f"  Images      : {counters.images_extracted}/{counters.images_total} extracted",
-            "=" * 60,
         ]
+        if counters.default_found or counters.extra_apps or counters.missing_apps:
+            lines.append(
+                f"  Apps found  : {counters.default_found}"
+                f" | extra: {counters.extra_apps}"
+                f" | missing: {counters.missing_apps}"
+            )
+        if counters.images_total:
+            lines.append(
+                f"  Images      : {counters.images_extracted}/{counters.images_total} extracted"
+            )
+        lines.append("=" * 60)
         for line in lines:
             print(line, file=sys.stderr, flush=True)
 
@@ -194,13 +225,15 @@ class LiveScreen:
         state = self._state
         elapsed = _elapsed_str(self._monotonic_start)
         counters = state.counters
-        return [
-            f"Developer : Mezo",
-            f"Edition   : {state.edition or 'unknown'}",
-            f"Device    : {state.device or 'unknown'}",
-            f"ROM       : {state.rom_version or 'pending'}",
-            f"Android   : {state.android_version or 'pending'}",
-            f"SoC       : {state.soc or 'unknown'}",
+        running = state.status == "RUNNING"
+
+        lines = [
+            "Developer : Mezo",
+            f"Style     : {state.edition or _DETECTING}",
+            f"Device    : {_display(state.device, running)}",
+            f"ROM       : {_display(state.rom_version, running)}",
+            f"Android   : {_display(state.android_version, running)}",
+            f"SoC       : {_display(state.soc, running)}",
             "",
             f"Stage     : {state.current_stage or '(init)'}",
             f"Status    : {state.status}",
@@ -209,14 +242,32 @@ class LiveScreen:
             "",
             f"Action    : {state.current_action or '...'}",
             f"Last file : {state.last_file or '...'}",
-            "",
-            f"Apps found       : {counters.default_found}",
-            f"Apps extra       : {counters.extra_apps}",
-            f"Apps missing     : {counters.missing_apps}",
-            f"Delete candidates: {counters.delete_candidates}",
-            f"Renamed apps     : {counters.renamed_apps}",
-            f"Images extracted : {counters.images_extracted}/{counters.images_total}",
+            f"Last event: {state.last_event or '...'}",
         ]
+
+        # App counters — only when scan has produced real data
+        app_data = any([
+            counters.default_found,
+            counters.extra_apps,
+            counters.missing_apps,
+            counters.delete_candidates,
+            counters.renamed_apps,
+        ])
+        if app_data:
+            lines += [
+                "",
+                f"Apps found       : {counters.default_found}",
+                f"Apps extra       : {counters.extra_apps}",
+                f"Apps missing     : {counters.missing_apps}",
+                f"Delete candidates: {counters.delete_candidates}",
+                f"Renamed apps     : {counters.renamed_apps}",
+            ]
+
+        # Image counters — only when extraction has started
+        if counters.images_total:
+            lines.append(f"Images extracted : {counters.images_extracted}/{counters.images_total}")
+
+        return lines
 
     def update_rom_info(self, device: str = "", rom_version: str = "", android_version: str = "") -> None:
         state = self._state

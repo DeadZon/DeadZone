@@ -35,22 +35,30 @@ class BuildCounters:
 @dataclass
 class BuildState:
     build_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    device: str = "unknown"
-    soc: str = "unknown"
-    edition: str = "unknown"
-    rom_version: str = "unknown"
-    android_version: str = "unknown"
+    device: str = "Detecting..."
+    soc: str = "Detecting..."
+    edition: str = ""
+    rom_version: str = "Detecting..."
+    android_version: str = "Detecting..."
     current_stage: str = ""
     status: str = "RUNNING"
     progress: float = 0.0
     current_action: str = ""
     last_file: str = ""
+    last_event: str = ""
     counters: BuildCounters = field(default_factory=BuildCounters)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     started_at: str = field(default_factory=_utc_now)
     finished_at: str = ""
     _state_path: Path | None = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        # Prefix build_id with style so it's traceable in logs and reports.
+        if self.edition and self.edition.lower() not in ("", "unknown", "detecting..."):
+            prefix = self.edition.upper()
+            short = self.build_id.replace("-", "")[:8]
+            self.build_id = f"DZ-{prefix}-{short}"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -65,6 +73,7 @@ class BuildState:
             "progress": round(self.progress, 1),
             "current_action": self.current_action,
             "last_file": self.last_file,
+            "last_event": self.last_event,
             "counters": self.counters.as_dict(),
             "errors": self.errors,
             "warnings": self.warnings,
