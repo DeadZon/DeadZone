@@ -170,6 +170,13 @@ class LiveScreen:
                 f" extra={counters.extra_apps}"
                 f" missing={counters.missing_apps}"
             )
+        if counters.stable_kept_apps or counters.stable_deleted_extra_apps or counters.stable_missing_apps:
+            line += (
+                f" | StablePolicy: kept={counters.stable_kept_apps}"
+                f" renamed={counters.stable_renamed_apps}"
+                f" missing={counters.stable_missing_apps}"
+                f" deleted={counters.stable_deleted_extra_apps}"
+            )
         if counters.images_total:
             line += f" | Images: {counters.images_extracted}/{counters.images_total}"
         print(line, file=sys.stderr, flush=True)
@@ -212,6 +219,13 @@ class LiveScreen:
                 f"  Apps found  : {counters.default_found}"
                 f" | extra: {counters.extra_apps}"
                 f" | missing: {counters.missing_apps}"
+            )
+        if counters.stable_kept_apps or counters.stable_deleted_extra_apps or counters.stable_missing_apps:
+            lines.append(
+                f"  Stable policy: kept={counters.stable_kept_apps}"
+                f" renamed={counters.stable_renamed_apps}"
+                f" missing={counters.stable_missing_apps}"
+                f" deleted={counters.stable_deleted_extra_apps}"
             )
         if counters.images_total:
             lines.append(
@@ -261,6 +275,22 @@ class LiveScreen:
                 f"Apps missing     : {counters.missing_apps}",
                 f"Delete candidates: {counters.delete_candidates}",
                 f"Renamed apps     : {counters.renamed_apps}",
+            ]
+
+        # Stable App Policy counters — only when policy has run
+        stable_data = any([
+            counters.stable_kept_apps,
+            counters.stable_renamed_apps,
+            counters.stable_missing_apps,
+            counters.stable_deleted_extra_apps,
+        ])
+        if stable_data:
+            lines += [
+                "",
+                f"Stable kept      : {counters.stable_kept_apps}",
+                f"Stable renamed   : {counters.stable_renamed_apps}",
+                f"Stable missing   : {counters.stable_missing_apps}",
+                f"Stable deleted   : {counters.stable_deleted_extra_apps}",
             ]
 
         # Image counters — only when extraction has started

@@ -13,6 +13,7 @@ from factory.core.cleanup import cleanup
 from factory.core.error_classifier import classify_from_context
 from factory.core.event_bus import EventBus
 from factory.core.stable_app_normalizer import normalize_stable_apps
+from factory.core.stable_app_policy import enforce_stable_app_policy
 from factory.core.detector import detect_rom
 from factory.core.device_registry import list_devices, resolve_device
 from factory.core.downloader import download_rom
@@ -71,6 +72,7 @@ class BuildContext:
     app_inventory: dict[str, Any] = field(default_factory=dict)
     app_policy: dict[str, Any] = field(default_factory=dict)
     image_extraction: dict[str, Any] = field(default_factory=dict)
+    stable_app_policy: dict[str, Any] = field(default_factory=dict)
     stable_normalize: dict[str, Any] = field(default_factory=dict)
     stable_normalize_mode: str = "apply"
     run_stable_normalize: bool = True
@@ -405,6 +407,18 @@ def _run_build(ctx: BuildContext) -> BuildContext:
             "app_inventory",
             lambda: generate_app_inventory(ws, ctx.image_extraction),
         )
+        if ctx.style == "stable":
+            ctx.stable_app_policy = _stage(
+                ctx,
+                "stable_app_policy",
+                lambda: enforce_stable_app_policy(
+                    reports_dir=ws.reports,
+                    partitions_root=ws.partitions,
+                    scanned_apps=(ctx.app_inventory or {}).get("apps") or [],
+                    style=ctx.style,
+                    build_state=ctx.build_state,
+                ),
+            )
         if ctx.run_stable_normalize and ctx.style in ("stable",):
             ctx.stable_normalize = _stage(
                 ctx,

@@ -22,6 +22,10 @@ class BuildCounters:
     images_extracted: int = 0
     images_failed: int = 0
     images_total: int = 0
+    stable_kept_apps: int = 0
+    stable_renamed_apps: int = 0
+    stable_missing_apps: int = 0
+    stable_deleted_extra_apps: int = 0
 
     def as_dict(self) -> dict[str, int]:
         return asdict(self)

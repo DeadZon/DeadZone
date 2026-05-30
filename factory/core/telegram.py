@@ -439,6 +439,17 @@ class TelegramStatus:
                 f"extra={counters.get('extra_apps', 0)} "
                 f"missing={counters.get('missing_apps', 0)}"
             )
+        stable_kept = counters.get("stable_kept_apps", 0)
+        stable_renamed = counters.get("stable_renamed_apps", 0)
+        stable_missing = counters.get("stable_missing_apps", 0)
+        stable_deleted = counters.get("stable_deleted_extra_apps", 0)
+        if any([stable_kept, stable_renamed, stable_missing, stable_deleted]):
+            lines.append(
+                f"Stable App Policy: kept={stable_kept} "
+                f"renamed={stable_renamed} "
+                f"missing={stable_missing} "
+                f"deleted={stable_deleted}"
+            )
 
         # Classified error on failure
         if build_status.upper() not in {"OK", "RUNNING"} and self._classified_error:

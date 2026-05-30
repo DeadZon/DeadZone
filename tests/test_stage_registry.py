@@ -18,6 +18,7 @@ EXPECTED_STAGE_IDS = [
     "image_mount",
     "app_inventory_scan",
     "app_policy_compare",
+    "stable_app_policy",
     "legend_patches",
     "image_repack",
     "super_build",
