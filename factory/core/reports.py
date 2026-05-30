@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from factory.core.workspace import Workspace
+from factory.core.workspace import read_json
 
 
 def _value(data: Any, key: str, default: str = "unknown") -> str:
@@ -68,6 +69,7 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
     upload_result = getattr(ctx, "upload_result", None)
     telegram_result = getattr(ctx, "telegram_result", None)
     status = getattr(ctx, "status", "UNKNOWN")
+    size_policy = read_json(ws.meta / "size_policy.json", {})
     failed_stage = getattr(ctx, "failed_stage", "") or "(none)"
     started_at = getattr(ctx, "started_at", time.time())
     completed_at = getattr(ctx, "completed_at", None)
@@ -106,6 +108,8 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"final ZIP path: {final_zip or '(none)'}",
         f"final ZIP name: {Path(final_zip).name if final_zip else '(none)'}",
         f"final ZIP size: {_zip_size(final_zip)}",
+        f"final ZIP max allowed: {size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes') or '(unknown)'}",
+        f"size policy reason: {size_policy.get('reason') or '(none)'}",
         f"upload requested: {getattr(upload_result, 'requested', False)}",
         f"upload provider: {getattr(upload_result, 'provider', 'PixelDrain')}",
         f"upload status: {getattr(upload_result, 'status', 'not requested')}",
@@ -145,6 +149,8 @@ def write_production_reports(ctx: Any, ws: Workspace) -> dict[str, str]:
         f"soc: {getattr(ctx, 'soc', '')}",
         f"final ZIP path: {final_zip or '(none)'}",
         f"final ZIP size: {_zip_size(final_zip)}",
+        f"final ZIP max allowed: {size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes') or '(unknown)'}",
+        f"size policy reason: {size_policy.get('reason') or '(none)'}",
         f"upload status: {getattr(upload_result, 'status', 'not requested')}",
         f"upload URL: {getattr(upload_result, 'url', '') or '(none)'}",
         f"telegram status: {getattr(telegram_result, 'status', 'not requested')}",

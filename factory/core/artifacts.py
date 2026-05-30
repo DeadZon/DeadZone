@@ -4,7 +4,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
 
-from factory.core.workspace import Workspace
+from factory.core.workspace import Workspace, read_json
 
 
 def _value(data: Any, key: str, default: str = "unknown") -> str:
@@ -41,6 +41,10 @@ def write_github_summary(ctx: Any, ws: Workspace) -> Path:
     detected = str(device.get("detected_codename") or "") or _value(rom, "codename")
     selected = getattr(ctx, "selected_codename", "") or "(none)"
     resolved = str(device.get("resolved_codename") or device.get("codename") or selected)
+    size_policy = read_json(ws.meta / "size_policy.json", {})
+    final_zip_bytes = size_policy.get("final_zip_size") or (final_path.stat().st_size if final_path and final_path.is_file() else 0)
+    final_max = size_policy.get("final_zip_max_allowed") or size_policy.get("final_zip_max_bytes") or 4_500_000_000
+    size_reason = size_policy.get("reason") or "(none)"
 
     lines = [
         "## DeadZone Build Summary",
@@ -54,6 +58,9 @@ def write_github_summary(ctx: Any, ws: Workspace) -> Path:
         f"- build version: {_value(rom, 'build')}",
         f"- final ZIP name: {final_path.name if final_path else '(none)'}",
         f"- final ZIP size: {_size(final_path)}",
+        f"- final ZIP bytes: {final_zip_bytes}",
+        f"- final ZIP max allowed: {final_max}",
+        f"- size policy reason: {size_reason}",
         f"- PixelDrain link: {getattr(upload, 'url', '') or '(none)'}",
         f"- Telegram status: {getattr(telegram, 'status', 'not requested')}",
         f"- failed stage: {getattr(ctx, 'failed_stage', '') or '(none)'}",

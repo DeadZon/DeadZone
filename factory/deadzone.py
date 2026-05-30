@@ -16,6 +16,7 @@ from factory.core.final_zip import build_final_zip
 from factory.core.inspector import inspect_workspace
 from factory.core.reports import write_production_reports
 from factory.core.repacker import build_repacked_super, repack_partitions
+from factory.core.size_policy import bytes_from_decimal_gb, default_policy, enforce_final_zip_policy, write_policy_config
 from factory.core.status import StageTracker
 from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
@@ -47,6 +48,9 @@ class BuildContext:
     device_profile: dict[str, Any] | None = None
     super_profile: dict[str, Any] | None = None
     final_zip_path: Path | None = None
+    super_target_bytes: int = 8_500_000_000
+    final_zip_max_bytes: int = 4_500_000_000
+    allow_oversized_final: bool = False
     upload_pixeldrain: bool = False
     notify_telegram: bool = False
     upload_result: UploadResult = field(default_factory=UploadResult)
@@ -81,6 +85,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--show-device", default="")
     parser.add_argument("--check-toolchain", action="store_true")
+    parser.add_argument("--super-target-gb", default="8.5")
+    parser.add_argument("--final-zip-max-gb", default="4.5")
+    parser.add_argument("--allow-oversized-final", action="store_true")
     return parser.parse_args()
 
 
@@ -179,7 +186,8 @@ def _stage(ctx: BuildContext, name: str, fn: Callable[[], Any]) -> Any:
         })
         print("[MEZO] Status: failed")
         if ctx.telegram:
-            ctx.telegram_result = ctx.telegram.add_event(name, "FAIL", str(exc))
+            detail = "Final ZIP exceeds 4.5GB policy" if name == "size_policy" else str(exc)
+            ctx.telegram_result = ctx.telegram.add_event(name, "FAIL", detail)
         raise
     duration = time.monotonic() - started
     ctx.completed_stage = name
@@ -219,6 +227,14 @@ def _update_resolved_device_metadata(ctx: BuildContext) -> None:
 
 
 def _prepare_workspace(ctx: BuildContext) -> Workspace:
+    write_policy_config(
+        ctx.workspace,
+        default_policy(
+            super_target_bytes=ctx.super_target_bytes,
+            final_zip_max_bytes=ctx.final_zip_max_bytes,
+            allow_oversized_final=ctx.allow_oversized_final,
+        ),
+    )
     return ctx.workspace
 
 
@@ -275,6 +291,11 @@ def _run_build(ctx: BuildContext) -> BuildContext:
         ctx,
         "final_zip",
         lambda: build_final_zip(ws, ctx.rom_metadata, ctx.style),  # type: ignore[arg-type]
+    )
+    _stage(
+        ctx,
+        "size_policy",
+        lambda: enforce_final_zip_policy(ws, ctx.final_zip_path, ctx.allow_oversized_final),  # type: ignore[arg-type]
     )
     print(f"[FINAL ZIP] {ctx.final_zip_path}")
     ctx.status = "OK"
@@ -370,6 +391,8 @@ def main() -> int:
     output_dir = args.output_dir
     ws = create_workspace(output_dir / "workspace", clean=True)
     selected_codename = _selected_codename(args.device_codename, args.custom_codename)
+    super_target_bytes = bytes_from_decimal_gb(args.super_target_gb, 8_500_000_000)
+    final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
     ctx = BuildContext(
         rom_url=args.rom_url,
         style=style_key,
@@ -383,6 +406,9 @@ def main() -> int:
         upload_pixeldrain=args.upload_pixeldrain,
         notify_telegram=args.notify_telegram,
         workspace=ws,
+        super_target_bytes=super_target_bytes,
+        final_zip_max_bytes=final_zip_max_bytes,
+        allow_oversized_final=args.allow_oversized_final,
     )
     ctx.tracker = StageTracker(ws)
     print("[DeadZone] Stage: production build")
@@ -395,6 +421,9 @@ def main() -> int:
         print("[DeadZone] Telegram: notifications requested")
     if ctx.selected_codename:
         print(f"[SELECTED DEVICE] {ctx.selected_codename}")
+    print(f"[SIZE] Super target: {ctx.super_target_bytes}")
+    print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}")
+    print(f"[SIZE] Allow oversized final: {ctx.allow_oversized_final}")
     ctx.telegram = TelegramStatus(
         enabled=ctx.notify_telegram,
         soc=ctx.soc,
@@ -418,7 +447,8 @@ def main() -> int:
             ctx.status = "FAILED"
         ctx.cleanup_status = "not run after failure"
         if ctx.failed_stage != "upload":
-            ctx.upload_result = write_skipped_upload_report(ws, requested=ctx.upload_pixeldrain, reason="build failed before final ZIP")
+            reason = "build failed after final ZIP; upload skipped" if ctx.final_zip_path else "build failed before final ZIP"
+            ctx.upload_result = write_skipped_upload_report(ws, requested=ctx.upload_pixeldrain, reason=reason)
         write_error_summary(ctx, ws, exc)
         try:
             _stage(ctx, "telegram", lambda: _run_telegram_finish(ctx, "FAIL"))

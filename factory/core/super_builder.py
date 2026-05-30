@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from factory.core.detector import DYNAMIC_PARTITIONS, RomInfo
+from factory.core.size_policy import SizePolicyError, apply_super_policy, collect_size_policy, load_policy, write_size_policy_report
 from factory.core.super_profile import build_super_profile
 from factory.core.toolchain import MISSING_LPMAKE_MESSAGE, resolve_toolchain
 from factory.core.workspace import Workspace, read_json, write_json
@@ -33,6 +34,36 @@ def _int_value(*values: Any) -> int:
         if parsed > 0:
             return parsed
     return 0
+
+
+def _is_sparse_image(path: Path) -> bool:
+    if not path.is_file() or path.stat().st_size < 4:
+        return False
+    with path.open("rb") as fh:
+        return fh.read(4) == b"\x3a\xff\x26\xed"
+
+
+def _ensure_sparse_super(super_img: Path, img2simg: Path | None, warnings: list[str]) -> bool:
+    if _is_sparse_image(super_img):
+        return True
+    if img2simg is None:
+        warnings.append("super.img is raw and img2simg is unavailable; final ZIP may exceed size policy")
+        return False
+    sparse_tmp = super_img.with_suffix(".sparse.tmp")
+    proc = subprocess.run(
+        [str(img2simg), str(super_img), str(sparse_tmp)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    if proc.returncode != 0 or not sparse_tmp.is_file():
+        warnings.append(f"img2simg could not convert raw super.img to sparse; code={proc.returncode}")
+        if sparse_tmp.exists():
+            sparse_tmp.unlink()
+        return False
+    sparse_tmp.replace(super_img)
+    return _is_sparse_image(super_img)
 
 
 def _allocation(part: str, image: Path, layout: dict[str, Any], warnings: list[str]) -> int:
@@ -137,8 +168,15 @@ def _write_report(
         f"input metadata source: {layout.get('metadata_source')}",
         f"allocation metadata source: {layout.get('allocation_metadata_source')}",
         f"target super size: {layout.get('target_super_size')}",
+        f"requested super target bytes: {layout.get('requested_super_target_bytes')}",
+        f"stock super size: {layout.get('stock_super_size')}",
         f"group name: {layout.get('dynamic_group_name')}",
         f"group size: {layout.get('group_size')}",
+        f"dynamic allocation total: {layout.get('dynamic_allocation_total')}",
+        f"actual images total: {layout.get('actual_images_total')}",
+        f"output format: {layout.get('output_format')}",
+        f"actual super.img size: {result.get('super_size')}",
+        f"super.img sparse: {result.get('super_is_sparse')}",
         f"slot mode: {layout.get('slot_mode')}",
         "",
         "partition list:",
@@ -203,10 +241,22 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     rom_info = metadata["rom_info.json"]
     super_layout = metadata["super_layout.json"]
     layout = build_super_profile(ws, info, inspection)
+    policy = load_policy(ws)
+    try:
+        layout = apply_super_policy(layout, policy)
+    except SizePolicyError as exc:
+        message = str(exc)
+        write_json(ws.meta / "super_layout.json", {**super_layout, **layout})
+        policy_data = collect_size_policy(ws, status="FAILED", reason=message)
+        write_size_policy_report(ws, policy_data)
+        _write_error_summary(ws, "super", message, layout)
+        raise RuntimeError(message) from exc
+    write_json(ws.meta / "super_profile.json", layout)
     dynamic_images = {name: Path(path) for name, path in layout.get("dynamic_images", {}).items()}
     toolchain = resolve_toolchain(ws)
     lpmake = toolchain.path("lpmake")
     lpdump = toolchain.path("lpdump")
+    img2simg = toolchain.path("img2simg")
     final_super = ws.images / "super.img"
     needs_rebuild = bool(
         super_layout.get("rebuild_required")
@@ -223,10 +273,12 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     if final_super.is_file() and not needs_rebuild:
         action = "preserved"
         reason = "original super.img is present and no dynamic partition rebuild was requested"
+        _ensure_sparse_super(final_super, img2simg, warnings)
         validation = _validate_with_lpdump(final_super, lpdump)
     elif final_super.is_file() and not dynamic_images:
         action = "preserved"
         reason = "super.img is present and no replacement dynamic partition images are available"
+        _ensure_sparse_super(final_super, img2simg, warnings)
         validation = _validate_with_lpdump(final_super, lpdump)
     else:
         action = "rebuilt"
@@ -302,14 +354,22 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
             errors.append(f"lpmake failed with code {proc.returncode}; see {log}")
             validation = {"status": "FAILED", "reason": "lpmake did not produce a valid super.img", "output": ""}
         else:
+            _ensure_sparse_super(final_super, img2simg, warnings)
             validation = _validate_with_lpdump(final_super, lpdump)
 
+    super_is_sparse = _is_sparse_image(final_super)
     result = {
         "status": "FAILED" if errors or validation.get("status") == "FAILED" else "OK",
         "action": action,
         "reason": reason,
         "super_img": str(final_super),
         "super_size": final_super.stat().st_size if final_super.is_file() else None,
+        "super_is_sparse": super_is_sparse,
+        "super_output_format": "sparse" if super_is_sparse else "raw",
+        "requested_super_target_bytes": layout.get("requested_super_target_bytes"),
+        "stock_super_size": layout.get("stock_super_size"),
+        "dynamic_allocation_total": layout.get("dynamic_allocation_total"),
+        "actual_images_total": layout.get("actual_images_total"),
         "input_metadata_source": layout.get("metadata_source"),
         "allocation_metadata_source": layout.get("allocation_metadata_source"),
         "target_super_size": layout.get("target_super_size"),
@@ -328,10 +388,13 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     write_json(ws.meta / "super_layout.json", {**super_layout, **layout, "lpmake_command": command, "validation": validation})
     write_json(ws.meta / "super_build_result.json", result)
     _write_report(ws, result, layout, validation)
+    policy_data = collect_size_policy(ws, status=result["status"], reason="; ".join(errors))
+    write_size_policy_report(ws, policy_data)
     if errors:
         _write_error_summary(ws, "super", "; ".join(errors), layout)
         raise RuntimeError("; ".join(errors))
     print(f"[SUPER] {action}")
+    print(f"[SUPER] super.img size={result.get('super_size')} sparse={result.get('super_is_sparse')}")
     return result
 
 

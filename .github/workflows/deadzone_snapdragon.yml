@@ -118,6 +118,11 @@ on:
         required: false
         type: boolean
         default: false
+      allow_oversized_final:
+        description: Allow final ZIP over 4.5GB
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -218,6 +223,10 @@ jobs:
             ARGS+=(--notify-telegram)
           fi
 
+          if [ "${{ inputs.allow_oversized_final }}" = "true" ]; then
+            ARGS+=(--allow-oversized-final)
+          fi
+
           python3 -m factory.deadzone "${ARGS[@]}"
 
       - name: Write job summary
@@ -262,6 +271,7 @@ jobs:
             output/workspace/reports/upload_report.txt
             output/workspace/reports/telegram_report.txt
             output/workspace/reports/final_zip_report.txt
+            output/workspace/reports/size_policy_report.txt
             output/workspace/reports/super_build_report.txt
             output/workspace/reports/toolchain_report.txt
             output/workspace/reports/payload_unpack_report.txt

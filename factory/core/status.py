@@ -21,6 +21,7 @@ STAGE_NAMES = [
     "repack",
     "super",
     "final_zip",
+    "size_policy",
     "upload",
     "telegram",
     "cleanup",

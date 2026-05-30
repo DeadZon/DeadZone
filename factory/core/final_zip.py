@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
-import stat
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -11,6 +10,7 @@ from typing import Any
 import yaml
 
 from factory.core.detector import RomInfo
+from factory.core.size_policy import load_policy
 from factory.core.super_builder import DYNAMIC_IMAGES
 from factory.core.style_runner import STYLE_LABELS
 from factory.core.workspace import Workspace, read_json, write_json
@@ -406,6 +406,9 @@ def _write_report(
     excluded: list[str],
     scripts: list[str],
     validation_errors: list[str],
+    compressed_size: int,
+    uncompressed_size: int,
+    compression_ratio: float,
 ) -> None:
     lines = [
         "DeadZone final ZIP report",
@@ -415,6 +418,10 @@ def _write_report(
         f"codename: {codename}",
         f"Android version: {android}",
         f"build: {build}",
+        f"compression: ZIP_DEFLATED level 9",
+        f"compressed size: {compressed_size}",
+        f"uncompressed size: {uncompressed_size}",
+        f"compression ratio: {compression_ratio:.6f}",
         "included files:",
     ]
     lines.extend(f"- {name}" for name in included)
@@ -445,6 +452,7 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
     slot_mode = _metadata_value(meta, "slot_mode", info.slot_mode)
     profile = _load_profile(soc)
     profile_super = _profile_super(profile)
+    size_policy = load_policy(ws)
     zip_name = f"DeadZone_{style}_{codename}_{_android_tag(android)}.zip"
 
     stage = ws.final / "stage"
@@ -460,16 +468,17 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
     out = ws.final / zip_name
     if out.exists():
         out.unlink()
-    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_STORED) as zf:
+    uncompressed_size = sum(path.stat().st_size for path in stage.rglob("*") if path.is_file())
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for path in sorted(stage.rglob("*")):
             if path.is_file():
                 arcname = str(path.relative_to(stage)).replace(os.sep, "/")
-                zi = zipfile.ZipInfo(arcname)
-                zi.external_attr = (stat.S_IMODE(path.stat().st_mode) or 0o644) << 16
-                zf.writestr(zi, path.read_bytes())
+                zf.write(path, arcname, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
 
     included = [f"images/{name}" for name in included_images] + included_tools + scripts
     validation_errors = _validate_zip(out, included_images, profile_super, (ws.images / "super.img").is_file())
+    compressed_size = out.stat().st_size
+    compression_ratio = (compressed_size / uncompressed_size) if uncompressed_size else 0.0
     _write_report(
         ws,
         out,
@@ -482,12 +491,26 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
         excluded,
         scripts,
         validation_errors,
+        compressed_size,
+        uncompressed_size,
+        compression_ratio,
     )
     if validation_errors:
         raise RuntimeError("final ZIP validation failed: " + "; ".join(validation_errors))
 
     sha = _sha256(out)
     _write_sidecars(ws, out, sha, style, codename, android, build)
-    write_json(ws.meta / "final_zip.json", {"zip": str(out), "sha256": sha, "images": included_images})
+    write_json(ws.meta / "final_zip.json", {
+        "zip": str(out),
+        "sha256": sha,
+        "images": included_images,
+        "compressed_size": compressed_size,
+        "uncompressed_size": uncompressed_size,
+        "compression_ratio": compression_ratio,
+        "compression": "ZIP_DEFLATED",
+        "compresslevel": 9,
+        "final_zip_max_bytes": size_policy.get("final_zip_max_bytes"),
+    })
     print(f"[ZIP] {out}")
+    print(f"[ZIP] compressed={compressed_size} uncompressed={uncompressed_size} ratio={compression_ratio:.6f}")
     return out
