@@ -15,6 +15,102 @@ from factory.core.workspace import Workspace, read_json
 
 
 MAX_TEXT_LEN = 4000
+
+# Human-readable labels for each pipeline stage ID.
+STAGE_DISPLAY: dict[str, dict[str, str]] = {
+    "image_extraction": {
+        "title": "Extracting Images",
+        "done_label": "Images extracted",
+        "running_label": "Extracting images",
+    },
+    "app_inventory": {
+        "title": "Scanning App Inventory",
+        "done_label": "App inventory scanned",
+        "running_label": "Scanning app inventory",
+    },
+    "stable_app_policy": {
+        "title": "Applying Stable App Policy",
+        "done_label": "Stable app policy applied",
+        "running_label": "Applying stable app policy",
+    },
+    "stable_app_normalize": {
+        "title": "Normalizing Stable Apps",
+        "done_label": "Stable apps normalized",
+        "running_label": "Normalizing stable apps",
+    },
+    "inventory_package": {
+        "title": "Building Inventory Package",
+        "done_label": "Inventory package built",
+        "running_label": "Building inventory package",
+    },
+    "size_reduction": {
+        "title": "Checking Size Policy",
+        "done_label": "Size reduction checked",
+        "running_label": "Checking size policy",
+    },
+    "super_profile": {
+        "title": "Loading Super Profile",
+        "done_label": "Super profile loaded",
+        "running_label": "Loading super profile",
+    },
+    "style": {
+        "title": "Applying Style Patches",
+        "done_label": "Style patches applied",
+        "running_label": "Applying style patches",
+    },
+    "repack": {
+        "title": "Repacking Partitions",
+        "done_label": "Partitions repacked",
+        "running_label": "Repacking partitions",
+    },
+    "super": {
+        "title": "Building Super Image",
+        "done_label": "Super image built",
+        "running_label": "Super image building",
+    },
+    "fastboot_validation": {
+        "title": "Validating Fastboot Package",
+        "done_label": "Fastboot package validated",
+        "running_label": "Validating fastboot package",
+    },
+    "zip_package": {
+        "title": "Packaging Fastboot ZIP",
+        "done_label": "ZIP packaged",
+        "running_label": "Packaging fastboot ZIP",
+    },
+    "upload": {
+        "title": "Uploading to PixelDrain",
+        "done_label": "PixelDrain upload done",
+        "running_label": "Uploading to PixelDrain",
+    },
+    "final_report": {
+        "title": "Writing Final Reports",
+        "done_label": "Reports written",
+        "running_label": "Writing final reports",
+    },
+}
+
+# Ordered list of stages shown in the timeline block.
+_TIMELINE_STAGES = [
+    "image_extraction",
+    "app_inventory",
+    "stable_app_policy",
+    "stable_app_normalize",
+    "inventory_package",
+    "size_reduction",
+    "super_profile",
+    "style",
+    "repack",
+    "super",
+    "fastboot_validation",
+    "zip_package",
+    "upload",
+    "final_report",
+]
+
+
+def _stage_title(stage_id: str) -> str:
+    return STAGE_DISPLAY.get(stage_id, {}).get("title", stage_id)
 MAX_DOCUMENT_BYTES = int(os.environ.get("TELEGRAM_MAX_DOCUMENT_BYTES", str(50 * 1024 * 1024)))
 _TELEGRAM_THROTTLE_SECONDS = float(os.environ.get("TELEGRAM_THROTTLE_SECONDS", "5"))
 
@@ -291,7 +387,7 @@ class TelegramStatus:
     def _base_payload(self, text: str) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "chat_id": self.chat_id,
-            "text": _ascii(text)[:MAX_TEXT_LEN],
+            "text": str(text)[:MAX_TEXT_LEN],
             "disable_web_page_preview": True,
         }
         if self.thread_id:
@@ -316,7 +412,7 @@ class TelegramStatus:
 
     def _post(self, method: str, payload: dict[str, Any]) -> dict[str, Any]:
         url = f"https://api.telegram.org/bot{self.token}/{method}"
-        data = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         request = urllib.request.Request(
             url,
             data=data,
@@ -384,82 +480,146 @@ class TelegramStatus:
             return {"ok": False, "error": str(exc)}
 
     def _format(self, build_status: str, final_zip: Path | None = None, upload_url: str = "") -> str:
-        final_name = final_zip.name if final_zip else ""
-        final_size = ""
-        if final_zip and final_zip.is_file():
-            final_size = f"{final_zip.stat().st_size / 1024 / 1024:.1f} MiB"
-        current = ""
-        for event in reversed(self.events):
-            if event.get("status") == "RUN":
-                current = event.get("name", "")
-                break
-        lines = [
-            "MEZO DeadZone Production Status",
-            f"SoC: {_ascii(self.soc)}",
-            f"Selected device: {_ascii(self.device)}",
-            f"Detected device: {_ascii(self.detected_device)}",
-            f"Style: {_ascii(self.style)}",
-            f"ROM source: {_ascii(self.rom_source)}",
-            f"Status: {_ascii(build_status)}",
-        ]
-        if current:
-            lines.append(f"Current stage: {_ascii(current)}")
-        if self.failed_stage:
-            lines.append(f"Failed stage: {_ascii(self.failed_stage)}")
-        if self.error_summary:
-            lines.append(f"Error: {_ascii(self.error_summary)[:500]}")
-        lines.extend(["", "Stages:"])
-        for event in self.events[-18:]:
-            detail = f" - {_ascii(event['detail'])}" if event.get("detail") else ""
-            lines.append(f"[{_ascii(event.get('status'))}] {_ascii(event.get('name'))}{detail}")
-        elapsed = int(max(0, time.monotonic() - self.started_at))
-        minutes, seconds = divmod(elapsed, 60)
-        lines.append(f"Elapsed: {minutes:02d}:{seconds:02d}")
-        if final_name:
-            lines.append(f"Final ZIP: {_ascii(final_name)}")
-        if final_size:
-            lines.append(f"Final size: {_ascii(final_size)}")
-        size_policy = read_json(self.workspace.meta / "size_policy.json", {})
-        size_reduction = read_json(self.workspace.meta / "size_reduction.json", {})
-        if build_status != "OK" and size_policy:
-            lines.append(f"Max allowed: {_ascii(size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes') or '')}")
-            lines.append(f"Size reduction: {_ascii(size_reduction.get('level') or '(none)')} / removed {_ascii(size_reduction.get('removed_bytes') or 0)} bytes")
-            recommendation = size_policy.get("recommendation") or size_reduction.get("recommendation")
-            if recommendation:
-                lines.append(f"Recommendation: {_ascii(recommendation)}")
-        if upload_url:
-            lines.append(f"PixelDrain: {_ascii(upload_url)}")
+        status_upper = build_status.upper()
+        is_running = status_upper == "RUNNING"
+        is_done = status_upper in {"OK", "DONE"}
+        is_failed = not is_running and not is_done
 
-        # Enrich with build_state counters when available
         state_data = read_json(self.workspace.root.parent / "state" / "build_state.json", {})
         counters = state_data.get("counters", {})
-        if any(counters.values()):
-            lines.append(
-                f"Apps: found={counters.get('default_found', 0)} "
-                f"extra={counters.get('extra_apps', 0)} "
-                f"missing={counters.get('missing_apps', 0)}"
-            )
-        stable_kept = counters.get("stable_kept_apps", 0)
-        stable_renamed = counters.get("stable_renamed_apps", 0)
-        stable_missing = counters.get("stable_missing_apps", 0)
-        stable_deleted = counters.get("stable_deleted_extra_apps", 0)
-        if any([stable_kept, stable_renamed, stable_missing, stable_deleted]):
-            lines.append(
-                f"Stable App Policy: kept={stable_kept} "
-                f"renamed={stable_renamed} "
-                f"missing={stable_missing} "
-                f"deleted={stable_deleted}"
-            )
 
-        # Classified error on failure
-        if build_status.upper() not in {"OK", "RUNNING"} and self._classified_error:
-            ce = self._classified_error
-            lines.extend([
-                "",
-                f"Error type     : {_ascii(ce.get('error_type', ''))}",
-                f"Cause          : {_ascii(ce.get('cause', '')[:200])}",
-                f"Suggested fix  : {_ascii(ce.get('suggested_fix', '')[:200])}",
-                f"Suggested check: {_ascii(ce.get('suggested_check', '') or ce.get('suggested_fix', '')[:200])}",
-            ])
+        # Collapse events: name -> latest {status, detail}
+        collapsed: dict[str, dict[str, str]] = {}
+        for event in self.events:
+            name = event.get("name", "")
+            if name:
+                collapsed[name] = {
+                    "status": event.get("status", ""),
+                    "detail": event.get("detail", ""),
+                }
+
+        # Elapsed time
+        elapsed_secs = int(max(0, time.monotonic() - self.started_at))
+        minutes, seconds = divmod(elapsed_secs, 60)
+        elapsed_str = f"{minutes:02d}:{seconds:02d}"
+
+        # Build metadata (prefer live state file, fall back to self)
+        style = _ascii(state_data.get("edition") or self.style)
+        device = _ascii(state_data.get("device") or self.device or "Detecting...")
+        soc = _ascii(state_data.get("soc") or self.soc)
+        rom = _ascii(state_data.get("rom_version") or self.rom_source)
+        build_id = _ascii(state_data.get("build_id") or "")
+
+        lines: list[str] = []
+
+        # ── HEADER ──────────────────────────────────────────────────────────
+        if is_done:
+            lines.append("✅ DeadZone Build Completed")
+        elif is_failed:
+            lines.append("❌ DeadZone Build Failed")
+        else:
+            lines.append("🔥 DeadZone Factory Live")
+        lines.append("")
+        if build_id:
+            lines.append(f"Build: {build_id}")
+        lines.append(f"Style: {style}")
+        lines.append(f"Device: {device}")
+        lines.append(f"SoC: {soc}")
+        lines.append(f"ROM: {rom}")
+        lines.append(f"Status: {'RUNNING' if is_running else ('DONE' if is_done else 'FAILED')}")
+        lines.append(f"Elapsed: {elapsed_str}")
+
+        # ── CURRENT STAGE BLOCK (running only) ──────────────────────────────
+        if is_running:
+            current_stage_id = ""
+            for sid in _TIMELINE_STAGES:
+                if collapsed.get(sid, {}).get("status") == "RUN":
+                    current_stage_id = sid
+                    break
+            if not current_stage_id:
+                bs_stage = state_data.get("current_stage", "")
+                if bs_stage and collapsed.get(bs_stage, {}).get("status") not in {"OK", "FAIL"}:
+                    current_stage_id = bs_stage
+            if current_stage_id:
+                lines.append("")
+                lines.append(f"▶ {_stage_title(current_stage_id)}")
+
+            # Progress bar
+            progress = float(state_data.get("progress", 0.0))
+            if progress > 0:
+                bar_width = 20
+                filled = int(min(bar_width, max(0, progress / 100.0 * bar_width)))
+                bar = "█" * filled + "░" * (bar_width - filled)
+                lines.append(f"Progress: {progress:.0f}% [{bar}]")
+
+            # Current action / last event from live state
+            current_action = _ascii(state_data.get("current_action") or "")
+            if current_action:
+                lines.append(f"Action: {current_action}")
+            last_event = _ascii(state_data.get("last_event") or "")
+            if last_event:
+                lines.append(f"Last event: {last_event}")
+
+        # ── STABLE APP POLICY BLOCK ─────────────────────────────────────────
+        stable_kept = int(counters.get("stable_kept_apps", 0))
+        stable_renamed = int(counters.get("stable_renamed_apps", 0))
+        stable_missing = int(counters.get("stable_missing_apps", 0))
+        stable_deleted = int(counters.get("stable_deleted_extra_apps", 0))
+        if any([stable_kept, stable_renamed, stable_missing, stable_deleted]):
+            lines.append("")
+            lines.append("Stable App Policy:")
+            lines.append(f"✅ Kept: {stable_kept}")
+            lines.append(f"🔁 Renamed: {stable_renamed}")
+            lines.append(f"⚠️ Missing: {stable_missing}")
+            lines.append(f"🧹 Deleted extra: {stable_deleted}")
+
+        # ── TIMELINE BLOCK (running only) ────────────────────────────────────
+        if is_running:
+            timeline_lines: list[str] = []
+            running_idx = -1
+            for i, sid in enumerate(_TIMELINE_STAGES):
+                if collapsed.get(sid, {}).get("status") == "RUN":
+                    running_idx = i
+                    break
+            for i, sid in enumerate(_TIMELINE_STAGES):
+                info = STAGE_DISPLAY.get(sid)
+                if info is None:
+                    continue
+                col_status = collapsed.get(sid, {}).get("status", "")
+                if col_status == "OK":
+                    timeline_lines.append(f"✅ {info['done_label']}")
+                elif col_status == "RUN":
+                    timeline_lines.append(f"🔄 {info['running_label']}")
+                elif col_status == "FAIL":
+                    timeline_lines.append(f"❌ {info['title']}")
+                elif running_idx >= 0 and i > running_idx:
+                    timeline_lines.append(f"⏳ {info['title']}")
+            if timeline_lines:
+                lines.append("")
+                lines.append("Timeline:")
+                lines.extend(timeline_lines)
+
+        # ── DONE-SPECIFIC BLOCK ─────────────────────────────────────────────
+        if is_done:
+            if upload_url:
+                lines.append("")
+                lines.append(f"PixelDrain: {_ascii(upload_url)}")
+            lines.append("Reports generated ✅")
+
+        # ── FAILED-SPECIFIC BLOCK ───────────────────────────────────────────
+        if is_failed:
+            failed_stage = _ascii(self.failed_stage)
+            if failed_stage:
+                lines.append("")
+                lines.append(f"Failed stage: {_stage_title(failed_stage)}")
+            if self.error_summary:
+                lines.append(f"Error: {_ascii(self.error_summary)[:300]}")
+            if self._classified_error:
+                ce = self._classified_error
+                lines.append(f"Error type: {_ascii(ce.get('error_type', ''))}")
+                lines.append(f"Cause: {_ascii(ce.get('cause', ''))[:200]}")
+                lines.append(f"Suggested fix: {_ascii(ce.get('suggested_fix', ''))[:200]}")
+                suggested_check = ce.get("suggested_check") or ce.get("suggested_fix", "")
+                lines.append(f"Suggested check: {_ascii(suggested_check)[:200]}")
 
         return "\n".join(lines)

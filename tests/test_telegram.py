@@ -1,0 +1,312 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from factory.core.telegram import STAGE_DISPLAY, TelegramStatus, _stage_title
+from factory.core.workspace import Workspace
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_ws(tmp_path: Path, state: dict | None = None) -> Workspace:
+    """Create a minimal workspace rooted at tmp_path/workspace."""
+    root = tmp_path / "workspace"
+    root.mkdir(parents=True, exist_ok=True)
+    for sub in ("input", "extracted", "images", "partitions", "meta", "reports", "logs"):
+        (root / sub).mkdir(exist_ok=True)
+    (tmp_path / "final").mkdir(exist_ok=True)
+
+    # Write build_state.json if state dict supplied
+    if state is not None:
+        state_dir = tmp_path / "state"
+        state_dir.mkdir(exist_ok=True)
+        (state_dir / "build_state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    return Workspace(
+        root=root,
+        input=root / "input",
+        extracted=root / "extracted",
+        images=root / "images",
+        partitions=root / "partitions",
+        meta=root / "meta",
+        reports=root / "reports",
+        logs=root / "logs",
+        final=tmp_path / "final",
+    )
+
+
+def _make_tg(ws: Workspace, style: str = "Ultra", device: str = "miatoll", soc: str = "Snapdragon") -> TelegramStatus:
+    """Create a TelegramStatus with credentials pre-set for formatting tests."""
+    tg = TelegramStatus(enabled=True, soc=soc, style=style, device=device, workspace=ws)
+    tg.enabled = True
+    tg.token = "fake_token"
+    tg.chat_id = "fake_chat"
+    return tg
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_uses_human_stage_titles
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_uses_human_stage_titles(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.add_event("image_extraction", "RUN")
+
+    text = tg._format("RUNNING")
+
+    assert "Extracting Images" in text or "Extracting images" in text
+    assert "Scanning App Inventory" in text or "Super image" in text or "Timeline:" in text
+
+
+def test_telegram_done_uses_human_labels(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    for sid in ("image_extraction", "app_inventory", "super"):
+        tg.add_event(sid, "RUN")
+        tg.add_event(sid, "OK")
+
+    text = tg._format("OK")
+
+    assert "✅ DeadZone Build Completed" in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_does_not_show_raw_stage_ids
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_does_not_show_raw_stage_ids(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.add_event("image_extraction", "RUN")
+    tg.add_event("image_extraction", "OK")
+    tg.add_event("app_inventory", "RUN")
+
+    text = tg._format("RUNNING")
+
+    for raw_id in STAGE_DISPLAY:
+        # Raw IDs must not appear as bare words (outside of their human labels)
+        # We check they don't appear at a line start or standalone
+        for line in text.splitlines():
+            stripped = line.strip()
+            assert stripped != raw_id, (
+                f"Raw stage ID '{raw_id}' appeared as a standalone line: {stripped!r}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_collapses_run_ok_duplicates
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_collapses_run_ok_duplicates(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    # Add RUN then OK for the same stage — timeline should show only ✅, not 🔄 as well
+    tg.add_event("image_extraction", "RUN")
+    tg.add_event("image_extraction", "OK")
+    tg.add_event("app_inventory", "RUN")
+
+    text = tg._format("RUNNING")
+
+    # image_extraction should appear only in its done form (✅), not also as 🔄
+    assert "✅ Images extracted" in text
+    assert "🔄 Extracting images" not in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_no_developer_recommendation
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_no_developer_recommendation(tmp_path):
+    ws = _make_ws(tmp_path)
+    # Write a size_policy.json with a recommendation field
+    (ws.meta / "size_policy.json").write_text(
+        json.dumps({
+            "final_zip_max_bytes": 4_500_000_000,
+            "recommendation": "implement image mount/extract/rebuild stage",
+        }),
+        encoding="utf-8",
+    )
+    tg = _make_tg(ws)
+    tg.add_event("image_extraction", "RUN")
+
+    text = tg._format("RUNNING")
+
+    assert "Recommendation:" not in text
+    assert "implement image mount" not in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_current_stage_not_done_stage
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_current_stage_not_done_stage(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    # super is done; current running stage should be fastboot_validation
+    for sid in ("image_extraction", "app_inventory", "super"):
+        tg.add_event(sid, "RUN")
+        tg.add_event(sid, "OK")
+    tg.add_event("fastboot_validation", "RUN")
+
+    text = tg._format("RUNNING")
+
+    # Current stage indicator must point at fastboot_validation, not super
+    assert "▶ Validating Fastboot Package" in text
+    assert "▶ Building Super Image" not in text
+    # super must show as done in timeline
+    assert "✅ Super image built" in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_stable_policy_counters_visible
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_stable_policy_counters_visible(tmp_path):
+    state = {
+        "counters": {
+            "stable_kept_apps": 142,
+            "stable_renamed_apps": 3,
+            "stable_missing_apps": 0,
+            "stable_deleted_extra_apps": 12,
+        }
+    }
+    ws = _make_ws(tmp_path, state=state)
+    tg = _make_tg(ws)
+    tg.add_event("stable_app_policy", "RUN")
+
+    text = tg._format("RUNNING")
+
+    assert "Stable App Policy:" in text
+    assert "✅ Kept: 142" in text
+    assert "🔁 Renamed: 3" in text
+    assert "🧹 Deleted extra: 12" in text
+
+
+def test_telegram_stable_policy_block_absent_when_no_counters(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+
+    text = tg._format("RUNNING")
+
+    assert "Stable App Policy:" not in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_done_message_has_pixeldrain_if_available
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_done_message_has_pixeldrain_if_available(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    for sid in ("image_extraction", "super", "upload"):
+        tg.add_event(sid, "RUN")
+        tg.add_event(sid, "OK")
+
+    text = tg._format("OK", upload_url="https://pixeldrain.com/u/abc123")
+
+    assert "✅ DeadZone Build Completed" in text
+    assert "https://pixeldrain.com/u/abc123" in text
+    assert "Reports generated ✅" in text
+
+
+def test_telegram_done_message_no_pixeldrain_when_missing(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+
+    text = tg._format("OK")
+
+    assert "✅ DeadZone Build Completed" in text
+    assert "PixelDrain:" not in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_failed_message_has_error_type_and_suggested_check
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_failed_message_has_error_type_and_suggested_check(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.failed_stage = "super"
+    tg.error_summary = "lpmake returned exit code 1"
+    tg._classified_error = {
+        "error_type": "LPMAKE_FAILED",
+        "cause": "lpmake exit code 1",
+        "suggested_fix": "Check lpmake binary",
+        "suggested_check": "Verify super partition layout",
+    }
+
+    text = tg._format("FAILED")
+
+    assert "❌ DeadZone Build Failed" in text
+    assert "Failed stage: Building Super Image" in text
+    assert "Error type: LPMAKE_FAILED" in text
+    assert "Suggested check: Verify super partition layout" in text
+
+
+def test_telegram_failed_message_fallback_suggested_check(tmp_path):
+    """When suggested_check is absent, suggested_fix is shown as fallback."""
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.failed_stage = "upload"
+    tg._classified_error = {
+        "error_type": "PIXELDRAIN_UPLOAD_FAILED",
+        "cause": "unauthorized",
+        "suggested_fix": "Check PIXELDRAIN_API_KEY",
+        "suggested_check": "",
+    }
+
+    text = tg._format("FAILED")
+
+    assert "Suggested check: Check PIXELDRAIN_API_KEY" in text
+
+
+# ---------------------------------------------------------------------------
+# test_telegram_edits_same_message_id
+# ---------------------------------------------------------------------------
+
+
+def test_telegram_edits_same_message_id(tmp_path):
+    """sendMessage is called once; subsequent updates use editMessageText."""
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+
+    api_calls: list[str] = []
+
+    def _fake_post(method: str, payload: dict) -> dict:
+        api_calls.append(method)
+        if method == "sendMessage":
+            return {"ok": True, "result": {"message_id": 42}}
+        return {"ok": True, "result": {"message_id": 42}}
+
+    tg._post = _fake_post  # type: ignore[assignment]
+    tg._last_edit_at = 0.0
+
+    # Bypass throttle by setting _TELEGRAM_THROTTLE_SECONDS to 0
+    with patch("factory.core.telegram._TELEGRAM_THROTTLE_SECONDS", 0):
+        tg.start()
+        tg.add_event("image_extraction", "RUN")
+        tg.add_event("image_extraction", "OK")
+        tg.finish("OK")
+
+    sends = [m for m in api_calls if m == "sendMessage"]
+    edits = [m for m in api_calls if m == "editMessageText"]
+
+    assert len(sends) == 1, f"Expected 1 sendMessage, got {len(sends)}: {api_calls}"
+    assert len(edits) >= 1, f"Expected at least 1 editMessageText, got {len(edits)}: {api_calls}"
+    assert tg.message_id == 42
