@@ -1,27 +1,21 @@
-"""Stable App Policy Enforcement — Stage: stable_app_policy.
+"""Stable App Policy Enforcement - package-name-first identity.
 
-For stable style: enforces apps.list as the source of truth by renaming
-misnamed app folders and deleting extra apps from allowed locations.
-For non-stable styles: generates a report only, no filesystem changes.
-
-Allowed scan/delete locations:
-  system/app, system/priv-app
-  product/app, product/priv-app
-  system_ext/app, system_ext/priv-app
-  vendor/app, vendor/priv-app
-  mi_ext/app, mi_ext/priv-app
+Stable style mutates only app folders under the allowed partition locations.
+Package names are identity; folder names are only the desired final layout.
 """
 from __future__ import annotations
 
 import json
+import re
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from factory.state.build_state import BuildState
 
-from factory.reports.app_inventory import _find_apps_list, _parse_apps_list
+from factory.reports.app_inventory import _find_apps_list, _is_package_name
 
 
 _ALLOWED_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
@@ -36,19 +30,27 @@ _ALLOWED_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
     ("mi_ext", "app"),
     ("mi_ext", "priv-app"),
 )
+_ALLOWED_PARTITIONS = {p for p, _t in _ALLOWED_LOCATION_PAIRS}
+_UNKNOWN = "UNKNOWN"
 
 
 def _build_allowed_dirs(partitions_root: Path) -> list[Path]:
-    return [partitions_root / partition / app_type
-            for partition, app_type in _ALLOWED_LOCATION_PAIRS]
+    return [partitions_root / partition / app_type for partition, app_type in _ALLOWED_LOCATION_PAIRS]
+
+
+def _safe_relative(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
 
 
 def _is_in_allowed(app_absolute: str, allowed: list[Path]) -> bool:
     try:
-        p = Path(app_absolute)
+        p = Path(app_absolute).resolve()
         for d in allowed:
             try:
-                p.relative_to(d)
+                p.relative_to(d.resolve())
                 return True
             except ValueError:
                 continue
@@ -57,244 +59,441 @@ def _is_in_allowed(app_absolute: str, allowed: list[Path]) -> bool:
     return False
 
 
-def _classify(
-    scanned_apps: list[dict[str, Any]],
-    expected: list[dict[str, str]],
-    allowed: list[Path],
-) -> dict[str, list]:
-    by_package: dict[str, dict[str, str]] = {
-        e["package"].lower(): e for e in expected
+def _normalize_section(line: str) -> tuple[str, str] | None:
+    cleaned = re.sub(r"\s+", "", line.strip().lower())
+    if not cleaned or "/" not in cleaned:
+        return None
+    parts = [p for p in cleaned.split("/") if p]
+    for idx, part in enumerate(parts):
+        if part in _ALLOWED_PARTITIONS:
+            partition = part
+            app_type = "priv-app" if "priv-app" in parts[idx + 1:] else "app"
+            if idx + 1 < len(parts) and parts[idx + 1] in {"app", "priv-app"}:
+                app_type = parts[idx + 1]
+            return partition, app_type
+    app_type = "priv-app" if "priv-app" in cleaned else ("app" if "app" in cleaned else "")
+    return ("system", app_type) if app_type else None
+
+
+def _parse_expected_apps(path: Path) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    partition = "system"
+    app_type = "app"
+    lines = [l.strip() for l in path.read_text(encoding="utf-8", errors="ignore").splitlines()]
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if not line:
+            i += 1
+            continue
+        section = _normalize_section(line)
+        if section:
+            partition, app_type = section
+            i += 1
+            continue
+        if line.startswith("ro.") or line.startswith("=") or line.lower().endswith(".apk"):
+            i += 1
+            continue
+        j = i + 1
+        while j < len(lines) and not lines[j]:
+            j += 1
+        next_line = lines[j] if j < len(lines) else ""
+        if not _is_package_name(line) and _is_package_name(next_line):
+            name, package = line, next_line
+            i = j + 1
+        elif _is_package_name(line):
+            name, package = line.split(".")[-1], line
+            i += 1
+        else:
+            i += 1
+            continue
+        entries.append(
+            {
+                "name": name,
+                "package": package,
+                "section": app_type,
+                "partition": partition,
+                "app_type": app_type,
+                "expected_path": f"{partition}/{app_type}/{name}",
+                "expected_apk_name": f"{name}.apk",
+            }
+        )
+    return entries
+
+
+def _find_apk(folder: Path, expected_name: str = "") -> Path | None:
+    direct = folder / f"{expected_name}.apk" if expected_name else None
+    if direct and direct.is_file():
+        return direct
+    apks = sorted(folder.glob("*.apk"))
+    return apks[0] if apks else None
+
+
+def _package_from_tool(apk: Path) -> str:
+    commands = (
+        ("aapt", "dump", "badging", str(apk)),
+        ("apkanalyzer", "manifest", "application-id", str(apk)),
+        ("bundletool", "dump", "manifest", "--bundle", str(apk)),
+    )
+    for command in commands:
+        try:
+            proc = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=20)
+        except Exception:
+            continue
+        if proc.returncode != 0:
+            continue
+        output = proc.stdout.strip()
+        if not output:
+            continue
+        match = re.search(r"package: name='([^']+)'", output) or re.search(r"package=\"([^\"]+)\"", output)
+        candidate = match.group(1) if match else output.splitlines()[0].strip()
+        if _is_package_name(candidate):
+            return candidate
+    return ""
+
+
+def _inventory_index(scanned_apps: list[dict[str, Any]], partitions_root: Path) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for app in scanned_apps:
+        candidates = [app.get("absolute_path"), app.get("found_at"), app.get("path")]
+        for value in candidates:
+            resolved = _resolve_app_path(value or "", partitions_root)
+            if resolved:
+                index[str(resolved)] = app
+    return index
+
+
+def _resolve_app_path(value: str | Path, partitions_root: Path) -> Path | None:
+    if not value:
+        return None
+    raw = Path(str(value))
+    candidates: list[Path] = []
+    if raw.is_absolute():
+        candidates.append(raw)
+    parts = [p for p in raw.parts if p not in {"", "."}]
+    for idx, part in enumerate(parts):
+        if part in _ALLOWED_PARTITIONS:
+            tail = list(parts[idx:])
+            if len(tail) >= 2 and tail[1] == part:
+                tail.pop(1)
+            candidates.append(partitions_root.joinpath(*tail))
+            if len(tail) >= 3:
+                candidates.append(partitions_root / tail[0] / tail[1] / tail[2])
+            break
+    if len(parts) >= 2 and parts[0] in {"app", "priv-app"}:
+        for partition in _ALLOWED_PARTITIONS:
+            candidates.append(partitions_root / partition / parts[0] / parts[1])
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if candidate.exists():
+            return candidate.resolve()
+    return candidates[0].resolve() if candidates else None
+
+
+def _scan_allowed_apps(partitions_root: Path, scanned_apps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    inventory = _inventory_index(scanned_apps, partitions_root)
+    apps: list[dict[str, Any]] = []
+    for partition, app_type in _ALLOWED_LOCATION_PAIRS:
+        base = partitions_root / partition / app_type
+        if not base.is_dir():
+            continue
+        for folder in sorted(p for p in base.iterdir() if p.is_dir()):
+            inv = inventory.get(str(folder.resolve()), {})
+            apk = _find_apk(folder, folder.name)
+            package = str(inv.get("package_name") or "").strip()
+            source = "app_inventory" if package and package.upper() != _UNKNOWN else ""
+            if (not package or package.lower() == "unknown") and apk:
+                package = _package_from_tool(apk)
+                source = "apk_manifest" if package else ""
+            if not package:
+                package = _UNKNOWN
+                source = "unknown"
+            size = 0
+            try:
+                size = sum(p.stat().st_size for p in folder.rglob("*") if p.is_file())
+            except OSError:
+                pass
+            apps.append(
+                {
+                    "partition": partition,
+                    "app_type": app_type,
+                    "type": app_type,
+                    "name": folder.name,
+                    "folder_name": folder.name,
+                    "path": f"{partition}/{app_type}/{folder.name}",
+                    "absolute_path": str(folder.resolve()),
+                    "apk_path": str(apk.resolve()) if apk else "",
+                    "apk_name": apk.name if apk else "",
+                    "package_name": package,
+                    "package_source": source,
+                    "size": size,
+                }
+            )
+    allowed = _build_allowed_dirs(partitions_root)
+    seen = {a["absolute_path"] for a in apps}
+    for inv in scanned_apps:
+        resolved = _resolve_app_path(inv.get("absolute_path") or inv.get("found_at") or inv.get("path") or "", partitions_root)
+        if not resolved or str(resolved) in seen:
+            continue
+        package = str(inv.get("package_name") or _UNKNOWN)
+        apps.append(
+            {
+                "partition": str(inv.get("partition") or ""),
+                "app_type": str(inv.get("app_type") or inv.get("type") or ""),
+                "type": str(inv.get("app_type") or inv.get("type") or ""),
+                "name": str(inv.get("name") or resolved.name),
+                "folder_name": str(inv.get("name") or resolved.name),
+                "path": str(inv.get("path") or _safe_relative(resolved, partitions_root)),
+                "absolute_path": str(resolved),
+                "apk_path": "",
+                "apk_name": "",
+                "package_name": package if package.lower() != "unknown" else _UNKNOWN,
+                "package_source": "app_inventory" if package and package.upper() != _UNKNOWN else "unknown",
+                "size": int(inv.get("size") or 0),
+            }
+        )
+    return apps
+
+
+def _write_scan_reports(reports_dir: Path, data: dict[str, Any]) -> None:
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "stable_package_scan_report.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    lines = [
+        "DeadZone Stable Package Scan Report",
+        "===================================",
+        f"scanned_apps: {data.get('summary', {}).get('scanned_apps', 0)}",
+        f"unknown_package_apps: {data.get('summary', {}).get('unknown_package_apps', 0)}",
+        "",
+        "apps:",
+    ]
+    for app in data.get("apps") or []:
+        lines.append(f"  - {app['path']} package={app['package_name']} apk={app.get('apk_name') or '(none)'}")
+    (reports_dir / "stable_package_scan_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _expected_by_package(expected: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    return {e["package"].lower(): e for e in (_normalize_expected(e) for e in expected)}
+
+
+def _normalize_expected(entry: dict[str, str]) -> dict[str, str]:
+    app_type = entry.get("app_type") or entry.get("section") or "app"
+    partition = entry.get("partition") or "system"
+    name = entry["name"]
+    return {
+        **entry,
+        "partition": partition,
+        "app_type": app_type,
+        "expected_path": entry.get("expected_path") or f"{partition}/{app_type}/{name}",
+        "expected_apk_name": entry.get("expected_apk_name") or f"{name}.apk",
     }
-    by_name: dict[str, dict[str, str]] = {
-        e["name"].lower(): e for e in expected
-    }
+
+
+def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]], allowed: list[Path]) -> dict[str, list]:
+    by_pkg = _expected_by_package(expected)
+    scanned_by_pkg: dict[str, list[dict[str, Any]]] = {}
+    unknown: list[dict[str, Any]] = []
+    for app in scanned_apps:
+        if "app_type" not in app:
+            app["app_type"] = str(app.get("type") or "")
+        if "folder_name" not in app:
+            app["folder_name"] = str(app.get("name") or "")
+        if "absolute_path" not in app:
+            app["absolute_path"] = str(app.get("found_at") or "")
+        pkg = str(app.get("package_name") or "").strip()
+        if not pkg or pkg.upper() == _UNKNOWN or pkg.lower() == "unknown":
+            unknown.append({**app, "status": "UNKNOWN_PACKAGE", "action": "REPORT_ONLY"})
+            continue
+        scanned_by_pkg.setdefault(pkg.lower(), []).append(app)
 
     kept: list[dict[str, Any]] = []
     to_rename: list[dict[str, Any]] = []
-    extra_in_allowed: list[dict[str, Any]] = []
-    skipped_outside: list[dict[str, Any]] = []
-    matched_packages: set[str] = set()
+    wrong_location: list[dict[str, Any]] = []
+    missing: list[dict[str, Any]] = []
+    matched_paths: set[str] = set()
 
-    for app in scanned_apps:
-        pkg = (app.get("package_name") or "").lower()
-        name = (app.get("name") or "").lower()
-        abs_path = app.get("absolute_path", "")
-        in_allowed = _is_in_allowed(abs_path, allowed)
-
-        entry: dict[str, str] | None = None
-        if pkg and pkg != "unknown" and pkg in by_package:
-            entry = by_package[pkg]
-        elif name and name in by_name:
-            entry = by_name[name]
-
-        if entry is not None:
-            pkg_key = entry["package"].lower()
-            if pkg_key not in matched_packages:
-                matched_packages.add(pkg_key)
-                expected_name = entry["name"]
-                actual_name = app.get("name", "")
-                if actual_name == expected_name:
-                    kept.append({
-                        "status": "FOUND",
-                        "action": "KEEP",
-                        "name": expected_name,
-                        "package": entry["package"],
-                        "partition": app.get("partition", ""),
-                        "app_type": app.get("type", ""),
-                        "found_at": abs_path,
-                    })
-                else:
-                    to_rename.append({
-                        "status": "FOUND_RENAMED",
-                        "action": "RENAME_TO_EXPECTED",
-                        "expected_name": expected_name,
-                        "actual_name": actual_name,
-                        "package": entry["package"],
-                        "partition": app.get("partition", ""),
-                        "app_type": app.get("type", ""),
-                        "found_at": abs_path,
-                        "in_allowed": in_allowed,
-                    })
+    for raw_entry in expected:
+        entry = _normalize_expected(raw_entry)
+        pkg_key = entry["package"].lower()
+        actuals = scanned_by_pkg.get(pkg_key) or []
+        exact = next((a for a in actuals if a["partition"] == entry["partition"] and a["app_type"] == entry["app_type"] and a["folder_name"] == entry["name"]), None)
+        same_place = next((a for a in actuals if a["partition"] == entry["partition"] and a["app_type"] == entry["app_type"]), None)
+        if exact and exact.get("apk_name") and exact.get("apk_name") != entry["expected_apk_name"]:
+            matched_paths.add(exact["absolute_path"])
+            to_rename.append({**exact, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": exact["folder_name"], "found_at": exact["absolute_path"], "in_allowed": _is_in_allowed(exact["absolute_path"], allowed)})
+        elif exact:
+            matched_paths.add(exact["absolute_path"])
+            kept.append({**exact, "status": "FOUND", "action": "KEEP", "expected": entry, "package": entry["package"], "found_at": exact["absolute_path"]})
+        elif same_place:
+            matched_paths.add(same_place["absolute_path"])
+            to_rename.append({**same_place, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": same_place["folder_name"], "found_at": same_place["absolute_path"], "in_allowed": _is_in_allowed(same_place["absolute_path"], allowed)})
+        elif actuals:
+            for actual in actuals:
+                matched_paths.add(actual["absolute_path"])
+                wrong_location.append({**actual, "status": "FOUND_WRONG_LOCATION", "action": "REPORT_ONLY", "expected": entry, "package": entry["package"], "found_at": actual["absolute_path"]})
         else:
-            if in_allowed:
-                extra_in_allowed.append({
-                    "status": "EXTRA",
-                    "action": "DELETE",
-                    "name": app.get("name", ""),
-                    "package": app.get("package_name", "unknown"),
-                    "partition": app.get("partition", ""),
-                    "app_type": app.get("type", ""),
-                    "found_at": abs_path,
-                    "size": app.get("size", 0),
-                })
-            else:
-                skipped_outside.append({
-                    "status": "OUTSIDE_ALLOWED",
-                    "action": "SKIP",
-                    "name": app.get("name", ""),
-                    "package": app.get("package_name", "unknown"),
-                    "partition": app.get("partition", ""),
-                    "found_at": abs_path,
-                })
+            missing.append({"status": "MISSING", "action": "REPORT_ONLY", "name": entry["name"], "package": entry["package"], "expected_partition": entry["partition"], "expected_app_type": entry["app_type"], "expected_path": entry["expected_path"]})
 
-    missing: list[dict[str, Any]] = [
-        {
-            "status": "MISSING",
-            "action": "REPORT_ONLY",
-            "name": e["name"],
-            "package": e["package"],
-            "expected_section": e.get("section", ""),
-        }
-        for e in expected
-        if e["package"].lower() not in matched_packages
-    ]
+    extras: list[dict[str, Any]] = []
+    outside: list[dict[str, Any]] = []
+    for app in scanned_apps:
+        pkg = str(app.get("package_name") or "").strip()
+        if app["absolute_path"] in matched_paths or not pkg or pkg.upper() == _UNKNOWN or pkg.lower() == "unknown":
+            continue
+        item = {**app, "status": "EXTRA", "action": "DELETE", "package": pkg, "found_at": app["absolute_path"]}
+        if pkg.lower() not in by_pkg and _is_in_allowed(app["absolute_path"], allowed):
+            extras.append(item)
+        elif not _is_in_allowed(app["absolute_path"], allowed):
+            outside.append({**item, "status": "OUTSIDE_ALLOWED", "action": "SKIP"})
 
     return {
         "kept": kept,
         "to_rename": to_rename,
-        "extra_in_allowed": extra_in_allowed,
-        "skipped_outside": skipped_outside,
+        "extra_in_allowed": extras,
+        "skipped_outside": outside,
         "missing": missing,
+        "wrong_location": wrong_location,
+        "unknown": unknown,
     }
 
 
-def _apply_renames(
-    to_rename: list[dict[str, Any]],
-    enforce: bool,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    done: list[dict[str, Any]] = []
+def _rename_apk(folder: Path, expected_name: str) -> dict[str, Any] | None:
+    apk = _find_apk(folder)
+    if not apk:
+        return None
+    target = folder / f"{expected_name}.apk"
+    if apk == target:
+        return None
+    if target.exists():
+        raise RuntimeError(f"CONFLICT: APK rename target already exists: {target}")
+    apk.rename(target)
+    return {"old_apk_path": str(apk), "new_apk_path": str(target)}
+
+
+def _execute_renames(to_rename: list[dict[str, Any]], enforce: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], set[str]]:
+    renamed: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     errors: list[str] = []
+    changed: set[str] = set()
     for item in to_rename:
+        src = Path(item["found_at"])
+        expected = _normalize_expected(item.get("expected") or {"name": item.get("expected_name", ""), "package": item.get("package", ""), "partition": item.get("partition", ""), "app_type": item.get("app_type", "")})
+        target = src.parent / expected["name"]
         if not enforce:
-            done.append({**item, "enacted": False, "reason": "report-only mode"})
+            skipped.append({**item, "enacted": False, "reason": "report-only mode"})
             continue
         if not item.get("in_allowed"):
-            done.append({**item, "enacted": False, "reason": "outside allowed location"})
+            skipped.append({**item, "enacted": False, "reason": "outside allowed location"})
             continue
-        src = Path(item["found_at"])
-        target = src.parent / item["expected_name"]
-        if target.exists():
-            errors.append(
-                f"CONFLICT: rename target already exists: {target} "
-                f"(wanted to rename '{item['actual_name']}' -> '{item['expected_name']}')"
-            )
+        if not src.exists():
+            skipped.append({**item, "enacted": False, "reason": "source path not found"})
+            continue
+        if target.exists() and target != src:
+            errors.append(f"CONFLICT: rename target already exists: {target}")
             continue
         try:
-            src.rename(target)
-            done.append({**item, "enacted": True, "new_path": str(target)})
-            print(
-                f"[STABLE APP POLICY] RENAMED: '{item['actual_name']}' -> "
-                f"'{item['expected_name']}' ({item['package']})"
-            )
+            if target != src:
+                src.rename(target)
+            apk_change = _rename_apk(target, expected["name"])
+            result = {**item, "enacted": True, "new_path": str(target), "found_at": str(target)}
+            if apk_change:
+                result.update(apk_change)
+            renamed.append(result)
+            changed.add(str(item.get("partition") or expected["partition"]))
         except Exception as exc:
             errors.append(f"RENAME FAILED: {src} -> {target}: {exc}")
-    return done, errors
+    return renamed, skipped, errors, changed
 
 
-def _apply_deletes(
-    extras: list[dict[str, Any]],
-    enforce: bool,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    done: list[dict[str, Any]] = []
+def _apply_renames(to_rename: list[dict[str, Any]], enforce: bool) -> tuple[list[dict[str, Any]], list[str]]:
+    renamed, skipped, errors, _changed = _execute_renames(to_rename, enforce)
+    return renamed + skipped, errors
+
+
+def _execute_deletes(extras: list[dict[str, Any]], enforce: bool, allowed: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str], set[str]]:
+    deleted: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    outside: list[dict[str, Any]] = []
     errors: list[str] = []
+    changed: set[str] = set()
     for item in extras:
-        if not enforce:
-            done.append({**item, "enacted": False, "reason": "report-only mode"})
-            continue
         path = Path(item["found_at"])
+        if not _is_in_allowed(str(path), allowed):
+            outside.append({**item, "enacted": False, "reason": "outside allowed location"})
+            continue
+        if not enforce:
+            skipped.append({**item, "enacted": False, "reason": "report-only mode"})
+            continue
         if not path.exists():
-            done.append({**item, "enacted": False, "reason": "path not found"})
+            skipped.append({**item, "enacted": False, "reason": "path not found"})
             continue
         try:
             if path.is_dir():
                 shutil.rmtree(path)
             else:
                 path.unlink()
-            done.append({**item, "enacted": True})
-            print(f"[STABLE APP POLICY] DELETED EXTRA: {item['name']} ({item['package']})")
+            deleted.append({**item, "enacted": True})
+            changed.add(str(item.get("partition") or ""))
         except Exception as exc:
             errors.append(f"DELETE FAILED: {path}: {exc}")
-    return done, errors
+    return deleted, skipped, outside, errors, changed
+
+
+def _apply_deletes(extras: list[dict[str, Any]], enforce: bool) -> tuple[list[dict[str, Any]], list[str]]:
+    allowed = _build_allowed_dirs(Path("/"))
+    deleted, skipped, outside, errors, _changed = _execute_deletes(extras, enforce, allowed)
+    return deleted + skipped + outside, errors
+
+
+def _write_inventory(path: Path, rows: list[dict[str, Any]], formatter) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(formatter(row) for row in rows) + ("\n" if rows else ""), encoding="utf-8")
+
+
+def _write_inventory_files(inventory_dir: Path, data: dict[str, Any]) -> None:
+    _write_inventory(inventory_dir / "apps_missing.txt", data["missing_apps"], lambda r: f"{r['expected_path']} {r['package']}")
+    _write_inventory(inventory_dir / "apps_removed.txt", data["deleted_extra_apps"], lambda r: f"{r['path']} {r['package']}")
+    _write_inventory(inventory_dir / "apps_remove_skipped.txt", data["skipped_delete_apps"], lambda r: f"{r.get('path', r.get('found_at'))} {r.get('package')} reason={r.get('reason','')}")
+    _write_inventory(inventory_dir / "apps_renamed.txt", data["renamed_apps"], lambda r: f"{r.get('actual_name')} -> {r.get('expected_name')} {r.get('package')}")
+    _write_inventory(inventory_dir / "apps_rename_skipped.txt", data["skipped_rename_apps"], lambda r: f"{r.get('actual_name')} -> {r.get('expected_name')} {r.get('package')} reason={r.get('reason','')}")
+    _write_inventory(inventory_dir / "apps_unknown_package.txt", data["unknown_package_apps"], lambda r: f"{r.get('path')} package=UNKNOWN")
+    _write_inventory(inventory_dir / "apps_wrong_location.txt", data["found_wrong_location_apps"], lambda r: f"{r.get('path')} {r.get('package')} expected={r.get('expected', {}).get('expected_path', '')}")
 
 
 def _write_txt_report(path: Path, data: dict[str, Any]) -> None:
-    kept = data.get("kept_apps", [])
-    renamed = data.get("renamed_apps", [])
-    missing = data.get("missing_apps", [])
-    deleted = data.get("deleted_extra_apps", [])
-    skipped = data.get("skipped_outside_allowed_locations", [])
-    errors = data.get("errors", [])
     summary = data.get("summary", {})
-
     lines = [
         "DeadZone Stable App Policy Report",
         "==================================",
-        f"style              : {data.get('style', 'unknown')}",
-        f"enforce_mode       : {data.get('enforce_mode', False)}",
-        f"apps_list_path     : {data.get('apps_list_path', '(not found)')}",
-        f"total_expected     : {data.get('total_expected', 0)}",
+        f"style: {data.get('style')}",
+        f"enforce_mode: {data.get('enforce_mode')}",
+        f"apps_list_path: {data.get('apps_list_path')}",
+        f"total_expected: {data.get('total_expected')}",
         "",
-        "SUMMARY:",
-        f"  kept             : {summary.get('kept', 0)}",
-        f"  renamed          : {summary.get('renamed', 0)}",
-        f"  missing          : {summary.get('missing', 0)}",
-        f"  deleted_extra    : {summary.get('deleted_extra', 0)}",
-        f"  skipped_outside  : {summary.get('skipped_outside', 0)}",
-        f"  errors           : {summary.get('errors', 0)}",
-        "",
-        "KEPT APPS (FOUND — exact match):",
+        "summary:",
     ]
-    for app in kept:
-        lines.append(
-            f"  [KEEP] {app['name']} ({app['package']}) @ {app['found_at']}"
-        )
-    if not kept:
-        lines.append("  (none)")
-
-    lines += ["", "RENAMED APPS (FOUND_RENAMED):"]
-    for app in renamed:
-        enacted = app.get("enacted", False)
-        tag = "RENAMED" if enacted else "WOULD_RENAME"
-        lines.append(
-            f"  [{tag}] '{app.get('actual_name')}' -> '{app.get('expected_name')}' "
-            f"({app['package']}) @ {app['found_at']}"
-        )
-    if not renamed:
-        lines.append("  (none)")
-
-    lines += ["", "MISSING APPS (not found — report only):"]
-    for app in missing:
-        lines.append(
-            f"  [MISS] {app['name']} ({app['package']}) "
-            f"expected_section={app.get('expected_section', '')}"
-        )
-    if not missing:
-        lines.append("  (none)")
-
-    lines += ["", "DELETED EXTRA APPS (in allowed locations, not in apps.list):"]
-    for app in deleted:
-        enacted = app.get("enacted", False)
-        tag = "DELETED" if enacted else "WOULD_DELETE"
-        lines.append(
-            f"  [{tag}] {app['name']} ({app['package']}) @ {app['found_at']} "
-            f"size={app.get('size', 0)}"
-        )
-    if not deleted:
-        lines.append("  (none)")
-
-    lines += ["", "SKIPPED (outside allowed locations — never deleted):"]
-    for app in skipped:
-        lines.append(
-            f"  [SKIP] {app['name']} ({app['package']}) @ {app['found_at']}"
-        )
-    if not skipped:
-        lines.append("  (none)")
-
-    if errors:
-        lines += ["", "ERRORS:"]
-        for err in errors:
-            lines.append(f"  [ERR] {err}")
-
+    for key in ("kept_apps", "renamed_apps", "skipped_rename_apps", "missing_apps", "found_wrong_location_apps", "unknown_package_apps", "delete_candidates", "deleted_extra_apps", "skipped_delete_apps", "skipped_outside_allowed_locations", "changed_partitions"):
+        lines.append(f"  {key}: {summary.get(key, 0)}")
+    for title, key in (
+        ("KEPT APPS", "kept_apps"),
+        ("RENAMED APPS", "renamed_apps"),
+        ("SKIPPED RENAME APPS", "skipped_rename_apps"),
+        ("MISSING APPS", "missing_apps"),
+        ("WRONG LOCATION APPS", "found_wrong_location_apps"),
+        ("UNKNOWN PACKAGE APPS", "unknown_package_apps"),
+        ("DELETE CANDIDATES", "delete_candidates"),
+        ("DELETED EXTRA APPS", "deleted_extra_apps"),
+        ("SKIPPED DELETE APPS", "skipped_delete_apps"),
+    ):
+        lines += ["", f"{title}:"]
+        rows = data.get(key) or []
+        lines.extend(f"  - {r.get('path') or r.get('expected_path') or r.get('found_at')} {r.get('package') or r.get('package_name')}" for r in rows)
+        if not rows:
+            lines.append("  (none)")
+    if data.get("errors"):
+        lines += ["", "errors:", *[f"  - {e}" for e in data["errors"]]]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -305,75 +504,35 @@ def enforce_stable_app_policy(
     style: str,
     build_state: "BuildState | None" = None,
 ) -> dict[str, Any]:
-    """Enforce Stable App Policy against apps.list.
-
-    stable style   — renames misnamed folders and deletes extra apps.
-    non-stable     — report-only, no filesystem modifications.
-
-    Raises RuntimeError when:
-      - style is stable and apps.list is missing
-      - a rename target already exists (CONFLICT)
-      - a delete operation fails
-    """
     style_key = style.strip().lower()
     enforce = style_key == "stable"
-
     apps_list_path = _find_apps_list()
     if apps_list_path is None:
         if enforce:
-            raise RuntimeError(
-                "Stable App Policy requires ListMezo/free/apps.list "
-                "but the file was not found"
-            )
-        print("[STABLE APP POLICY] apps.list not found; skipping (non-stable style)")
-        return {
-            "status": "skipped",
-            "reason": "apps.list not found",
-            "style": style,
-            "enforce_mode": enforce,
-        }
+            raise RuntimeError("Stable App Policy requires ListMezo/free/apps.list but the file was not found")
+        return {"status": "skipped", "reason": "apps.list not found", "style": style, "enforce_mode": enforce}
 
-    print(f"[STABLE APP POLICY] apps.list: {apps_list_path}")
-    try:
-        expected = _parse_apps_list(apps_list_path)
-    except Exception as exc:
-        raise RuntimeError(
-            f"Stable App Policy failed to parse apps.list: {exc}"
-        ) from exc
-
-    print(
-        f"[STABLE APP POLICY] Expected={len(expected)} "
-        f"Scanned={len(scanned_apps)} "
-        f"enforce={enforce}"
-    )
+    expected = _parse_expected_apps(apps_list_path)
+    scanned = _scan_allowed_apps(partitions_root, scanned_apps)
+    scan_data = {
+        "status": "ok",
+        "apps": scanned,
+        "summary": {
+            "scanned_apps": len(scanned),
+            "unknown_package_apps": sum(1 for a in scanned if str(a.get("package_name")).upper() == _UNKNOWN),
+        },
+    }
+    _write_scan_reports(reports_dir, scan_data)
 
     allowed = _build_allowed_dirs(partitions_root)
-    classification = _classify(scanned_apps, expected, allowed)
-
-    renamed_done, rename_errors = _apply_renames(classification["to_rename"], enforce)
-    deleted_done, delete_errors = _apply_deletes(classification["extra_in_allowed"], enforce)
-
+    classification = _classify(scanned, expected, allowed)
+    renamed, skipped_rename, rename_errors, rename_changed = _execute_renames(classification["to_rename"], enforce)
+    deleted, skipped_delete, skipped_outside_delete, delete_errors, delete_changed = _execute_deletes(classification["extra_in_allowed"], enforce, allowed)
     all_errors = rename_errors + delete_errors
+
+    changed_partitions = sorted(p for p in (rename_changed | delete_changed) if p)
     if enforce and all_errors:
-        raise RuntimeError(
-            f"Stable App Policy failed with {len(all_errors)} error(s):\n"
-            + "\n".join(all_errors)
-        )
-
-    kept_count = len(classification["kept"])
-    renamed_count = sum(1 for r in renamed_done if r.get("enacted"))
-    missing_count = len(classification["missing"])
-    deleted_count = sum(1 for d in deleted_done if d.get("enacted"))
-    skipped_count = len(classification["skipped_outside"])
-
-    summary = {
-        "kept": kept_count,
-        "renamed": renamed_count,
-        "missing": missing_count,
-        "deleted_extra": deleted_count,
-        "skipped_outside": skipped_count,
-        "errors": len(all_errors),
-    }
+        raise RuntimeError("Stable App Policy failed with errors:\n" + "\n".join(all_errors))
 
     data: dict[str, Any] = {
         "status": "ok",
@@ -381,48 +540,60 @@ def enforce_stable_app_policy(
         "enforce_mode": enforce,
         "apps_list_path": str(apps_list_path),
         "total_expected": len(expected),
-        "summary": summary,
         "kept_apps": classification["kept"],
-        "renamed_apps": renamed_done,
+        "renamed_apps": renamed,
+        "skipped_rename_apps": skipped_rename,
         "missing_apps": classification["missing"],
-        "deleted_extra_apps": deleted_done,
-        "skipped_outside_allowed_locations": classification["skipped_outside"],
+        "found_wrong_location_apps": classification["wrong_location"],
+        "unknown_package_apps": classification["unknown"],
+        "delete_candidates": classification["extra_in_allowed"],
+        "deleted_extra_apps": deleted,
+        "skipped_delete_apps": skipped_delete,
+        "skipped_outside_allowed_locations": classification["skipped_outside"] + skipped_outside_delete,
+        "changed_partitions": changed_partitions,
         "errors": all_errors,
     }
+    data["summary"] = {
+        "kept_apps": len(data["kept_apps"]),
+        "renamed_apps": len(data["renamed_apps"]),
+        "skipped_rename_apps": len(data["skipped_rename_apps"]),
+        "missing_apps": len(data["missing_apps"]),
+        "found_wrong_location_apps": len(data["found_wrong_location_apps"]),
+        "unknown_package_apps": len(data["unknown_package_apps"]),
+        "delete_candidates": len(data["delete_candidates"]),
+        "deleted_extra_apps": len(data["deleted_extra_apps"]),
+        "skipped_delete_apps": len(data["skipped_delete_apps"]),
+        "skipped_outside_allowed_locations": len(data["skipped_outside_allowed_locations"]),
+        "changed_partitions": len(changed_partitions),
+        "kept": len(data["kept_apps"]),
+        "renamed": len(data["renamed_apps"]),
+        "missing": len(data["missing_apps"]),
+        "deleted_extra": len(data["deleted_extra_apps"]),
+        "skipped_outside": len(data["skipped_outside_allowed_locations"]),
+    }
+
+    workspace_root = reports_dir.parent
+    _write_inventory_files(workspace_root / "inventory", data)
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    _write_txt_report(reports_dir / "stable_app_policy_report.txt", data)
+    (reports_dir / "stable_app_policy_report.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
     if build_state is not None:
         try:
             build_state.counters.update(
-                stable_kept_apps=kept_count,
-                stable_renamed_apps=renamed_count,
-                stable_missing_apps=missing_count,
-                stable_deleted_extra_apps=deleted_count,
+                stable_kept_apps=len(data["kept_apps"]),
+                stable_renamed_apps=len(data["renamed_apps"]),
+                stable_missing_apps=len(data["missing_apps"]),
+                stable_deleted_extra_apps=len(data["deleted_extra_apps"]),
             )
             build_state.save()
         except Exception as exc:
             print(f"[STABLE APP POLICY] Warning: counters update failed: {exc}")
 
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    txt_path = reports_dir / "stable_app_policy_report.txt"
-    try:
-        _write_txt_report(txt_path, data)
-        print(f"[STABLE APP POLICY] Written: {txt_path}")
-    except Exception as exc:
-        print(f"[STABLE APP POLICY] Warning: txt report write failed: {exc}")
-
-    json_path = reports_dir / "stable_app_policy_report.json"
-    try:
-        json_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-        print(f"[STABLE APP POLICY] Written: {json_path}")
-    except Exception as exc:
-        print(f"[STABLE APP POLICY] Warning: json report write failed: {exc}")
-
     print(
-        f"[STABLE APP POLICY] kept={kept_count} "
-        f"renamed={renamed_count} "
-        f"missing={missing_count} "
-        f"deleted_extra={deleted_count} "
-        f"skipped_outside={skipped_count}"
+        "[STABLE APP POLICY] "
+        f"kept={len(data['kept_apps'])} renamed={len(data['renamed_apps'])} "
+        f"missing={len(data['missing_apps'])} deleted_extra={len(data['deleted_extra_apps'])} "
+        f"unknown={len(data['unknown_package_apps'])}"
     )
     return data

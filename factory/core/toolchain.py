@@ -9,7 +9,7 @@ from pathlib import Path
 from factory.core.workspace import Workspace
 
 REQUIRED_TOOLS = ("lpmake", "lpdump", "lpunpack", "simg2img", "img2simg")
-OPTIONAL_TOOLS = ("brotli", "zstd", "file", "debugfs", "dump.erofs", "fsck.erofs", "erofsfuse", "7z", "mount")
+OPTIONAL_TOOLS = ("brotli", "zstd", "file", "debugfs", "dump.erofs", "fsck.erofs", "mkfs.erofs", "erofsfuse", "7z", "mount")
 HELPER_DIRS = (
     Path("tools/helper"),
     Path("tools/helper/linux"),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -119,6 +120,19 @@ def classify_error(error: str, stage: str = "") -> dict[str, Any]:
     raw = str(error or "").strip()
     lower = raw.lower()
     stage_lower = stage.lower()
+    try:
+        structured = json.loads(raw)
+    except Exception:
+        structured = {}
+    if isinstance(structured, dict) and structured.get("error_type"):
+        return {
+            "error_type": structured.get("error_type"),
+            "stage": stage or structured.get("stage") or "unknown",
+            "cause": structured.get("cause") or raw[:400],
+            "suggested_fix": structured.get("suggested_fix") or "Check reports and logs artifacts for the failing stage",
+            "suggested_check": structured.get("suggested_check") or "",
+            "raw_error": raw[:800],
+        }
 
     if _is_apps_list_missing(raw, stage_lower):
         return {
@@ -145,7 +159,16 @@ def classify_error(error: str, stage: str = "") -> dict[str, Any]:
                 "error_type": sig["error_type"],
                 "stage": stage or stage_hint,
                 "cause": sig["cause"],
-                "suggested_fix": sig["suggested_fix"],
+                "suggested_fix": (
+                    "Reduce more apps, rebuild partitions correctly, or adjust final_zip_max_gb only if intentional"
+                    if sig["error_type"] == "FASTBOOT_VALIDATION_FAILED"
+                    else sig["suggested_fix"]
+                ),
+                "suggested_check": (
+                    "stable_app_policy_report, stable_partition_rebuild_report, size_policy_report"
+                    if sig["error_type"] == "FASTBOOT_VALIDATION_FAILED"
+                    else ""
+                ),
                 "raw_error": raw[:800],
             }
 

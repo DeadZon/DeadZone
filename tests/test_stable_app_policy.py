@@ -507,3 +507,76 @@ def test_rename_outside_allowed_skipped_even_in_stable(tmp_path):
     assert wrong.exists(), "Rename outside allowed must not happen"
     assert not errors
     assert done[0].get("reason") == "outside allowed location"
+
+
+def test_package_match_wrong_partition_report_only_not_deleted(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    wrong = _make_app_folder(partitions_root, "product", "app", "BluetoothMidiService")
+    scanned = [_scanned_app("product", "app", "BluetoothMidiService", "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert wrong.exists()
+    assert result["found_wrong_location_apps"]
+    assert result["deleted_extra_apps"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_unknown_package_is_reported_not_deleted(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    unknown = _make_app_folder(partitions_root, "system", "app", "Mystery")
+    scanned = [_scanned_app("system", "app", "Mystery", "unknown", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert unknown.exists()
+    assert result["unknown_package_apps"]
+    assert result["delete_candidates"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_same_package_different_apk_name_renames_apk_not_delete(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    folder = partitions_root / "system" / "app" / "BTMidi"
+    folder.mkdir(parents=True)
+    (folder / "Wrong.apk").write_bytes(b"PK\x03\x04")
+    scanned = [_scanned_app("system", "app", "BTMidi", "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    target = partitions_root / "system" / "app" / "BluetoothMidiService"
+    assert target.exists()
+    assert (target / "BluetoothMidiService.apk").is_file()
+    assert not result["deleted_extra_apps"]
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_same_package_exact_folder_different_apk_name_renames_apk(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    folder = partitions_root / "system" / "app" / "BluetoothMidiService"
+    folder.mkdir(parents=True)
+    (folder / "Wrong.apk").write_bytes(b"PK\x03\x04")
+    scanned = [_scanned_app("system", "app", "BluetoothMidiService", "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert folder.exists()
+    assert (folder / "BluetoothMidiService.apk").is_file()
+    assert not (folder / "Wrong.apk").exists()
+    assert len(result["renamed_apps"]) == 1
+    assert not result["deleted_extra_apps"]
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_delete_candidate_path_missing_is_skipped_not_counted_deleted(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    missing = partitions_root / "product" / "app" / "Gone"
+    scanned = [_scanned_app("product", "app", "Gone", "com.extra.gone", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert not missing.exists()
+    assert result["deleted_extra_apps"] == []
+    assert result["skipped_delete_apps"]
+    assert result["summary"]["deleted_extra_apps"] == 0
+    del os.environ["LISTMEZO_APPS_LIST"]

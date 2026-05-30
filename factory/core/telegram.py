@@ -33,6 +33,11 @@ STAGE_DISPLAY: dict[str, dict[str, str]] = {
         "done_label": "Stable app policy applied",
         "running_label": "Applying stable app policy",
     },
+    "stable_partition_rebuild": {
+        "title": "Rebuilding Stable Partitions",
+        "done_label": "Stable partitions rebuilt",
+        "running_label": "Rebuilding stable partitions",
+    },
     "stable_app_normalize": {
         "title": "Normalizing Stable Apps",
         "done_label": "Stable apps normalized",
@@ -95,6 +100,7 @@ _TIMELINE_STAGES = [
     "image_extraction",
     "app_inventory",
     "stable_app_policy",
+    "stable_partition_rebuild",
     "stable_app_normalize",
     "inventory_package",
     "size_reduction",
@@ -642,17 +648,42 @@ class TelegramStatus:
                 lines.append(f"Last event: {last_event}")
 
         # ── STABLE APP POLICY BLOCK ─────────────────────────────────────────
-        stable_kept = int(counters.get("stable_kept_apps", 0))
-        stable_renamed = int(counters.get("stable_renamed_apps", 0))
-        stable_missing = int(counters.get("stable_missing_apps", 0))
-        stable_deleted = int(counters.get("stable_deleted_extra_apps", 0))
-        if any([stable_kept, stable_renamed, stable_missing, stable_deleted]):
+        policy_report = read_json(self.workspace.reports / "stable_app_policy_report.json", {})
+        policy_summary = policy_report.get("summary") if isinstance(policy_report.get("summary"), dict) else {}
+        stable_kept = int(policy_summary.get("kept_apps", counters.get("stable_kept_apps", 0)) or 0)
+        stable_renamed = int(policy_summary.get("renamed_apps", counters.get("stable_renamed_apps", 0)) or 0)
+        stable_missing = int(policy_summary.get("missing_apps", counters.get("stable_missing_apps", 0)) or 0)
+        stable_deleted = int(policy_summary.get("deleted_extra_apps", counters.get("stable_deleted_extra_apps", 0)) or 0)
+        stable_skipped_delete = int(policy_summary.get("skipped_delete_apps", 0) or 0)
+        stable_unknown = int(policy_summary.get("unknown_package_apps", 0) or 0)
+        if (policy_report or any([stable_kept, stable_renamed, stable_missing, stable_deleted])) and any([stable_kept, stable_renamed, stable_missing, stable_deleted, stable_skipped_delete, stable_unknown]):
             lines.append("")
             lines.append("Stable App Policy:")
             lines.append(f"✅ Kept: {stable_kept}")
             lines.append(f"🔁 Renamed: {stable_renamed}")
             lines.append(f"⚠️ Missing: {stable_missing}")
             lines.append(f"🧹 Deleted extra: {stable_deleted}")
+            lines.append(f"⏭ Skipped delete: {stable_skipped_delete}")
+            lines.append(f"❔ Unknown package: {stable_unknown}")
+
+        rebuild_report = read_json(self.workspace.reports / "stable_partition_rebuild_report.json", {})
+        rebuild_entries = rebuild_report.get("partitions") if isinstance(rebuild_report.get("partitions"), list) else []
+        if rebuild_entries:
+            lines.append("")
+            if rebuild_report.get("status") == "failed":
+                lines.append("❌ Partition Rebuild Failed")
+                err = rebuild_report.get("error") if isinstance(rebuild_report.get("error"), dict) else {}
+                if err.get("error_type"):
+                    lines.append(f"Error type: {_ascii(err.get('error_type'))}")
+                if err.get("cause"):
+                    lines.append(f"Cause: {_ascii(err.get('cause'))}")
+                if err.get("suggested_fix"):
+                    lines.append(f"Suggested fix: {_ascii(err.get('suggested_fix'))}")
+            else:
+                lines.append("Partition Rebuild:")
+                for entry in rebuild_entries:
+                    if entry.get("status") == "rebuilt":
+                        lines.append(f"✅ {entry.get('partition')}.img rebuilt: {entry.get('size_before')} → {entry.get('size_after')}")
 
         # ── TIMELINE BLOCK (running only) ────────────────────────────────────
         if is_running:
@@ -709,5 +740,11 @@ class TelegramStatus:
                 lines.append(f"Suggested fix: {suggested_fix[:200]}")
             if suggested_check:
                 lines.append(f"Suggested check: {suggested_check[:200]}")
+            if failed_stage == "size_policy":
+                size_policy = read_json(self.workspace.meta / "size_policy.json", {})
+                if size_policy.get("final_zip_size") is not None:
+                    lines.append(f"Final ZIP size: {size_policy.get('final_zip_size')}")
+                if size_policy.get("final_zip_max_allowed") or size_policy.get("final_zip_max_bytes"):
+                    lines.append(f"Limit: {size_policy.get('final_zip_max_allowed') or size_policy.get('final_zip_max_bytes')}")
 
         return "\n".join(lines)

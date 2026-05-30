@@ -12,8 +12,8 @@ from factory.core.build_lock import BuildAlreadyRunningError, BuildLock, make_lo
 from factory.core.cleanup import cleanup
 from factory.core.error_classifier import classify_from_context
 from factory.core.event_bus import EventBus
-from factory.core.stable_app_normalizer import normalize_stable_apps
 from factory.core.stable_app_policy import enforce_stable_app_policy
+from factory.core.stable_partition_rebuild import rebuild_stable_partitions
 from factory.core.detector import detect_rom
 from factory.core.device_registry import list_devices, resolve_device
 from factory.core.downloader import download_rom
@@ -74,6 +74,7 @@ class BuildContext:
     image_extraction: dict[str, Any] = field(default_factory=dict)
     stable_app_policy: dict[str, Any] = field(default_factory=dict)
     stable_normalize: dict[str, Any] = field(default_factory=dict)
+    stable_partition_rebuild: dict[str, Any] = field(default_factory=dict)
     stable_normalize_mode: str = "apply"
     run_stable_normalize: bool = True
     upload_pixeldrain: bool = False
@@ -419,12 +420,16 @@ def _run_build(ctx: BuildContext) -> BuildContext:
                     build_state=ctx.build_state,
                 ),
             )
-        if ctx.run_stable_normalize and ctx.style in ("stable",):
-            ctx.stable_normalize = _stage(
+            ctx.stable_partition_rebuild = _stage(
                 ctx,
-                "stable_app_normalize",
-                lambda: normalize_stable_apps(ws, style=ctx.style, mode=ctx.stable_normalize_mode),
+                "stable_partition_rebuild",
+                lambda: rebuild_stable_partitions(ws, ctx.stable_app_policy),
             )
+        if ctx.run_stable_normalize and ctx.style in ("stable",):
+            ctx.stable_normalize = {
+                "skipped": True,
+                "reason": "Stable App Policy is the source of truth for stable app actions",
+            }
         ctx.app_inventory_zip_path = _stage(
             ctx,
             "inventory_package",
@@ -624,7 +629,7 @@ def main() -> int:
     super_target_bytes = bytes_from_decimal_gb(args.super_target_gb, 8_500_000_000)
     final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
     generate_inventory = not args.skip_app_inventory
-    run_normalize = not args.skip_stable_app_normalize
+    run_normalize = bool(style_key != "stable" and not args.skip_stable_app_normalize)
     live_screen_enabled = _bool_arg(getattr(args, "live_screen", None), False)
 
     build_state = create_build_state(

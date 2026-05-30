@@ -18,6 +18,8 @@ STAGE_NAMES = [
     "inspect",
     "image_extraction",
     "app_inventory",
+    "stable_app_policy",
+    "stable_partition_rebuild",
     "inventory_package",
     "size_reduction",
     "super_profile",

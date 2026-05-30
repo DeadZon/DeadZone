@@ -61,6 +61,14 @@ STAGE_DEFINITIONS: list[dict[str, Any]] = [
         "fail_text": "Stable app policy failed",
     },
     {
+        "id": "stable_partition_rebuild",
+        "title": "Stable Partition Rebuild",
+        "description": "Rebuild partition images changed by Stable App Policy",
+        "weight": 8,
+        "success_text": "Stable partitions rebuilt",
+        "fail_text": "Stable partition rebuild failed",
+    },
+    {
         "id": "legend_patches",
         "title": "Legend Patches",
         "description": "Apply style patches (Stable, Legend, Gaming, EPiC)",
@@ -132,6 +140,7 @@ BUILD_STAGE_MAP: dict[str, str] = {
     "stable_app_normalize": "app_policy_compare",
     "inventory_package": "app_policy_compare",
     "stable_app_policy": "stable_app_policy",
+    "stable_partition_rebuild": "stable_partition_rebuild",
     "size_reduction": "image_mount",
     "super_profile": "super_build",
     "style": "legend_patches",
