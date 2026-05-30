@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import zipfile
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -33,6 +34,13 @@ _ALLOWED_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
 )
 _ALLOWED_PARTITIONS = {p for p, _t in _ALLOWED_LOCATION_PAIRS}
 _UNKNOWN = "UNKNOWN"
+
+
+def _known_package(value: Any) -> str:
+    package = str(value or "").strip()
+    if not package or package.upper() == _UNKNOWN or package.lower() == "unknown":
+        return ""
+    return package
 
 
 def _env_int(name: str, default: int) -> int:
@@ -80,18 +88,32 @@ def _is_in_allowed(app_absolute: str, allowed: list[Path]) -> bool:
     return False
 
 
-def _normalize_section(line: str) -> tuple[str, str] | None:
-    cleaned = re.sub(r"\s+", "", line.strip().lower())
+def _normalize_expected_path(value: str) -> tuple[str, str, str] | None:
+    cleaned = re.sub(r"\s+", "", value.strip())
     if not cleaned or "/" not in cleaned:
         return None
     parts = [p for p in cleaned.split("/") if p]
     for idx, part in enumerate(parts):
-        if part in _ALLOWED_PARTITIONS:
-            partition = part
-            app_type = "priv-app" if "priv-app" in parts[idx + 1:] else "app"
-            if idx + 1 < len(parts) and parts[idx + 1] in {"app", "priv-app"}:
-                app_type = parts[idx + 1]
-            return partition, app_type
+        if part not in _ALLOWED_PARTITIONS:
+            continue
+        tail = parts[idx:]
+        if len(tail) >= 2 and tail[1] == part:
+            tail.pop(1)
+        if len(tail) >= 3 and tail[1] in {"app", "priv-app"}:
+            return tail[0], tail[1], tail[2]
+        if len(tail) >= 2 and tail[1] in {"app", "priv-app"}:
+            return tail[0], tail[1], ""
+    return None
+
+
+def _normalize_section(line: str) -> tuple[str, str] | None:
+    cleaned = re.sub(r"\s+", "", line.strip().lower())
+    if not cleaned or "/" not in cleaned:
+        return None
+    normalized = _normalize_expected_path(cleaned + "/_placeholder")
+    if normalized:
+        partition, app_type, _name = normalized
+        return partition, app_type
     app_type = "priv-app" if "priv-app" in cleaned else ("app" if "app" in cleaned else "")
     return ("system", app_type) if app_type else None
 
@@ -107,6 +129,29 @@ def _parse_expected_apps(path: Path) -> list[dict[str, str]]:
         if not line:
             i += 1
             continue
+        path_entry = _normalize_expected_path(line)
+        if path_entry and path_entry[2]:
+            path_partition, path_app_type, path_name = path_entry
+            j = i + 1
+            while j < len(lines) and not lines[j]:
+                j += 1
+            next_line = lines[j] if j < len(lines) else ""
+            if _is_package_name(next_line):
+                entries.append(
+                    {
+                        "name": path_name,
+                        "expected_folder_name": path_name,
+                        "package": next_line,
+                        "expected_package": next_line,
+                        "section": path_app_type,
+                        "partition": path_partition,
+                        "app_type": path_app_type,
+                        "expected_path": f"{path_partition}/{path_app_type}/{path_name}",
+                        "expected_apk_name": f"{path_name}.apk",
+                    }
+                )
+                i = j + 1
+                continue
         section = _normalize_section(line)
         if section:
             partition, app_type = section
@@ -131,7 +176,9 @@ def _parse_expected_apps(path: Path) -> list[dict[str, str]]:
         entries.append(
             {
                 "name": name,
+                "expected_folder_name": name,
                 "package": package,
+                "expected_package": package,
                 "section": app_type,
                 "partition": partition,
                 "app_type": app_type,
@@ -143,11 +190,20 @@ def _parse_expected_apps(path: Path) -> list[dict[str, str]]:
 
 
 def _find_apk(folder: Path, expected_name: str = "") -> Path | None:
-    direct = folder / f"{expected_name}.apk" if expected_name else None
-    if direct and direct.is_file():
-        return direct
-    apks = sorted(folder.glob("*.apk"))
-    return apks[0] if apks else None
+    apks = sorted(folder.rglob("*.apk"))
+    if not apks:
+        return None
+    expected_lower = f"{expected_name.lower()}.apk" if expected_name else ""
+    for apk in apks:
+        if expected_lower and apk.name.lower() == expected_lower:
+            return apk
+    return sorted(apks, key=lambda p: (-p.stat().st_size, p.as_posix()))[0]
+
+
+def _package_tools_status() -> dict[str, list[str]]:
+    names = ["aapt", "apkanalyzer", "bundletool"]
+    available = [name for name in names if shutil.which(name)]
+    return {"available": available, "missing": [name for name in names if name not in available]}
 
 
 def _package_from_tool(apk: Path) -> tuple[str, str, str]:
@@ -172,6 +228,46 @@ def _package_from_tool(apk: Path) -> tuple[str, str, str]:
             confidence = "medium" if source == "bundletool" and not match else "high"
             return candidate, source, confidence
     return "", "unknown", "low"
+
+
+def _package_from_manifest(apk: Path) -> tuple[str, str, str]:
+    try:
+        with zipfile.ZipFile(apk) as zf:
+            data = zf.read("AndroidManifest.xml")
+    except Exception:
+        return "", "unknown", "low"
+    text = "\n".join(
+        (
+            data.decode("utf-8", errors="ignore"),
+            data.decode("utf-16le", errors="ignore"),
+        )
+    )
+    patterns = (
+        r'package\s*=\s*"([^"]+)"',
+        r"package\s*=\s*'([^']+)'",
+        r"\b([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+){2,})\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            candidate = match.group(1).strip()
+            if _is_package_name(candidate):
+                return candidate, "manifest", "medium"
+    return "", "unknown", "low"
+
+
+def _extract_package(apk: Path | None, inventory_package: str = "") -> tuple[str, str, str]:
+    if apk:
+        package, source, confidence = _package_from_tool(apk)
+        if package:
+            return package, source, confidence
+        package, source, confidence = _package_from_manifest(apk)
+        if package:
+            return package, source, confidence
+    fallback = _known_package(inventory_package)
+    if fallback:
+        return fallback, "inventory", "medium"
+    return _UNKNOWN, "unknown", "low"
 
 
 def _inventory_index(scanned_apps: list[dict[str, Any]], partitions_root: Path) -> dict[str, dict[str, Any]]:
@@ -225,15 +321,7 @@ def _scan_allowed_apps(partitions_root: Path, scanned_apps: list[dict[str, Any]]
         for folder in sorted(p for p in base.iterdir() if p.is_dir()):
             inv = inventory.get(str(folder.resolve()), {})
             apk = _find_apk(folder, folder.name)
-            package = str(inv.get("package_name") or "").strip()
-            source = "inventory" if package and package.upper() != _UNKNOWN else ""
-            confidence = "medium" if source == "inventory" else "low"
-            if (not package or package.lower() == "unknown") and apk:
-                package, source, confidence = _package_from_tool(apk)
-            if not package:
-                package = _UNKNOWN
-                source = "unknown"
-                confidence = "low"
+            package, source, confidence = _extract_package(apk, str(inv.get("package_name") or ""))
             size = 0
             try:
                 size = sum(p.stat().st_size for p in folder.rglob("*") if p.is_file())
@@ -262,8 +350,8 @@ def _scan_allowed_apps(partitions_root: Path, scanned_apps: list[dict[str, Any]]
         resolved = _resolve_app_path(inv.get("absolute_path") or inv.get("found_at") or inv.get("path") or "", partitions_root)
         if not resolved or str(resolved) in seen:
             continue
-        package = str(inv.get("package_name") or _UNKNOWN)
-        source = "inventory" if package and package.upper() != _UNKNOWN and package.lower() != "unknown" else "unknown"
+        package = _known_package(inv.get("package_name")) or _UNKNOWN
+        source = "inventory" if package != _UNKNOWN else "unknown"
         apps.append(
             {
                 "partition": str(inv.get("partition") or ""),
@@ -306,6 +394,63 @@ def _write_scan_reports(reports_dir: Path, data: dict[str, Any]) -> None:
     (reports_dir / "stable_package_scan_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _write_matching_debug_report(reports_dir: Path, scanned: list[dict[str, Any]], expected: list[dict[str, str]]) -> None:
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    expected_packages = {e["package"].lower() for e in expected if _known_package(e.get("package"))}
+    scanned_packages = {str(a.get("package_name") or "").lower() for a in scanned if _known_package(a.get("package_name"))}
+    duplicate_expected = sorted(pkg for pkg in expected_packages if sum(1 for e in expected if e["package"].lower() == pkg) > 1)
+    duplicate_scanned = sorted(pkg for pkg in scanned_packages if sum(1 for a in scanned if str(a.get("package_name") or "").lower() == pkg) > 1)
+
+    lines = [
+        "DeadZone Stable Matching Debug Report",
+        "=====================================",
+        "",
+        "first 50 scanned apps:",
+    ]
+    for app in scanned[:50]:
+        lines.append(
+            "  - "
+            f"package_name={app.get('package_name')} | "
+            f"package_source={app.get('package_source')} | "
+            f"package_confidence={app.get('package_confidence')} | "
+            f"apk_path={app.get('apk_path') or '(none)'} | "
+            f"folder_name={app.get('folder_name') or app.get('name')} | "
+            f"partition={app.get('partition')} | "
+            f"app_type={app.get('app_type') or app.get('type')}"
+        )
+    if not scanned:
+        lines.append("  (none)")
+
+    lines += ["", "first 50 expected apps:"]
+    for entry in expected[:50]:
+        lines.append(
+            "  - "
+            f"expected_name={entry.get('name')} | "
+            f"expected_package={entry.get('package')} | "
+            f"expected_partition={entry.get('partition')} | "
+            f"expected_app_type={entry.get('app_type')} | "
+            f"expected_path={entry.get('expected_path')}"
+        )
+    if not expected:
+        lines.append("  (none)")
+
+    sections = (
+        ("common packages between scanned and expected", sorted(expected_packages & scanned_packages)),
+        ("packages in expected but not scanned", sorted(expected_packages - scanned_packages)),
+        ("packages in scanned but not expected", sorted(scanned_packages - expected_packages)),
+        ("duplicate expected packages", duplicate_expected),
+        ("duplicate scanned packages", duplicate_scanned),
+    )
+    for title, packages in sections:
+        lines += ["", f"{title}:"]
+        lines.extend(f"  - {pkg}" for pkg in packages[:500])
+        if len(packages) > 500:
+            lines.append(f"  ... {len(packages) - 500} more")
+        if not packages:
+            lines.append("  (none)")
+    (reports_dir / "stable_matching_debug_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def _expected_by_package(expected: list[dict[str, str]]) -> dict[str, dict[str, str]]:
     return {e["package"].lower(): e for e in (_normalize_expected(e) for e in expected)}
 
@@ -318,6 +463,8 @@ def _normalize_expected(entry: dict[str, str]) -> dict[str, str]:
         **entry,
         "partition": partition,
         "app_type": app_type,
+        "expected_folder_name": entry.get("expected_folder_name") or name,
+        "expected_package": entry.get("expected_package") or entry.get("package", ""),
         "expected_path": entry.get("expected_path") or f"{partition}/{app_type}/{name}",
         "expected_apk_name": entry.get("expected_apk_name") or f"{name}.apk",
     }
@@ -400,7 +547,13 @@ def _safety_thresholds() -> dict[str, Any]:
     }
 
 
-def _stable_safety_guard(expected_count: int, classification: dict[str, list], enforce: bool) -> dict[str, Any]:
+def _stable_safety_guard(
+    expected_count: int,
+    classification: dict[str, list],
+    enforce: bool,
+    scanned_count: int = 0,
+    package_tools: dict[str, list[str]] | None = None,
+) -> dict[str, Any]:
     thresholds = _safety_thresholds()
     kept = len(classification["kept"])
     renamed = len(classification["to_rename"])
@@ -412,45 +565,42 @@ def _stable_safety_guard(expected_count: int, classification: dict[str, list], e
     normal_rom = expected_count > 100
     reasons: list[str] = []
     if normal_rom and kept < thresholds["min_kept_apps"]:
-        reasons.append(f"kept_apps {kept} is below {thresholds['min_kept_apps']}")
+        reasons.append("kept_apps below threshold")
     if missing > thresholds["max_missing_apps"]:
-        reasons.append(f"missing_apps {missing} exceeds {thresholds['max_missing_apps']}")
+        reasons.append("missing_apps above threshold")
     if deletes > thresholds["max_delete_candidates"]:
-        reasons.append(f"delete_candidates {deletes} exceeds {thresholds['max_delete_candidates']}")
+        reasons.append("delete_candidates above threshold")
     if normal_rom and ratio < thresholds["min_match_ratio"]:
-        reasons.append(f"matched_expected_ratio {ratio:.2f} is below {thresholds['min_match_ratio']:.2f}")
+        reasons.append("matched_expected_ratio below threshold")
     if expected_count > 100 and matched < 50:
-        reasons.append(f"expected apps count {expected_count} but matched apps count {matched}")
+        reasons.append("matched_expected_count below safe minimum")
     status = "failed" if reasons and enforce else ("warning" if reasons else "passed")
     return {
         "status": status,
         "thresholds": thresholds,
         "reason": "; ".join(reasons),
+        "reasons": reasons,
+        "scanned_apps_count": scanned_count,
         "expected_apps_count": expected_count,
         "matched_expected_count": matched,
         "matched_expected_ratio": ratio,
         "kept_apps": kept,
         "missing_apps": missing,
         "delete_candidates": deletes,
+        "unknown_package_count": len(classification["unknown"]),
+        "package_tools_available": (package_tools or {}).get("available", []),
+        "package_tools_missing": (package_tools or {}).get("missing", []),
     }
 
 
 def _unsafe_payload(guard: dict[str, Any]) -> dict[str, str]:
     return {
         "error_type": "STABLE_APP_MATCHING_UNSAFE",
-        "cause": "Stable package matching is unsafe; too many expected apps are missing or too many extras are planned for deletion",
-        "telegram_cause": (
-            f"Matching unsafe: kept={guard.get('kept_apps')}, "
-            f"missing={guard.get('missing_apps')}, "
-            f"delete_candidates={guard.get('delete_candidates')}"
-        ),
-        "suggested_fix": "Fix package extraction/matching before deleting apps",
-        "suggested_check": "Check stable_package_scan_report.json and stable_app_policy_report.json",
-        "details": (
-            f"Matching unsafe: kept={guard.get('kept_apps')}, "
-            f"missing={guard.get('missing_apps')}, "
-            f"delete_candidates={guard.get('delete_candidates')}"
-        ),
+        "cause": f"Matching unsafe: matched {guard.get('matched_expected_count')} of {guard.get('expected_apps_count')} expected apps",
+        "telegram_cause": f"Matching unsafe: matched {guard.get('matched_expected_count')} of {guard.get('expected_apps_count')} expected apps",
+        "suggested_fix": "Fix package extraction or apps.list parsing before deleting apps",
+        "suggested_check": "stable_matching_debug_report.txt and stable_package_scan_report.json",
+        "details": f"Matching unsafe: matched {guard.get('matched_expected_count')} of {guard.get('expected_apps_count')} expected apps",
     }
 
 
@@ -615,6 +765,7 @@ def enforce_stable_app_policy(
 
     expected = _parse_expected_apps(apps_list_path)
     scanned = _scan_allowed_apps(partitions_root, scanned_apps)
+    package_tools = _package_tools_status()
     expected_packages = {e["package"].lower() for e in expected}
     scanned_known_packages = {
         str(a.get("package_name") or "").lower()
@@ -629,17 +780,22 @@ def enforce_stable_app_policy(
             "unknown_package_apps": sum(1 for a in scanned if str(a.get("package_name")).upper() == _UNKNOWN),
             "matched_by_package": len(expected_packages & scanned_known_packages),
             "unmatched_known_packages": len(scanned_known_packages - expected_packages),
+            "package_tools_available": len(package_tools["available"]),
+            "package_tools_missing": len(package_tools["missing"]),
         },
+        "package_tools_available": package_tools["available"],
+        "package_tools_missing": package_tools["missing"],
         "scanned_apps": len(scanned),
         "unknown_package_apps": [a for a in scanned if str(a.get("package_name")).upper() == _UNKNOWN],
         "matched_by_package": sorted(expected_packages & scanned_known_packages),
         "unmatched_known_packages": sorted(scanned_known_packages - expected_packages),
     }
     _write_scan_reports(reports_dir, scan_data)
+    _write_matching_debug_report(reports_dir, scanned, expected)
 
     allowed = _build_allowed_dirs(partitions_root)
     classification = _classify(scanned, expected, allowed)
-    guard = _stable_safety_guard(len(expected), classification, enforce)
+    guard = _stable_safety_guard(len(expected), classification, enforce, len(scanned), package_tools)
     if guard["status"] == "failed":
         payload = _unsafe_payload(guard)
         data = {

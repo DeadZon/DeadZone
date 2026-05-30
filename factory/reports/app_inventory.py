@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 _APPS_LIST_ENV = "LISTMEZO_APPS_LIST"
 _APPS_LIST_RELATIVE = "ListMezo/free/apps.list"
 _APPS_LIST_ABSOLUTE = ""
+_ALLOWED_PARTITIONS = {"system", "product", "system_ext", "vendor", "mi_ext"}
 
 
 # ---------------------------------------------------------------------------
@@ -22,16 +23,49 @@ def _is_package_name(s: str) -> bool:
     return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){2,}$", s))
 
 
+def _normalize_expected_path(value: str) -> tuple[str, str, str] | None:
+    cleaned = re.sub(r"\s+", "", value.strip())
+    if not cleaned or "/" not in cleaned:
+        return None
+    parts = [p for p in cleaned.split("/") if p]
+    for idx, part in enumerate(parts):
+        if part not in _ALLOWED_PARTITIONS:
+            continue
+        tail = parts[idx:]
+        if len(tail) >= 2 and tail[1] == part:
+            tail.pop(1)
+        if len(tail) >= 3 and tail[1] in {"app", "priv-app"}:
+            return tail[0], tail[1], tail[2]
+        if len(tail) >= 2 and tail[1] in {"app", "priv-app"}:
+            return tail[0], tail[1], ""
+    return None
+
+
+def _entry(name: str, package: str, partition: str, app_type: str) -> dict[str, str]:
+    return {
+        "name": name,
+        "expected_folder_name": name,
+        "package": package,
+        "expected_package": package,
+        "section": app_type,
+        "partition": partition,
+        "app_type": app_type,
+        "expected_path": f"{partition}/{app_type}/{name}",
+        "expected_apk_name": f"{name}.apk",
+    }
+
+
 def _is_section_header(s: str) -> bool:
     lower = s.lower()
     if "/" in s:
-        return True
+        return _normalize_expected_path(s + "/_placeholder") is not None
     return lower in {"or", "fine", "and", "remove", "replace", "delate", "delete"}
 
 
 def _parse_apps_list(path: Path) -> list[dict[str, str]]:
     """Parse apps.list into [{name, package, section}] entries."""
     entries: list[dict[str, str]] = []
+    current_partition = "system"
     current_section = "app"
     raw_lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
     lines = [l.strip() for l in raw_lines]
@@ -44,12 +78,25 @@ def _parse_apps_list(path: Path) -> list[dict[str, str]]:
             i += 1
             continue
 
-        # Section header
+        path_entry = _normalize_expected_path(line)
+        if path_entry and path_entry[2]:
+            path_partition, path_app_type, path_name = path_entry
+            j = i + 1
+            while j < len(lines) and not lines[j]:
+                j += 1
+            next_line = lines[j] if j < len(lines) else ""
+            if _is_package_name(next_line):
+                entries.append(_entry(path_name, next_line, path_partition, path_app_type))
+                i = j + 1
+                continue
+
+        section = _normalize_expected_path(line + "/_placeholder") if "/" in line else None
+        if section:
+            current_partition, current_section, _placeholder = section
+            i += 1
+            continue
+
         if _is_section_header(line):
-            if "priv-app" in line.lower():
-                current_section = "priv-app"
-            elif "app" in line.lower():
-                current_section = "app"
             i += 1
             continue
 
@@ -77,20 +124,20 @@ def _parse_apps_list(path: Path) -> list[dict[str, str]]:
 
         if _is_package_name(line) and _is_package_name(next_line):
             # line = folder name that happens to be a package, next_line = package
-            entries.append({"name": line, "package": next_line, "section": current_section})
+            entries.append(_entry(line, next_line, current_partition, current_section))
             i = j + 1
             continue
 
         if not _is_package_name(line) and _is_package_name(next_line):
             # Normal: name then package
-            entries.append({"name": line, "package": next_line, "section": current_section})
+            entries.append(_entry(line, next_line, current_partition, current_section))
             i = j + 1
             continue
 
         if _is_package_name(line) and not _is_package_name(next_line):
             # Standalone package name = folder name
             folder_name = line.split(".")[-1] if "." in line else line
-            entries.append({"name": folder_name, "package": line, "section": current_section})
+            entries.append(_entry(folder_name, line, current_partition, current_section))
             i += 1
             continue
 

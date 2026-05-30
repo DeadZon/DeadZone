@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import tempfile
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,10 @@ from factory.core.stable_app_policy import (
     _apply_renames,
     _apply_deletes,
     _build_allowed_dirs,
+    _extract_package,
+    _find_apk,
     _is_in_allowed,
+    _parse_expected_apps,
     enforce_stable_app_policy,
 )
 
@@ -639,4 +643,118 @@ def test_env_thresholds_override_safety_defaults(tmp_path, monkeypatch):
 
     assert result["safety_guard"]["status"] == "passed"
     assert not extra.exists()
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_apps_list_parser_normalizes_duplicate_partition_prefixes(tmp_path):
+    apps_list = _write_apps_list(
+        tmp_path,
+        """\
+system/system/app
+BluetoothMidiService
+com.android.bluetoothmidiservice
+
+product/product/priv-app
+PrivThing
+com.example.privthing
+
+system_ext/system_ext/app/SystemExtThing
+com.example.systemext
+""",
+    )
+
+    parsed = _parse_expected_apps(apps_list)
+    by_package = {entry["package"]: entry for entry in parsed}
+
+    assert by_package["com.android.bluetoothmidiservice"]["partition"] == "system"
+    assert by_package["com.android.bluetoothmidiservice"]["app_type"] == "app"
+    assert by_package["com.android.bluetoothmidiservice"]["expected_path"] == "system/app/BluetoothMidiService"
+    assert by_package["com.example.privthing"]["expected_path"] == "product/priv-app/PrivThing"
+    assert by_package["com.example.privthing"]["expected_folder_name"] == "PrivThing"
+    assert by_package["com.example.privthing"]["expected_package"] == "com.example.privthing"
+    assert by_package["com.example.systemext"]["expected_path"] == "system_ext/app/SystemExtThing"
+
+
+def test_find_apk_prefers_folder_name_then_largest_then_first(tmp_path):
+    folder = tmp_path / "system" / "app" / "MainApp"
+    nested = folder / "nested"
+    nested.mkdir(parents=True)
+    (folder / "Other.apk").write_bytes(b"1" * 50)
+    (folder / "MainApp.apk").write_bytes(b"1")
+    (nested / "Large.apk").write_bytes(b"1" * 200)
+
+    assert _find_apk(folder, "MainApp").name == "MainApp.apk"
+    (folder / "MainApp.apk").unlink()
+    assert _find_apk(folder, "MainApp").name == "Large.apk"
+
+
+def test_extract_package_falls_back_to_inventory_when_tools_unavailable_or_fail(tmp_path, monkeypatch):
+    apk = tmp_path / "Broken.apk"
+    apk.write_bytes(b"not an apk")
+    monkeypatch.setattr("factory.core.stable_app_policy._package_from_tool", lambda _apk: ("", "unknown", "low"))
+
+    package, source, confidence = _extract_package(apk, "com.example.inventory")
+
+    assert package == "com.example.inventory"
+    assert source == "inventory"
+    assert confidence == "medium"
+
+
+def test_extract_package_reads_manifest_before_inventory(tmp_path, monkeypatch):
+    apk = tmp_path / "Readable.apk"
+    with zipfile.ZipFile(apk, "w") as zf:
+        zf.writestr("AndroidManifest.xml", '<manifest package="com.example.manifest" />')
+    monkeypatch.setattr("factory.core.stable_app_policy._package_from_tool", lambda _apk: ("", "unknown", "low"))
+
+    package, source, confidence = _extract_package(apk, "com.example.inventory")
+
+    assert package == "com.example.manifest"
+    assert source == "manifest"
+    assert confidence == "medium"
+
+
+def test_missing_apk_becomes_unknown_and_not_deleted(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    folder = partitions_root / "system" / "app" / "NoApk"
+    folder.mkdir(parents=True)
+
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, [], "stable")
+
+    assert folder.exists()
+    assert result["unknown_package_apps"]
+    assert result["delete_candidates"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_package_first_match_in_different_folder_is_rename_not_missing(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    partitions_root = tmp_path / "partitions"
+    _make_app_folder(partitions_root, "system", "app", "OtherFolder")
+    scanned = [_scanned_app("system", "app", "OtherFolder", "com.android.bluetoothmidiservice", partitions_root)]
+
+    result = _classify(scanned, _parse_expected_apps(apps_list), _build_allowed_dirs(partitions_root))
+
+    assert any(item["package"] == "com.android.bluetoothmidiservice" for item in result["to_rename"])
+    assert not any(item["package"] == "com.android.bluetoothmidiservice" for item in result["missing"])
+
+
+def test_matching_debug_report_and_guard_details_are_written_on_unsafe(tmp_path):
+    apps_list = _write_apps_list(tmp_path, "\n".join(f"App{i}\ncom.example.expected{i}" for i in range(218)))
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    _make_app_folder(partitions_root, "system", "app", "App0")
+    scanned = [_scanned_app("system", "app", "App0", "com.example.expected0", partitions_root)]
+
+    with pytest.raises(RuntimeError, match="matched 1 of 218 expected apps"):
+        enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+
+    debug = (tmp_path / "reports" / "stable_matching_debug_report.txt").read_text(encoding="utf-8")
+    report = json.loads((tmp_path / "reports" / "stable_app_policy_report.json").read_text(encoding="utf-8"))
+    assert "first 50 scanned apps" in debug
+    assert "common packages between scanned and expected" in debug
+    assert report["safety_guard"]["scanned_apps_count"] == 1
+    assert "matched_expected_ratio below threshold" in report["safety_guard"]["reasons"]
+    assert "package_tools_available" in report["safety_guard"]
     del os.environ["LISTMEZO_APPS_LIST"]

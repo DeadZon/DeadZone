@@ -107,6 +107,28 @@ def test_parse_apps_list_skips_section_headers():
     assert "or" not in names
 
 
+def test_parse_apps_list_normalizes_expected_paths():
+    tmp = Path(tempfile.mkdtemp())
+    p = _write_apps_list(
+        tmp,
+        """\
+system/system/app
+BluetoothMidiService
+com.android.bluetoothmidiservice
+
+product/product/priv-app/ProductPriv
+com.example.productpriv
+""",
+    )
+    entries = _parse_apps_list(p)
+    by_package = {e["package"]: e for e in entries}
+
+    assert by_package["com.android.bluetoothmidiservice"]["expected_path"] == "system/app/BluetoothMidiService"
+    assert by_package["com.example.productpriv"]["partition"] == "product"
+    assert by_package["com.example.productpriv"]["app_type"] == "priv-app"
+    assert by_package["com.example.productpriv"]["expected_path"] == "product/priv-app/ProductPriv"
+
+
 def test_compare_finds_default_found():
     tmp = Path(tempfile.mkdtemp())
     apps_list_path = _write_apps_list(tmp, SAMPLE_APPS_LIST)
