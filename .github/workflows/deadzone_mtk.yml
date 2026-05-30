@@ -77,8 +77,12 @@ jobs:
       - name: Prepare Android toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file e2fsprogs erofs-utils p7zip-full android-sdk-libsparse-utils || \
-            sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file e2fsprogs erofs-utils p7zip-full
+          sudo apt-get install -y --no-install-recommends \
+            xz-utils brotli zstd file e2fsprogs erofs-utils p7zip-full \
+            android-sdk-libsparse-utils fuse3 || \
+          sudo apt-get install -y --no-install-recommends \
+            xz-utils brotli zstd file e2fsprogs erofs-utils p7zip-full fuse3
+
           python3 - <<'PY'
           import json
           import platform
@@ -111,16 +115,80 @@ jobs:
           echo "$PWD/tools/helper/linux" >> "$GITHUB_PATH"
           echo "$PWD/tools/helper" >> "$GITHUB_PATH"
           export PATH="$PWD/tools/helper/linux:$PWD/tools/helper:$PATH"
-          which lpmake || true
-          which lpdump || true
-          which lpunpack || true
-          which simg2img || true
-          which img2simg || true
-          which debugfs || true
-          which dump.erofs || true
-          which fsck.erofs || true
-          which erofsfuse || true
-          which 7z || true
+
+          # ── EROFS capability detection ──────────────────────────────────────
+          echo ""
+          echo "[EROFS] Checking erofs-utils installation:"
+          FSCK_EROFS="$(command -v fsck.erofs 2>/dev/null || true)"
+          DUMP_EROFS="$(command -v dump.erofs 2>/dev/null || true)"
+          EROFS_EXTRACT_OK=false
+
+          if [ -n "$FSCK_EROFS" ]; then
+            echo "[EROFS] Tool: fsck.erofs = $FSCK_EROFS"
+            fsck.erofs --version 2>/dev/null | head -1 || true
+            FSCK_HELP="$(fsck.erofs --help 2>&1 || true)"
+            if echo "$FSCK_HELP" | grep -q -- "--extract"; then
+              echo "[EROFS] Capability: fsck.erofs --extract SUPPORTED"
+              EROFS_EXTRACT_OK=true
+            else
+              echo "[EROFS] Capability: fsck.erofs --extract NOT supported in apt version"
+            fi
+          else
+            echo "[EROFS] fsck.erofs: NOT FOUND"
+          fi
+
+          if [ -n "$DUMP_EROFS" ]; then
+            echo "[EROFS] Tool: dump.erofs = $DUMP_EROFS"
+            dump.erofs --version 2>/dev/null | head -1 || true
+          fi
+
+          # Build erofs-utils from source if apt version lacks extraction support
+          if [ "$EROFS_EXTRACT_OK" != "true" ]; then
+            echo "[EROFS] apt version does not support extraction — building erofs-utils from source..."
+            sudo apt-get install -y --no-install-recommends \
+              build-essential autoconf automake libtool pkg-config \
+              liblz4-dev liblzma-dev libzstd-dev zlib1g-dev libfuse3-dev 2>/dev/null || \
+            sudo apt-get install -y --no-install-recommends \
+              build-essential autoconf automake libtool pkg-config \
+              liblz4-dev liblzma-dev libzstd-dev zlib1g-dev libfuse-dev 2>/dev/null || true
+
+            EROFS_TAG="v1.8.1"
+            EROFS_SRC_URL="https://git.kernel.org/pub/scm/linux/kernel/git/xiang/erofs-utils.git/snapshot/erofs-utils-${EROFS_TAG}.tar.gz"
+            curl -fsSL --retry 3 -o /tmp/erofs-utils.tar.gz "$EROFS_SRC_URL" 2>/dev/null && \
+            mkdir -p /tmp/erofs-build && \
+            tar -xzf /tmp/erofs-utils.tar.gz -C /tmp/erofs-build --strip-components=1 && \
+            (cd /tmp/erofs-build && \
+              ./autogen.sh && \
+              ./configure --prefix=/usr/local 2>/dev/null && \
+              make -j"$(nproc)" 2>/dev/null && \
+              sudo make install 2>/dev/null) && \
+            echo "[EROFS] Source build complete." || \
+            echo "[EROFS] Source build failed — will use listing-only fallback for EROFS partitions."
+
+            FSCK_NEW="$(command -v fsck.erofs 2>/dev/null || true)"
+            if [ -n "$FSCK_NEW" ]; then
+              echo "[EROFS] fsck.erofs after build: $FSCK_NEW"
+              fsck.erofs --version 2>/dev/null | head -1 || true
+              if fsck.erofs --help 2>&1 | grep -q -- "--extract"; then
+                echo "[EROFS] Capability: fsck.erofs --extract SUPPORTED (after source build)"
+              else
+                echo "[EROFS] Capability: fsck.erofs --extract still NOT supported"
+              fi
+            fi
+          fi
+          echo ""
+
+          # ── Toolchain summary ───────────────────────────────────────────────
+          which lpmake    || true
+          which lpdump    || true
+          which lpunpack  || true
+          which simg2img  || true
+          which img2simg  || true
+          which debugfs   || true
+          which dump.erofs  || true
+          which fsck.erofs  || true
+          which erofsfuse   || true
+          which 7z        || true
           python3 -m factory.deadzone --check-toolchain
           if [ ! -x tools/helper/linux/lpmake ] && ! command -v lpmake >/dev/null 2>&1; then
             echo "lpmake is missing. Install Android dynamic partition tools or place lpmake in tools/helper/linux."

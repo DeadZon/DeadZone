@@ -7,9 +7,11 @@ WORKDIR /app
 ENV PATH="/app/tools/helper/linux:/app/tools/helper:${PATH}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl wget unzip zip tar xz-utils zstd brotli file git android-sdk-libsparse-utils \
+    curl wget unzip zip tar xz-utils zstd brotli file git \
+    e2fsprogs erofs-utils fuse3 android-sdk-libsparse-utils \
     || apt-get install -y --no-install-recommends \
     curl wget unzip zip tar xz-utils zstd brotli file git \
+    e2fsprogs erofs-utils fuse3 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
