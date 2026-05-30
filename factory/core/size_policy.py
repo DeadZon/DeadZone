@@ -10,6 +10,8 @@ DEFAULT_SUPER_TARGET_BYTES = 8_500_000_000
 DEFAULT_FINAL_ZIP_MAX_BYTES = 4_500_000_000
 DEFAULT_SUPER_OUTPUT_FORMAT = "sparse"
 DEFAULT_FINAL_ZIP_COMPRESSION = "max"
+DEFAULT_SUPER_SIZE_POLICY = "stock_safe"
+SUPER_SIZE_POLICIES = ("stock_safe", "compact_if_safe", "force_decimal")
 LP_METADATA_OVERHEAD = 4 * 1024 * 1024
 
 
@@ -31,6 +33,7 @@ def default_policy(
     super_target_bytes: int = DEFAULT_SUPER_TARGET_BYTES,
     final_zip_max_bytes: int = DEFAULT_FINAL_ZIP_MAX_BYTES,
     allow_oversized_final: bool = False,
+    super_size_policy: str = DEFAULT_SUPER_SIZE_POLICY,
 ) -> dict[str, Any]:
     return {
         "super_target_bytes": int(super_target_bytes),
@@ -38,6 +41,7 @@ def default_policy(
         "super_output_format": DEFAULT_SUPER_OUTPUT_FORMAT,
         "final_zip_compression": DEFAULT_FINAL_ZIP_COMPRESSION,
         "allow_oversized_final": bool(allow_oversized_final),
+        "super_size_policy": _normalize_super_size_policy(super_size_policy),
     }
 
 
@@ -50,6 +54,7 @@ def load_policy(ws: Workspace) -> dict[str, Any]:
     policy["super_output_format"] = str(policy.get("super_output_format") or DEFAULT_SUPER_OUTPUT_FORMAT)
     policy["final_zip_compression"] = str(policy.get("final_zip_compression") or DEFAULT_FINAL_ZIP_COMPRESSION)
     policy["allow_oversized_final"] = bool(policy.get("allow_oversized_final", False))
+    policy["super_size_policy"] = _normalize_super_size_policy(policy.get("super_size_policy"))
     return policy
 
 
@@ -69,6 +74,24 @@ def _int_value(*values: Any) -> int:
         if parsed > 0:
             return parsed
     return 0
+
+
+def _normalize_super_size_policy(value: Any) -> str:
+    mode = str(value or DEFAULT_SUPER_SIZE_POLICY).strip().lower()
+    return mode if mode in SUPER_SIZE_POLICIES else DEFAULT_SUPER_SIZE_POLICY
+
+
+def _bool_value(*values: Any) -> bool:
+    for value in values:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "yes", "on"}:
+                return True
+            if normalized in {"0", "false", "no", "off"}:
+                return False
+    return False
 
 
 def dynamic_allocation_total(layout: dict[str, Any]) -> int:
@@ -98,21 +121,61 @@ def actual_images_total(layout: dict[str, Any]) -> int:
 
 def apply_super_policy(layout: dict[str, Any], policy: dict[str, Any]) -> dict[str, Any]:
     requested = int(policy.get("super_target_bytes") or DEFAULT_SUPER_TARGET_BYTES)
+    mode = _normalize_super_size_policy(policy.get("super_size_policy"))
     stock_size = _int_value(layout.get("target_super_size"), layout.get("super_size"))
+    stock_size = stock_size or requested
     allocation = dynamic_allocation_total(layout)
-    if stock_size > requested:
-        raise SizePolicyError(f"Device stock super requires {stock_size} bytes, requested target is {requested} bytes.")
-    if allocation > requested:
-        raise SizePolicyError(f"Cannot build requested 8.5GB super because dynamic partition allocation requires {allocation} bytes.")
-    group_limit = max(1, requested - LP_METADATA_OVERHEAD)
+    compact_allowed = _bool_value(
+        layout.get("allow_super_compaction"),
+        layout.get("allow_compact_super"),
+        layout.get("compact_super_safe"),
+    )
+    compact_group_limit = max(1, requested - LP_METADATA_OVERHEAD)
+    compact_fits = allocation <= requested and allocation <= compact_group_limit
+
+    if mode == "force_decimal":
+        if stock_size > requested:
+            raise SizePolicyError(f"Device stock super requires {stock_size} bytes, requested target is {requested} bytes.")
+        selected = requested
+        selected_source = "force_decimal"
+        selection_reason = "force_decimal selected requested display target because stock metadata does not require a larger device"
+    elif mode == "compact_if_safe" and stock_size > requested and compact_allowed and compact_fits:
+        selected = requested
+        selected_source = "compact_if_safe"
+        selection_reason = "compact_if_safe selected requested display target because allocation fits and profile allows compacting"
+    elif mode == "compact_if_safe" and stock_size <= requested:
+        selected = requested
+        selected_source = "requested_decimal"
+        selection_reason = "compact_if_safe selected requested display target because stock metadata fits within it"
+    elif mode == "compact_if_safe":
+        selected = stock_size
+        selected_source = "stock_safe"
+        selection_reason = "compact_if_safe selected stock-safe size because profile does not allow safe compacting or allocation does not fit"
+    else:
+        selected = max(requested, stock_size)
+        selected_source = "stock_safe" if stock_size > requested else "requested_decimal"
+        if stock_size > requested:
+            selection_reason = "stock_safe selected device stock metadata size because it is larger than the requested display target"
+        else:
+            selection_reason = "stock_safe selected requested display target because stock metadata fits within it"
+
+    if allocation > selected:
+        raise SizePolicyError(f"Cannot build selected super because dynamic partition allocation requires {allocation} bytes.")
+    group_limit = max(1, selected - LP_METADATA_OVERHEAD)
     if allocation > group_limit:
-        raise SizePolicyError(f"Cannot build requested 8.5GB super because dynamic partition allocation requires {allocation} bytes.")
+        raise SizePolicyError(f"Cannot build selected super because dynamic partition allocation requires {allocation} bytes.")
 
     updated = dict(layout)
     updated["requested_super_target_bytes"] = requested
     updated["stock_super_size"] = stock_size
-    updated["target_super_size"] = requested
-    updated["super_size"] = requested
+    updated["stock_super_size_bytes"] = stock_size
+    updated["selected_super_size_bytes"] = selected
+    updated["selected_super_size_source"] = selected_source
+    updated["super_size_policy"] = mode
+    updated["super_size_policy_reason"] = selection_reason
+    updated["final_zip_max_bytes"] = int(policy.get("final_zip_max_bytes") or DEFAULT_FINAL_ZIP_MAX_BYTES)
+    updated["target_super_size"] = selected
+    updated["super_size"] = selected
     updated["output_format"] = DEFAULT_SUPER_OUTPUT_FORMAT
     updated["super_output_format"] = DEFAULT_SUPER_OUTPUT_FORMAT
     updated["dynamic_allocation_total"] = allocation
@@ -155,19 +218,24 @@ def collect_size_policy(
     allocation = _int_value(super_layout.get("dynamic_allocation_total"), dynamic_allocation_total(super_layout))
     images_total = _int_value(super_layout.get("actual_images_total"), actual_images_total(super_layout))
     sparse_size = _int_value(super_result.get("super_size"))
+    selected_super_size = _int_value(super_layout.get("selected_super_size_bytes"), super_layout.get("target_super_size"))
+    stock_super_size = _int_value(super_layout.get("stock_super_size_bytes"), super_layout.get("stock_super_size"), super_layout.get("target_super_size"))
     passed = final_size <= max_allowed if final_size else False
     if status == "FAILED":
         passed = False
-    recommendation = "Enable size-reduction style/debloat to reach 4.5GB" if not passed else "Current package meets the 4.5GB policy"
-    if not passed and final_size:
-        recommendation = "Current Stable content cannot fit 4.5GB with compression only"
+    recommendation = "Enable size-reduction/debloat style to reach 4.5GB" if not passed else "Current package meets the 4.5GB policy"
     if not reason and final_size and not passed:
         reason = f"Final ZIP is {final_size} bytes, max allowed is {max_allowed} bytes"
 
     return {
         **policy,
         "requested_super_target_bytes": requested,
-        "actual_super_device_size": _int_value(super_layout.get("stock_super_size"), super_layout.get("target_super_size")),
+        "selected_super_size_bytes": selected_super_size,
+        "selected_super_size_source": super_layout.get("selected_super_size_source") or "",
+        "stock_super_size_bytes": stock_super_size,
+        "super_size_policy": _normalize_super_size_policy(policy.get("super_size_policy")),
+        "super_size_policy_reason": super_layout.get("super_size_policy_reason") or "",
+        "actual_super_device_size": stock_super_size,
         "group_size": _int_value(super_layout.get("group_size")),
         "dynamic_allocation_total": allocation,
         "actual_images_total": images_total,
@@ -177,11 +245,13 @@ def collect_size_policy(
         "final_zip": str(final_zip) if final_zip else "",
         "final_zip_size": final_size,
         "final_zip_uncompressed_size": final_uncompressed,
+        "final_zip_max_bytes": max_allowed,
         "final_zip_max_allowed": max_allowed,
         "compression_ratio": ratio,
         "pass": passed,
         "status": "PASSED" if passed else status,
         "reason": reason,
+        "pass_fail_reason": reason or ("Final ZIP passes 4.5GB policy" if passed else "Final ZIP has not been generated yet"),
         "recommendation": recommendation,
     }
 
@@ -192,6 +262,11 @@ def write_size_policy_report(ws: Workspace, data: dict[str, Any]) -> None:
         "DeadZone Size Policy Report",
         "===========================",
         f"requested super target bytes: {data.get('requested_super_target_bytes')}",
+        f"selected super size bytes: {data.get('selected_super_size_bytes')}",
+        f"selected super size source: {data.get('selected_super_size_source')}",
+        f"stock super size bytes: {data.get('stock_super_size_bytes')}",
+        f"super policy mode: {data.get('super_size_policy')}",
+        f"super policy reason: {data.get('super_size_policy_reason') or '(none)'}",
         f"actual super device size: {data.get('actual_super_device_size')}",
         f"group size: {data.get('group_size')}",
         f"dynamic allocation total: {data.get('dynamic_allocation_total')}",
@@ -200,10 +275,12 @@ def write_size_policy_report(ws: Workspace, data: dict[str, Any]) -> None:
         f"sparse super size: {data.get('sparse_super_size')}",
         f"super is sparse: {data.get('super_is_sparse')}",
         f"final ZIP size: {data.get('final_zip_size')}",
+        f"final ZIP max bytes: {data.get('final_zip_max_bytes')}",
         f"final ZIP max allowed: {data.get('final_zip_max_allowed')}",
         f"compression ratio: {float(data.get('compression_ratio') or 0.0):.6f}",
         f"pass/fail: {'PASS' if data.get('pass') else 'FAIL'}",
         f"reason: {data.get('reason') or '(none)'}",
+        f"pass/fail reason: {data.get('pass_fail_reason') or '(none)'}",
         f"recommendation: {data.get('recommendation')}",
         "",
     ]
@@ -228,13 +305,16 @@ def enforce_final_zip_policy(ws: Workspace, final_zip: Path, allow_oversized_fin
     data["status"] = "PASSED" if passed else status
     if not passed:
         data["reason"] = reason
-        data["recommendation"] = "Current Stable content cannot fit 4.5GB with compression only"
+        data["recommendation"] = "Enable size-reduction/debloat style to reach 4.5GB"
     write_size_policy_report(ws, data)
-    print(f"[SIZE] Super target: {data.get('requested_super_target_bytes')}")
+    print(f"[SIZE] Super display target: {data.get('requested_super_target_bytes')}")
+    print(f"[SIZE] Stock-safe super: {data.get('stock_super_size_bytes')}")
+    print(f"[SIZE] Selected super: {data.get('selected_super_size_bytes')}")
+    print(f"[SIZE] Super policy: {data.get('super_size_policy')}")
+    print(f"[SIZE] Final ZIP max: {data.get('final_zip_max_allowed')}")
     print(f"[SIZE] Dynamic allocation: {data.get('dynamic_allocation_total')}")
     print(f"[SIZE] Sparse super: {data.get('sparse_super_size')}")
     print(f"[SIZE] Final ZIP: {data.get('final_zip_size')}")
-    print(f"[SIZE] Max allowed: {data.get('final_zip_max_allowed')}")
     print(f"[SIZE] Policy: {data.get('status')}")
     if not passed and not policy.get("allow_oversized_final"):
         raise SizePolicyError(reason)

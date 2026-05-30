@@ -16,7 +16,7 @@ from factory.core.final_zip import build_final_zip
 from factory.core.inspector import inspect_workspace
 from factory.core.reports import write_production_reports
 from factory.core.repacker import build_repacked_super, repack_partitions
-from factory.core.size_policy import bytes_from_decimal_gb, default_policy, enforce_final_zip_policy, write_policy_config
+from factory.core.size_policy import SUPER_SIZE_POLICIES, bytes_from_decimal_gb, default_policy, enforce_final_zip_policy, write_policy_config
 from factory.core.status import StageTracker
 from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
@@ -50,6 +50,7 @@ class BuildContext:
     final_zip_path: Path | None = None
     super_target_bytes: int = 8_500_000_000
     final_zip_max_bytes: int = 4_500_000_000
+    super_size_policy: str = "stock_safe"
     allow_oversized_final: bool = False
     upload_pixeldrain: bool = False
     notify_telegram: bool = False
@@ -87,6 +88,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--check-toolchain", action="store_true")
     parser.add_argument("--super-target-gb", default="8.5")
     parser.add_argument("--final-zip-max-gb", default="4.5")
+    parser.add_argument("--super-size-policy", choices=SUPER_SIZE_POLICIES, default="stock_safe")
     parser.add_argument("--allow-oversized-final", action="store_true")
     return parser.parse_args()
 
@@ -233,6 +235,7 @@ def _prepare_workspace(ctx: BuildContext) -> Workspace:
             super_target_bytes=ctx.super_target_bytes,
             final_zip_max_bytes=ctx.final_zip_max_bytes,
             allow_oversized_final=ctx.allow_oversized_final,
+            super_size_policy=ctx.super_size_policy,
         ),
     )
     return ctx.workspace
@@ -408,6 +411,7 @@ def main() -> int:
         workspace=ws,
         super_target_bytes=super_target_bytes,
         final_zip_max_bytes=final_zip_max_bytes,
+        super_size_policy=args.super_size_policy,
         allow_oversized_final=args.allow_oversized_final,
     )
     ctx.tracker = StageTracker(ws)
@@ -421,7 +425,10 @@ def main() -> int:
         print("[DeadZone] Telegram: notifications requested")
     if ctx.selected_codename:
         print(f"[SELECTED DEVICE] {ctx.selected_codename}")
-    print(f"[SIZE] Super target: {ctx.super_target_bytes}")
+    print(f"[SIZE] Super display target: {ctx.super_target_bytes}")
+    print("[SIZE] Stock-safe super: pending metadata")
+    print("[SIZE] Selected super: pending metadata")
+    print(f"[SIZE] Super policy: {ctx.super_size_policy}")
     print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}")
     print(f"[SIZE] Allow oversized final: {ctx.allow_oversized_final}")
     ctx.telegram = TelegramStatus(

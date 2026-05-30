@@ -169,6 +169,12 @@ def _write_report(
         f"allocation metadata source: {layout.get('allocation_metadata_source')}",
         f"target super size: {layout.get('target_super_size')}",
         f"requested super target bytes: {layout.get('requested_super_target_bytes')}",
+        f"selected super size bytes: {layout.get('selected_super_size_bytes')}",
+        f"selected super size source: {layout.get('selected_super_size_source')}",
+        f"stock super size bytes: {layout.get('stock_super_size_bytes')}",
+        f"super policy mode: {layout.get('super_size_policy')}",
+        f"super policy reason: {layout.get('super_size_policy_reason')}",
+        f"final ZIP max bytes: {layout.get('final_zip_max_bytes')}",
         f"stock super size: {layout.get('stock_super_size')}",
         f"group name: {layout.get('dynamic_group_name')}",
         f"group size: {layout.get('group_size')}",
@@ -251,6 +257,11 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
         write_size_policy_report(ws, policy_data)
         _write_error_summary(ws, "super", message, layout)
         raise RuntimeError(message) from exc
+    print(f"[SIZE] Super display target: {layout.get('requested_super_target_bytes')}")
+    print(f"[SIZE] Stock-safe super: {layout.get('stock_super_size_bytes')}")
+    print(f"[SIZE] Selected super: {layout.get('selected_super_size_bytes')}")
+    print(f"[SIZE] Super policy: {layout.get('super_size_policy')}")
+    print(f"[SIZE] Final ZIP max: {policy.get('final_zip_max_bytes')}")
     write_json(ws.meta / "super_profile.json", layout)
     dynamic_images = {name: Path(path) for name, path in layout.get("dynamic_images", {}).items()}
     toolchain = resolve_toolchain(ws)
@@ -295,6 +306,12 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
                 "input_metadata_source": layout.get("metadata_source"),
                 "allocation_metadata_source": layout.get("allocation_metadata_source"),
                 "target_super_size": layout.get("target_super_size"),
+                "selected_super_size_bytes": layout.get("selected_super_size_bytes"),
+                "selected_super_size_source": layout.get("selected_super_size_source"),
+                "stock_super_size_bytes": layout.get("stock_super_size_bytes"),
+                "super_size_policy": layout.get("super_size_policy"),
+                "super_size_policy_reason": layout.get("super_size_policy_reason"),
+                "final_zip_max_bytes": layout.get("final_zip_max_bytes"),
                 "group_name": layout.get("dynamic_group_name"),
                 "group_size": layout.get("group_size"),
                 "slot_mode": layout.get("slot_mode"),
@@ -328,6 +345,12 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
                 "input_metadata_source": layout.get("metadata_source"),
                 "allocation_metadata_source": layout.get("allocation_metadata_source"),
                 "target_super_size": layout.get("target_super_size"),
+                "selected_super_size_bytes": layout.get("selected_super_size_bytes"),
+                "selected_super_size_source": layout.get("selected_super_size_source"),
+                "stock_super_size_bytes": layout.get("stock_super_size_bytes"),
+                "super_size_policy": layout.get("super_size_policy"),
+                "super_size_policy_reason": layout.get("super_size_policy_reason"),
+                "final_zip_max_bytes": layout.get("final_zip_max_bytes"),
                 "group_name": layout.get("dynamic_group_name"),
                 "group_size": layout.get("group_size"),
                 "slot_mode": layout.get("slot_mode"),
@@ -367,7 +390,13 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
         "super_is_sparse": super_is_sparse,
         "super_output_format": "sparse" if super_is_sparse else "raw",
         "requested_super_target_bytes": layout.get("requested_super_target_bytes"),
+        "selected_super_size_bytes": layout.get("selected_super_size_bytes"),
+        "selected_super_size_source": layout.get("selected_super_size_source"),
         "stock_super_size": layout.get("stock_super_size"),
+        "stock_super_size_bytes": layout.get("stock_super_size_bytes"),
+        "super_size_policy": layout.get("super_size_policy"),
+        "super_size_policy_reason": layout.get("super_size_policy_reason"),
+        "final_zip_max_bytes": layout.get("final_zip_max_bytes"),
         "dynamic_allocation_total": layout.get("dynamic_allocation_total"),
         "actual_images_total": layout.get("actual_images_total"),
         "input_metadata_source": layout.get("metadata_source"),

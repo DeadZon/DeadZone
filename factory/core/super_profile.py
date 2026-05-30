@@ -441,6 +441,7 @@ def build_super_profile(
         "vab_zero_b": bool(profile_super.get("vab_zero_b", True)),
         "output_format": str(output_value or "sparse"),
         "output_format_source": output_source,
+        "allow_super_compaction": bool(profile_super.get("allow_super_compaction") or profile_super.get("allow_compact_super")),
         "partition_sizes": detected_sizes,
         "partition_sizes_source": "detected_metadata" if detected_sizes else "unavailable",
         "partitions": partitions,

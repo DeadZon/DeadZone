@@ -10,10 +10,12 @@ def summarize_error(error: object, stage: str = "") -> dict[str, str]:
     raw = str(error or "").strip()
     lower = raw.lower()
     clean_stage = stage or "unknown"
+    recommendation = ""
 
     if clean_stage.lower() == "size_policy":
         title = "Final ZIP size policy failed"
         hint = "Check size_policy_report.txt and final_zip_report.txt."
+        recommendation = "Enable size-reduction/debloat style to reach 4.5GB"
     elif "super" in clean_stage.lower() and "no metadata allocation" in lower:
         title = "Super metadata allocation missing"
         hint = "Check payload metadata and the super profile report."
@@ -35,12 +37,14 @@ def summarize_error(error: object, stage: str = "") -> dict[str, str]:
     else:
         title = "Build failed"
         hint = "Check reports and logs artifacts for the failing stage."
+        recommendation = hint
 
     return {
         "title": title,
         "stage": clean_stage,
         "reason": raw[:800] if raw else "Unknown failure.",
         "hint": hint,
+        "recommendation": recommendation or hint,
         "raw_error": raw[:1200],
     }
 
@@ -57,6 +61,7 @@ def write_error_summary(ctx: Any, ws: Workspace, error: object | None = None) ->
         f"failed stage: {summary['stage']}",
         f"title: {summary['title']}",
         f"reason: {summary['reason']}",
+        f"recommendation: {summary['recommendation']}",
         f"hint: {summary['hint']}",
         f"final ZIP: {getattr(ctx, 'final_zip_path', None) or '(none)'}",
         "",
