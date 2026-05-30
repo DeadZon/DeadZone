@@ -35,6 +35,7 @@ from factory.core.style_runner import apply_style, normalize_style
 from factory.core.telegram import TelegramResult, TelegramStatus
 from factory.core.toolchain import resolve_toolchain
 from factory.core.smart_unpack import deadzone_smart_unpack
+from factory.core.partition_workspace import deadzone_partition_workspace_stage
 from factory.core.uploader import UploadResult, upload_final_zip_to_pixeldrain, write_skipped_upload_report
 from factory.core.workspace import Workspace, create_workspace, read_json, write_json
 from factory.live.live_screen import LiveScreen
@@ -93,6 +94,7 @@ class BuildContext:
     build_id: str = ""
     smart_unpack_result: dict = field(default_factory=dict)
     smart_unpack_route: str = ""
+    partition_workspace_result: dict = field(default_factory=dict)
     stop_after: str = ""
     reports: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
@@ -137,7 +139,7 @@ def parse_args() -> argparse.Namespace:
                         help="Enable animated live screen (true/false)")
     parser.add_argument(
         "--stop-after",
-        choices=["smart_unpack"],
+        choices=["smart_unpack", "partition_workspace"],
         default="",
         dest="stop_after",
         help="Stop the build pipeline after the specified stage (no repack/super/mods)",
@@ -419,6 +421,90 @@ def _annotate_smart_unpack_only_stop(ctx: BuildContext, ws: Workspace) -> None:
             )
 
 
+def _run_partition_workspace_stage(ctx: BuildContext, ws: Workspace) -> dict:
+    """Run deadzone_partition_workspace_stage and store the result on ctx."""
+    if ctx.event_bus:
+        ctx.event_bus.emit_event(
+            "partition_workspace", "RUN", "Starting partition workspace stage"
+        )
+    result = deadzone_partition_workspace_stage(
+        ws, smart_unpack_result=ctx.smart_unpack_result or None
+    )
+    ctx.partition_workspace_result = result
+    extracted = sum(
+        1 for r in result.get("partition_results", []) if r.get("status") == "extracted"
+    )
+    if ctx.event_bus:
+        ctx.event_bus.emit_event(
+            "partition_workspace", "OK",
+            f"route={result.get('route')} extracted={extracted}",
+            file=result.get("report_path"),
+        )
+    if ctx.telegram:
+        ctx.telegram_result = ctx.telegram.add_event(
+            "partition_workspace", "OK",
+            f"route={result.get('route')} extracted={extracted}",
+        )
+    print(f"[PARTITION WORKSPACE] Extracted partitions: {extracted}")
+    return result
+
+
+def _run_partition_workspace_only(ctx: BuildContext) -> BuildContext:
+    """Minimal pipeline that stops safely after the partition_workspace stage.
+
+    Runs: prepare → download → detect → device → unpack → partition_workspace.
+    Does NOT run inspect, image extraction, app policy, stable partition
+    rebuild, style, repack, super build, final ZIP, or any mod step.
+    """
+    ws = _stage(ctx, "prepare", lambda: _prepare_workspace(ctx))
+    ctx.rom_source = _stage(ctx, "download", lambda: download_rom(ctx.rom_url, ws))
+    ctx.rom_metadata = _stage(
+        ctx,
+        "detect",
+        lambda: detect_rom(
+            ctx.rom_source,
+            ws,
+            soc=ctx.soc,
+            custom_codename=ctx.custom_codename if ctx.device_codename.strip().lower() == "custom" else "",
+        ),
+    )
+    _warn_on_codename_mismatch(ctx)
+    ctx.device_profile = _stage(
+        ctx,
+        "device",
+        lambda: resolve_device(
+            _resolution_codename(ctx),
+            rom_metadata=ctx.rom_metadata,
+            custom_codename=ctx.custom_codename,
+            ws=ws,
+        ),
+    )
+    _update_resolved_device_metadata(ctx)
+    _print_device(ctx.device_profile)
+    _sync_device_to_state(ctx)
+    if ctx.telegram:
+        codename = (
+            ctx.device_profile.get("resolved_codename")
+            or ctx.device_profile.get("codename")
+            or "unknown"
+        )
+        ctx.telegram.device = str(codename)
+        ctx.telegram.detected_device = str(
+            ctx.device_profile.get("detected_codename")
+            or getattr(ctx.rom_metadata, "codename", "unknown")
+        )
+        ctx.telegram_result = ctx.telegram.add_event("device resolved", "OK", str(codename))
+    _acquire_build_lock(ctx)
+    _stage(ctx, "unpack", lambda: _run_smart_unpack_stage(ctx, ws))
+    _stage(
+        ctx,
+        "partition_workspace",
+        lambda: _run_partition_workspace_stage(ctx, ws),
+    )
+    ctx.status = "OK"
+    return ctx
+
+
 def _run_smart_unpack_only(ctx: BuildContext) -> BuildContext:
     """Minimal pipeline that stops safely after the unpack stage.
 
@@ -681,7 +767,7 @@ def _write_final_reports(ctx: BuildContext) -> None:
 def _validate_build_args(args: argparse.Namespace) -> None:
     errors: list[str] = []
     stop_after = getattr(args, "stop_after", "") or ""
-    if not args.style and stop_after != "smart_unpack":
+    if not args.style and stop_after not in ("smart_unpack", "partition_workspace"):
         errors.append("--style is required (stable, legend, gaming, epic)")
     if not args.soc:
         errors.append("--soc is required (mtk, snapdragon)")
@@ -750,7 +836,10 @@ def main() -> int:
     selected_codename = _selected_codename(args.device_codename, args.custom_codename)
     super_target_bytes = bytes_from_decimal_gb(args.super_target_gb, 8_500_000_000)
     final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
-    generate_inventory = (not args.skip_app_inventory) and stop_after != "smart_unpack"
+    generate_inventory = (
+        (not args.skip_app_inventory)
+        and stop_after not in ("smart_unpack", "partition_workspace")
+    )
     run_normalize = bool(style_key != "stable" and not args.skip_stable_app_normalize)
     live_screen_enabled = _bool_arg(getattr(args, "live_screen", None), False)
 
@@ -809,6 +898,8 @@ def main() -> int:
         try:
             if ctx.stop_after == "smart_unpack":
                 _run_smart_unpack_only(ctx)
+            elif ctx.stop_after == "partition_workspace":
+                _run_partition_workspace_only(ctx)
             else:
                 _run_build(ctx)
         except BuildAlreadyRunningError as lock_exc:
@@ -817,9 +908,14 @@ def main() -> int:
             if ctx.live_screen:
                 ctx.live_screen.stop("BLOCKED")
             return 1
-        if ctx.stop_after == "smart_unpack":
+        if ctx.stop_after in ("smart_unpack", "partition_workspace"):
+            reason = (
+                "smart_unpack_only mode: no final ZIP produced"
+                if ctx.stop_after == "smart_unpack"
+                else "partition_workspace mode: no final ZIP produced"
+            )
             ctx.upload_result = write_skipped_upload_report(
-                ws, requested=False, reason="smart_unpack_only mode: no final ZIP produced"
+                ws, requested=False, reason=reason
             )
         else:
             _stage(ctx, "upload", lambda: _run_upload(ctx))
@@ -864,6 +960,15 @@ def main() -> int:
         print(f"[FINAL ZIP] {ctx.final_zip_path}")
     if ctx.stop_after == "smart_unpack":
         print(f"[SMART UNPACK ONLY] route={ctx.smart_unpack_route} — stopped before repack/super/mods")
+    elif ctx.stop_after == "partition_workspace":
+        extracted = sum(
+            1 for r in ctx.partition_workspace_result.get("partition_results", [])
+            if r.get("status") == "extracted"
+        )
+        print(
+            f"[PARTITION WORKSPACE ONLY] route={ctx.smart_unpack_route} "
+            f"extracted={extracted} — stopped before repack/super/mods"
+        )
     return 0
 
 
