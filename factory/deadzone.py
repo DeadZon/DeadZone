@@ -7,12 +7,15 @@ from pathlib import Path
 from typing import Any, Callable
 
 from factory.core.artifacts import write_github_summary
+from factory.core.app_inventory import generate_app_inventory
 from factory.core.cleanup import cleanup
 from factory.core.detector import detect_rom
 from factory.core.device_registry import list_devices, resolve_device
 from factory.core.downloader import download_rom
 from factory.core.errors import write_error_summary
 from factory.core.final_zip import build_final_zip
+from factory.core.image_extractor import extract_partition_images
+from factory.core.inventory_package import build_inventory_package
 from factory.core.inspector import inspect_workspace
 from factory.core.reports import write_production_reports
 from factory.core.repacker import build_repacked_super, repack_partitions
@@ -56,6 +59,10 @@ class BuildContext:
     allow_oversized_final: bool = False
     enable_size_reduction: bool = True
     size_reduction_level: str = "balanced"
+    generate_app_inventory: bool = True
+    app_inventory_zip_path: Path | None = None
+    app_inventory: dict[str, Any] = field(default_factory=dict)
+    image_extraction: dict[str, Any] = field(default_factory=dict)
     upload_pixeldrain: bool = False
     notify_telegram: bool = False
     upload_result: UploadResult = field(default_factory=UploadResult)
@@ -96,6 +103,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--allow-oversized-final", action="store_true")
     parser.add_argument("--enable-size-reduction", nargs="?", const="true", default="true")
     parser.add_argument("--size-reduction-level", choices=SIZE_REDUCTION_LEVELS, default="balanced")
+    parser.add_argument("--generate-app-inventory", action="store_true")
+    parser.add_argument("--skip-app-inventory", action="store_true")
     return parser.parse_args()
 
 
@@ -299,13 +308,32 @@ def _run_build(ctx: BuildContext) -> BuildContext:
         "inspect",
         lambda: inspect_workspace(ws, ctx.rom_metadata, unpack_result),  # type: ignore[arg-type]
     )
+    if ctx.generate_app_inventory:
+        ctx.image_extraction = _stage(
+            ctx,
+            "image_extraction",
+            lambda: extract_partition_images(ws, ctx.rom_metadata, inspection),  # type: ignore[arg-type]
+        )
+        ctx.app_inventory = _stage(
+            ctx,
+            "app_inventory",
+            lambda: generate_app_inventory(ws, ctx.image_extraction),
+        )
+        ctx.app_inventory_zip_path = _stage(
+            ctx,
+            "inventory_package",
+            lambda: build_inventory_package(ws, ctx.rom_metadata, ctx.app_inventory),  # type: ignore[arg-type]
+        )
     _stage(
         ctx,
         "size_reduction",
         lambda: reduce_workspace_size(
             ws,
-            enabled=ctx.enable_size_reduction,
+            enabled=ctx.enable_size_reduction and not ctx.generate_app_inventory,
             level=ctx.size_reduction_level,
+            disabled_reason="Stable App Inventory is inspect-only; deletion is disabled for this stage"
+            if ctx.generate_app_inventory
+            else "size reduction disabled by CLI",
         ),
     )
     ctx.super_profile = _stage(
@@ -359,6 +387,13 @@ def _run_telegram_finish(ctx: BuildContext, final_status: str) -> TelegramResult
             failed_stage=ctx.failed_stage,
             error_summary=error_summary,
         )
+        if ctx.generate_app_inventory:
+            ctx.telegram_result = ctx.telegram.send_app_inventory_document(
+                ctx.app_inventory_zip_path,
+                total_apps=int((ctx.app_inventory or {}).get("total_apps_found") or 0),
+                android_version=str(getattr(ctx.rom_metadata, "android_version", "unknown")),
+                extraction_summary=(ctx.image_extraction or {}).get("summary") if isinstance(ctx.image_extraction, dict) else {},
+            )
         ctx.telegram_result = ctx.telegram.write_report()
     except Exception as exc:
         report = ctx.workspace.reports / "telegram_report.txt"
@@ -386,7 +421,7 @@ def _run_telegram_finish(ctx: BuildContext, final_status: str) -> TelegramResult
 
 
 def _run_cleanup(ctx: BuildContext) -> dict[str, Any]:
-    cleanup_result = cleanup(ctx.workspace, keep_workspace=ctx.keep_workspace)
+    cleanup_result = cleanup(ctx.workspace, keep_workspace=ctx.keep_workspace or ctx.generate_app_inventory)
     ctx.cleanup_status = str(cleanup_result.get("status", "unknown"))
     if cleanup_result.get("status") == "FAILED":
         raise RuntimeError("; ".join(cleanup_result.get("errors") or ["cleanup failed"]))
@@ -422,6 +457,7 @@ def main() -> int:
     selected_codename = _selected_codename(args.device_codename, args.custom_codename)
     super_target_bytes = bytes_from_decimal_gb(args.super_target_gb, 8_500_000_000)
     final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
+    generate_inventory = not args.skip_app_inventory
     ctx = BuildContext(
         rom_url=args.rom_url,
         style=style_key,
@@ -441,6 +477,7 @@ def main() -> int:
         allow_oversized_final=args.allow_oversized_final,
         enable_size_reduction=_bool_arg(args.enable_size_reduction, True),
         size_reduction_level=args.size_reduction_level,
+        generate_app_inventory=generate_inventory,
     )
     ctx.tracker = StageTracker(ws)
     print("[DeadZone] Stage: production build")
@@ -458,7 +495,8 @@ def main() -> int:
     print("[SIZE] Selected super: pending metadata")
     print(f"[SIZE] Super policy: {ctx.super_size_policy}")
     print(f"[SIZE REDUCTION] Level: {ctx.size_reduction_level}")
-    print(f"[SIZE REDUCTION] Enabled: {ctx.enable_size_reduction}")
+    print(f"[SIZE REDUCTION] Enabled: {ctx.enable_size_reduction and not ctx.generate_app_inventory}")
+    print(f"[APP INVENTORY] Enabled: {ctx.generate_app_inventory}")
     print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}")
     print(f"[SIZE] Allow oversized final: {ctx.allow_oversized_final}")
     ctx.telegram = TelegramStatus(

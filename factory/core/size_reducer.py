@@ -343,10 +343,11 @@ def reduce_workspace_size(
     *,
     enabled: bool = True,
     level: str = "balanced",
+    disabled_reason: str = "size reduction disabled by CLI",
 ) -> dict[str, Any]:
     active_level = _normalize_level(level)
     if not enabled:
-        result = _skipped_result(ws, False, active_level, "size reduction disabled by CLI")
+        result = _skipped_result(ws, False, active_level, disabled_reason)
         print(f"[SIZE REDUCTION] Level: {active_level}")
         print("[SIZE REDUCTION] Removed: 0")
         print("[SIZE REDUCTION] Per partition: {}")

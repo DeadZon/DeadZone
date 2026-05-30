@@ -139,8 +139,8 @@ jobs:
       - name: Prepare Android toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file android-sdk-libsparse-utils || \
-            sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file
+          sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file e2fsprogs erofs-utils p7zip-full android-sdk-libsparse-utils || \
+            sudo apt-get install -y --no-install-recommends xz-utils brotli zstd file e2fsprogs erofs-utils p7zip-full
           python3 - <<'PY'
           import json
           import platform
@@ -178,6 +178,11 @@ jobs:
           which lpunpack || true
           which simg2img || true
           which img2simg || true
+          which debugfs || true
+          which dump.erofs || true
+          which fsck.erofs || true
+          which erofsfuse || true
+          which 7z || true
           python3 -m factory.deadzone --check-toolchain
           if [ ! -x tools/helper/linux/lpmake ] && ! command -v lpmake >/dev/null 2>&1; then
             echo "lpmake is missing. Install Android dynamic partition tools or place lpmake in tools/helper/linux."
@@ -290,4 +295,18 @@ jobs:
             output/final/build_info.txt
             output/final/upload_links.txt
             output/final/*.txt
+          if-no-files-found: ignore
+
+      - name: Upload app inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deadzone-app-inventory
+          path: |
+            output/final/*AppInventory*.zip
+            output/workspace/inventory/**
+            output/workspace/reports/app_inventory_report.txt
+            output/workspace/reports/image_extraction_report.txt
+            output/workspace/meta/app_inventory.json
+            output/workspace/meta/image_extraction.json
           if-no-files-found: ignore

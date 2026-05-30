@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import time
 import urllib.error
@@ -14,6 +15,7 @@ from factory.core.workspace import Workspace, read_json
 
 
 MAX_TEXT_LEN = 4000
+MAX_DOCUMENT_BYTES = int(os.environ.get("TELEGRAM_MAX_DOCUMENT_BYTES", str(50 * 1024 * 1024)))
 
 
 @dataclass
@@ -194,6 +196,54 @@ class TelegramStatus:
         result.report_path = str(path)
         return result
 
+    def send_app_inventory_document(
+        self,
+        inventory_zip: Path | None,
+        *,
+        total_apps: int = 0,
+        android_version: str = "unknown",
+        extraction_summary: dict[str, Any] | None = None,
+    ) -> TelegramResult:
+        print(f"[TELEGRAM] App inventory: {inventory_zip or '(none)'}")
+        if not self.requested:
+            return self.result("not requested")
+        if not inventory_zip or not inventory_zip.is_file():
+            self.warnings.append("App Inventory ZIP is missing; document upload skipped")
+            return self.result(self.status)
+        size = inventory_zip.stat().st_size
+        if size > MAX_DOCUMENT_BYTES:
+            message = f"App Inventory ZIP is too large for Telegram document upload: {inventory_zip} ({size} bytes)"
+            self.warnings.append(message)
+            self.add_event("app inventory document", "SKIP", message)
+            return self.result(self.status)
+        if not self.enabled:
+            return self.result(self.status)
+        summary = extraction_summary or {}
+        caption = "\n".join(
+            [
+                "Stable App Inventory generated",
+                f"device: {_ascii(self.device)}",
+                f"android version: {_ascii(android_version)}",
+                f"total apps found: {_ascii(total_apps)}",
+                f"inventory ZIP name: {_ascii(inventory_zip.name)}",
+                "extraction status summary: "
+                f"extracted={_ascii(summary.get('extracted', 0))}, "
+                f"listed_only={_ascii(summary.get('listed_only', 0))}, "
+                f"failed={_ascii(summary.get('failed', 0))}, "
+                f"skipped={_ascii(summary.get('skipped', 0))}",
+            ]
+        )
+        response = self._send_document(inventory_zip, caption)
+        self.attempted = True
+        if response.get("ok"):
+            self.events.append({"name": "app inventory document", "status": "OK", "detail": inventory_zip.name})
+            self.status = "updated"
+            return self.result(self.status)
+        error = str(response.get("error") or "Telegram App Inventory document upload failed")
+        self.warnings.append(error)
+        self.events.append({"name": "app inventory document", "status": "FAIL", "detail": error})
+        return self.result(self.status)
+
     def result(self, status: str | None = None) -> TelegramResult:
         failure = self.errors[-1] if self.errors else ""
         return TelegramResult(
@@ -261,6 +311,54 @@ class TelegramStatus:
             if "message is not modified" in body.lower():
                 return {"ok": True, "result": {"message_id": self.message_id}}
             return {"ok": False, "error": f"HTTP {exc.code}: {body[:200]}"}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def _send_document(self, path: Path, caption: str) -> dict[str, Any]:
+        fields: dict[str, Any] = {
+            "chat_id": self.chat_id,
+            "caption": _ascii(caption)[:1024],
+        }
+        if self.thread_id:
+            try:
+                fields["message_thread_id"] = int(self.thread_id)
+            except ValueError:
+                if "Telegram thread id is not an integer; topic support skipped" not in self.warnings:
+                    self.warnings.append("Telegram thread id is not an integer; topic support skipped")
+        return self._post_multipart("sendDocument", fields, "document", path)
+
+    def _post_multipart(self, method: str, fields: dict[str, Any], file_field: str, path: Path) -> dict[str, Any]:
+        boundary = f"----DeadZone{int(time.time() * 1000)}"
+        body = bytearray()
+        for name, value in fields.items():
+            body.extend(f"--{boundary}\r\n".encode("ascii"))
+            body.extend(f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("ascii"))
+            body.extend(_ascii(value).encode("utf-8"))
+            body.extend(b"\r\n")
+        filename = path.name
+        content_type = mimetypes.guess_type(filename)[0] or "application/zip"
+        body.extend(f"--{boundary}\r\n".encode("ascii"))
+        body.extend(
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'
+                f"Content-Type: {content_type}\r\n\r\n"
+            ).encode("ascii")
+        )
+        body.extend(path.read_bytes())
+        body.extend(b"\r\n")
+        body.extend(f"--{boundary}--\r\n".encode("ascii"))
+        request = urllib.request.Request(
+            f"https://api.telegram.org/bot{self.token}/{method}",
+            data=bytes(body),
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.loads(response.read().decode("utf-8", errors="replace"))
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode("utf-8", errors="replace")
+            return {"ok": False, "error": f"HTTP {exc.code}: {body_text[:200]}"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
 

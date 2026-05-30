@@ -28,6 +28,8 @@ def cleanup(ws: Workspace, keep_workspace: bool = True) -> dict:
         "partition_size_report.txt",
         "size_policy_report.txt",
         "size_reduction_report.txt",
+        "app_inventory_report.txt",
+        "image_extraction_report.txt",
     }
 
     def _remove(path: Path) -> None:

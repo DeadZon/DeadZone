@@ -9,7 +9,7 @@ from pathlib import Path
 from factory.core.workspace import Workspace
 
 REQUIRED_TOOLS = ("lpmake", "lpdump", "lpunpack", "simg2img", "img2simg")
-OPTIONAL_TOOLS = ("brotli", "zstd", "file")
+OPTIONAL_TOOLS = ("brotli", "zstd", "file", "debugfs", "dump.erofs", "fsck.erofs", "erofsfuse", "7z", "mount")
 HELPER_DIRS = (
     Path("tools/helper"),
     Path("tools/helper/linux"),
@@ -171,7 +171,7 @@ def write_toolchain_report(toolchain: Toolchain) -> Path:
         "",
         "candidate files checked:",
     ]
-    for name in REQUIRED_TOOLS:
+    for name in (*REQUIRED_TOOLS, *OPTIONAL_TOOLS):
         lines.append(f"  - {name}:")
         lines.extend(f"      {candidate}" for candidate in toolchain.tools[name].checked)
     lines.append("")

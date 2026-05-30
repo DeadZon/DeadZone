@@ -72,7 +72,7 @@ def write_github_summary(ctx: Any, ws: Workspace) -> Path:
         f"- Telegram status: {getattr(telegram, 'status', 'not requested')}",
         f"- failed stage: {getattr(ctx, 'failed_stage', '') or '(none)'}",
         "",
-        "Reports and logs are attached as workflow artifacts: `deadzone-reports`, `deadzone-logs`, `deadzone-sidecars`, and `deadzone-final-info`.",
+        "Reports and logs are attached as workflow artifacts: `deadzone-reports`, `deadzone-logs`, `deadzone-sidecars`, `deadzone-final-info`, and `deadzone-app-inventory`.",
         "",
     ]
     path = ws.reports / "github_summary.md"
