@@ -19,6 +19,10 @@ RUN pip install --no-cache-dir -r /app/requirements.txt || true
 
 COPY . /app
 
+ARG SOC=mtk
+COPY fly/${SOC}/build_script.sh /build_script.sh
+RUN chmod +x /build_script.sh
+
 RUN python3 -c 'import json, platform, urllib.request; arch = platform.machine().lower(); aliases = {"x86_64": ("amd64", "x86_64"), "amd64": ("amd64", "x86_64"), "aarch64": ("arm64", "aarch64"), "arm64": ("arm64", "aarch64")}.get(arch, (arch,)); data = json.load(urllib.request.urlopen("https://api.github.com/repos/ssut/payload-dumper-go/releases/latest")); assets = data.get("assets", []); matches = [a for a in assets if "linux" in a.get("name", "").lower() and any(x in a.get("name", "").lower() for x in aliases) and a.get("name", "").lower().endswith((".tar.gz", ".tgz"))]; url = matches[0]["browser_download_url"] if matches else ""; assert url, "payload-dumper-go linux release asset not found"; urllib.request.urlretrieve(url, "/tmp/payload-dumper-go.tar.gz")' \
     && mkdir -p /tmp/payload-dumper-go /app/tools/helper \
     && tar -xzf /tmp/payload-dumper-go.tar.gz -C /tmp/payload-dumper-go \
@@ -26,4 +30,4 @@ RUN python3 -c 'import json, platform, urllib.request; arch = platform.machine()
     && chmod +x /app/tools/helper/linux/* 2>/dev/null || true \
     && rm -rf /tmp/payload-dumper-go /tmp/payload-dumper-go.tar.gz
 
-ENTRYPOINT ["python3", "-m", "factory.deadzone"]
+ENTRYPOINT ["/build_script.sh"]
