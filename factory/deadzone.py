@@ -9,6 +9,7 @@ from typing import Any, Callable
 from factory.core.artifacts import write_github_summary
 from factory.core.app_inventory import generate_app_inventory
 from factory.core.cleanup import cleanup
+from factory.core.stable_app_normalizer import normalize_stable_apps
 from factory.core.detector import detect_rom
 from factory.core.device_registry import list_devices, resolve_device
 from factory.core.downloader import download_rom
@@ -63,6 +64,9 @@ class BuildContext:
     app_inventory_zip_path: Path | None = None
     app_inventory: dict[str, Any] = field(default_factory=dict)
     image_extraction: dict[str, Any] = field(default_factory=dict)
+    stable_normalize: dict[str, Any] = field(default_factory=dict)
+    stable_normalize_mode: str = "apply"
+    run_stable_normalize: bool = True
     upload_pixeldrain: bool = False
     notify_telegram: bool = False
     upload_result: UploadResult = field(default_factory=UploadResult)
@@ -105,6 +109,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--size-reduction-level", choices=SIZE_REDUCTION_LEVELS, default="balanced")
     parser.add_argument("--generate-app-inventory", action="store_true")
     parser.add_argument("--skip-app-inventory", action="store_true")
+    parser.add_argument("--stable-app-normalize", action="store_true")
+    parser.add_argument("--skip-stable-app-normalize", action="store_true")
+    parser.add_argument("--stable-normalize-mode", choices=["plan", "apply"], default="apply")
     return parser.parse_args()
 
 
@@ -319,6 +326,12 @@ def _run_build(ctx: BuildContext) -> BuildContext:
             "app_inventory",
             lambda: generate_app_inventory(ws, ctx.image_extraction),
         )
+        if ctx.run_stable_normalize and ctx.style in ("stable",):
+            ctx.stable_normalize = _stage(
+                ctx,
+                "stable_app_normalize",
+                lambda: normalize_stable_apps(ws, style=ctx.style, mode=ctx.stable_normalize_mode),
+            )
         ctx.app_inventory_zip_path = _stage(
             ctx,
             "inventory_package",
@@ -388,11 +401,20 @@ def _run_telegram_finish(ctx: BuildContext, final_status: str) -> TelegramResult
             error_summary=error_summary,
         )
         if ctx.generate_app_inventory:
+            norm = ctx.stable_normalize or {}
             ctx.telegram_result = ctx.telegram.send_app_inventory_document(
                 ctx.app_inventory_zip_path,
                 total_apps=int((ctx.app_inventory or {}).get("total_apps_found") or 0),
                 android_version=str(getattr(ctx.rom_metadata, "android_version", "unknown")),
                 extraction_summary=(ctx.image_extraction or {}).get("summary") if isinstance(ctx.image_extraction, dict) else {},
+                normalize_summary={
+                    "kept": norm.get("kept", 0),
+                    "removed": norm.get("removed_count", 0),
+                    "renamed": norm.get("renamed", 0),
+                    "missing": norm.get("missing", 0),
+                    "protected_extra": norm.get("protected_extra", 0),
+                    "removed_bytes": norm.get("removed_bytes", 0),
+                } if not norm.get("skipped") else {},
             )
         ctx.telegram_result = ctx.telegram.write_report()
     except Exception as exc:
@@ -458,6 +480,7 @@ def main() -> int:
     super_target_bytes = bytes_from_decimal_gb(args.super_target_gb, 8_500_000_000)
     final_zip_max_bytes = bytes_from_decimal_gb(args.final_zip_max_gb, 4_500_000_000)
     generate_inventory = not args.skip_app_inventory
+    run_normalize = not args.skip_stable_app_normalize
     ctx = BuildContext(
         rom_url=args.rom_url,
         style=style_key,
@@ -478,6 +501,8 @@ def main() -> int:
         enable_size_reduction=_bool_arg(args.enable_size_reduction, True),
         size_reduction_level=args.size_reduction_level,
         generate_app_inventory=generate_inventory,
+        run_stable_normalize=run_normalize,
+        stable_normalize_mode=args.stable_normalize_mode,
     )
     ctx.tracker = StageTracker(ws)
     print("[DeadZone] Stage: production build")
@@ -497,6 +522,7 @@ def main() -> int:
     print(f"[SIZE REDUCTION] Level: {ctx.size_reduction_level}")
     print(f"[SIZE REDUCTION] Enabled: {ctx.enable_size_reduction and not ctx.generate_app_inventory}")
     print(f"[APP INVENTORY] Enabled: {ctx.generate_app_inventory}")
+    print(f"[STABLE APPS] Normalize: {run_normalize}, mode: {args.stable_normalize_mode}")
     print(f"[SIZE] Final ZIP max: {ctx.final_zip_max_bytes}")
     print(f"[SIZE] Allow oversized final: {ctx.allow_oversized_final}")
     ctx.telegram = TelegramStatus(

@@ -1,0 +1,85 @@
+# DeadZone Stable Protected Apps
+# Apps in this list must NOT be deleted from partition trees even if they
+# are absent from the canonical list (stable_canonical_apps.yml).
+# If a protected app is found as "extra", it is reported as protected_extra.
+#
+# Criteria for protection: app is critical for system boot, security,
+# telephony, media storage, or GMS integrity.
+
+protected:
+  # Core Android settings and UI
+  - Settings
+  - SystemUI
+  - MiuiSystemUI
+  - PackageInstaller
+  - MiuiPackageInstaller
+  - PermissionController
+
+  # Core providers (data loss if deleted)
+  - SettingsProvider
+  - TelephonyProvider
+  - ContactsProvider
+  - CalendarProvider
+  - DownloadProvider
+  - MediaProvider
+  - MediaProviderLegacy
+  - ExternalStorageProvider
+
+  # Core telephony
+  - TeleService
+  - Telecom
+  - MmsService
+
+  # Core connectivity
+  - NetworkStack
+
+  # Provisioning / setup
+  - Provision
+  - ManagedProvisioning
+
+  # Security center
+  - SecurityCenter
+
+  # Launcher
+  - MiuiHome
+
+  # Google Mobile Services (never delete GMS)
+  - GmsCore
+  - GoogleServicesFramework
+  - ConfigUpdater
+  - GoogleOneTimeInitializer
+
+  # Framework resource overlay (not an app folder but guard the name)
+  - framework-res
+
+protected_packages:
+  # Android core
+  - com.android.settings
+  - com.android.systemui
+  - com.android.packageinstaller
+  - com.miui.packageinstaller
+  - com.android.permissioncontroller
+  - com.android.providers.settings
+  - com.android.providers.telephony
+  - com.android.providers.contacts
+  - com.android.providers.calendar
+  - com.android.providers.downloads
+  - com.android.providers.media
+  - com.android.externalstorage
+  - com.android.phone
+  - com.android.server.telecom
+  - com.android.mms.service
+  - com.android.networkstack
+  - com.android.provision
+  - com.android.managedprovisioning
+
+  # Miui critical
+  - com.miui.securitycenter
+  - com.miui.home
+  - com.android.systemui
+
+  # Google core
+  - com.google.android.gms
+  - com.google.android.gsf
+  - com.google.android.configupdater
+  - com.google.android.onetimeinitializer

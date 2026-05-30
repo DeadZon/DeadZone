@@ -203,6 +203,7 @@ class TelegramStatus:
         total_apps: int = 0,
         android_version: str = "unknown",
         extraction_summary: dict[str, Any] | None = None,
+        normalize_summary: dict[str, Any] | None = None,
     ) -> TelegramResult:
         print(f"[TELEGRAM] App inventory: {inventory_zip or '(none)'}")
         if not self.requested:
@@ -219,20 +220,30 @@ class TelegramStatus:
         if not self.enabled:
             return self.result(self.status)
         summary = extraction_summary or {}
-        caption = "\n".join(
-            [
-                "Stable App Inventory generated",
-                f"device: {_ascii(self.device)}",
-                f"android version: {_ascii(android_version)}",
-                f"total apps found: {_ascii(total_apps)}",
-                f"inventory ZIP name: {_ascii(inventory_zip.name)}",
-                "extraction status summary: "
-                f"extracted={_ascii(summary.get('extracted', 0))}, "
-                f"listed_only={_ascii(summary.get('listed_only', 0))}, "
-                f"failed={_ascii(summary.get('failed', 0))}, "
-                f"skipped={_ascii(summary.get('skipped', 0))}",
-            ]
-        )
+        norm = normalize_summary or {}
+        caption_parts = [
+            "Stable App Inventory generated",
+            f"device: {_ascii(self.device)}",
+            f"android version: {_ascii(android_version)}",
+            f"total apps found: {_ascii(total_apps)}",
+            f"inventory ZIP name: {_ascii(inventory_zip.name)}",
+            "extraction status summary: "
+            f"extracted={_ascii(summary.get('extracted', 0))}, "
+            f"listed_only={_ascii(summary.get('listed_only', 0))}, "
+            f"failed={_ascii(summary.get('failed', 0))}, "
+            f"skipped={_ascii(summary.get('skipped', 0))}",
+        ]
+        if norm:
+            caption_parts.append(
+                "stable normalization: "
+                f"kept={_ascii(norm.get('kept', 0))}, "
+                f"removed={_ascii(norm.get('removed', 0))}, "
+                f"renamed={_ascii(norm.get('renamed', 0))}, "
+                f"missing={_ascii(norm.get('missing', 0))}, "
+                f"protected={_ascii(norm.get('protected_extra', 0))}, "
+                f"removed_bytes={_ascii(norm.get('removed_bytes', 0))}"
+            )
+        caption = "\n".join(caption_parts)
         response = self._send_document(inventory_zip, caption)
         self.attempted = True
         if response.get("ok"):

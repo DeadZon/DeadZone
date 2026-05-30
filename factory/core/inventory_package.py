@@ -41,8 +41,10 @@ def build_inventory_package(ws: Workspace, info: RomInfo, inventory: dict[str, A
         for path in (
             ws.reports / "image_extraction_report.txt",
             ws.reports / "app_inventory_report.txt",
+            ws.reports / "stable_app_normalize_report.txt",
             ws.meta / "image_extraction.json",
             ws.meta / "app_inventory.json",
+            ws.meta / "stable_app_normalize.json",
         ):
             _add_file(zf, path)
         for path in sorted(ws.logs.glob("image_extraction_*.log")):
@@ -57,8 +59,10 @@ def build_inventory_package(ws: Workspace, info: RomInfo, inventory: dict[str, A
             "output/workspace/inventory",
             "output/workspace/reports/image_extraction_report.txt",
             "output/workspace/reports/app_inventory_report.txt",
+            "output/workspace/reports/stable_app_normalize_report.txt",
             "output/workspace/meta/image_extraction.json",
             "output/workspace/meta/app_inventory.json",
+            "output/workspace/meta/stable_app_normalize.json",
             "output/workspace/logs/image_extraction_*.log",
         ],
         "excluded": ["ROM ZIP", "super.img", "partition images", "extracted partition files", "secrets", "payload.bin"],

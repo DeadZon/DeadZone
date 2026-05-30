@@ -1,0 +1,2757 @@
+# DeadZone Stable Canonical App Registry
+# Source: origin/cleanup/deep-repo-clean:ListMezo/free/apps.list
+# Stage 15 — Stable App Normalization
+# Total entries: 224
+# Partitions covered: system, product, system_ext
+# Do not edit manually without updating source_line and source fields.
+
+apps:
+
+  # =========================================================
+  # system / app  (15 entries)
+  # =========================================================
+
+  - id: system_app_BluetoothMidiService
+    partition: system
+    app_class: app
+    canonical_folder_name: BluetoothMidiService
+    canonical_apk_name: BluetoothMidiService.apk
+    expected_path: app/BluetoothMidiService
+    package_name: com.android.bluetoothmidiservice
+    source_line: BluetoothMidiService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_CameraExtensionsProxy
+    partition: system
+    app_class: app
+    canonical_folder_name: CameraExtensionsProxy
+    canonical_apk_name: CameraExtensionsProxy.apk
+    expected_path: app/CameraExtensionsProxy
+    package_name: com.android.cameraextensions
+    source_line: CameraExtensionsProxy
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_CaptivePortalLogin
+    partition: system
+    app_class: app
+    canonical_folder_name: CaptivePortalLogin
+    canonical_apk_name: CaptivePortalLogin.apk
+    expected_path: app/CaptivePortalLogin
+    package_name: com.android.captiveportallogin
+    source_line: CaptivePortalLogin
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_CarrierDefaultApp
+    partition: system
+    app_class: app
+    canonical_folder_name: CarrierDefaultApp
+    canonical_apk_name: CarrierDefaultApp.apk
+    expected_path: app/CarrierDefaultApp
+    package_name: ""
+    source_line: CarrierDefaultApp
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: package_name same as folder, not a standard package ID
+
+  - id: system_app_CertInstaller
+    partition: system
+    app_class: app
+    canonical_folder_name: CertInstaller
+    canonical_apk_name: CertInstaller.apk
+    expected_path: app/CertInstaller
+    package_name: com.android.certinstaller
+    source_line: CertInstaller
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_CompanionDeviceManager
+    partition: system
+    app_class: app
+    canonical_folder_name: CompanionDeviceManager
+    canonical_apk_name: CompanionDeviceManager.apk
+    expected_path: app/CompanionDeviceManager
+    package_name: com.android.companiondevicemanager
+    source_line: CompanionDeviceManager
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_EasterEgg
+    partition: system
+    app_class: app
+    canonical_folder_name: EasterEgg
+    canonical_apk_name: EasterEgg.apk
+    expected_path: app/EasterEgg
+    package_name: com.android.egg
+    source_line: EasterEgg
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_GoogleExtShared
+    partition: system
+    app_class: app
+    canonical_folder_name: GoogleExtShared
+    canonical_apk_name: GoogleExtShared.apk
+    expected_path: app/GoogleExtShared
+    package_name: com.google.android.ext.shared
+    source_line: GoogleExtShared
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_GooglePrintRecommendationService
+    partition: system
+    app_class: app
+    canonical_folder_name: GooglePrintRecommendationService
+    canonical_apk_name: GooglePrintRecommendationService.apk
+    expected_path: app/GooglePrintRecommendationService
+    package_name: com.google.android.printservice.recommendation
+    source_line: GooglePrintRecommendationService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_KeyChain
+    partition: system
+    app_class: app
+    canonical_folder_name: KeyChain
+    canonical_apk_name: KeyChain.apk
+    expected_path: app/KeyChain
+    package_name: com.android.keychain
+    source_line: KeyChain
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_PacProcessor
+    partition: system
+    app_class: app
+    canonical_folder_name: PacProcessor
+    canonical_apk_name: PacProcessor.apk
+    expected_path: app/PacProcessor
+    package_name: com.android.pacprocessor
+    source_line: PacProcessor
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_SecureElement
+    partition: system
+    app_class: app
+    canonical_folder_name: SecureElement
+    canonical_apk_name: SecureElement.apk
+    expected_path: app/SecureElement
+    package_name: com.android.se
+    source_line: SecureElement
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_SimAppDialog
+    partition: system
+    app_class: app
+    canonical_folder_name: SimAppDialog
+    canonical_apk_name: SimAppDialog.apk
+    expected_path: app/SimAppDialog
+    package_name: com.android.simappdialog
+    source_line: SimAppDialog
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_Traceur
+    partition: system
+    app_class: app
+    canonical_folder_name: Traceur
+    canonical_apk_name: Traceur.apk
+    expected_path: app/Traceur
+    package_name: com.android.traceur
+    source_line: Traceur
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_app_WallpaperBackup
+    partition: system
+    app_class: app
+    canonical_folder_name: WallpaperBackup
+    canonical_apk_name: WallpaperBackup.apk
+    expected_path: app/WallpaperBackup
+    package_name: com.android.wallpaperbackup
+    source_line: WallpaperBackup
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  # =========================================================
+  # system / priv-app  (37 entries)
+  # =========================================================
+
+  - id: system_priv_app_BackupRestoreConfirmation
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: BackupRestoreConfirmation
+    canonical_apk_name: BackupRestoreConfirmation.apk
+    expected_path: priv-app/BackupRestoreConfirmation
+    package_name: com.android.backupconfirm
+    source_line: BackupRestoreConfirmation
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_BlockedNumberProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: BlockedNumberProvider
+    canonical_apk_name: BlockedNumberProvider.apk
+    expected_path: priv-app/BlockedNumberProvider
+    package_name: com.android.providers.blockednumber
+    source_line: BlockedNumberProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_BuiltInPrintService
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: BuiltInPrintService
+    canonical_apk_name: BuiltInPrintService.apk
+    expected_path: priv-app/BuiltInPrintService
+    package_name: com.android.bips
+    source_line: BuiltInPrintService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_CalendarProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: CalendarProvider
+    canonical_apk_name: CalendarProvider.apk
+    expected_path: priv-app/CalendarProvider
+    package_name: com.android.providers.calendar
+    source_line: CalendarProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_CallLogBackup
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: CallLogBackup
+    canonical_apk_name: CallLogBackup.apk
+    expected_path: priv-app/CallLogBackup
+    package_name: com.android.calllogbackup
+    source_line: CallLogBackup
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_CellBroadcastServiceModulePlatform
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: CellBroadcastServiceModulePlatform
+    canonical_apk_name: CellBroadcastServiceModulePlatform.apk
+    expected_path: priv-app/CellBroadcastServiceModulePlatform
+    package_name: com.android.cellbroadcastservice
+    source_line: CellBroadcastServiceModulePlatform
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_ContactsProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: ContactsProvider
+    canonical_apk_name: ContactsProvider.apk
+    expected_path: priv-app/ContactsProvider
+    package_name: com.android.providers.contacts
+    source_line: ContactsProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_DeviceAsWebcam
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: DeviceAsWebcam
+    canonical_apk_name: DeviceAsWebcam.apk
+    expected_path: priv-app/DeviceAsWebcam
+    package_name: com.android.DeviceAsWebcam
+    source_line: DeviceAsWebcam
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_DeviceDiagnostics
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: DeviceDiagnostics
+    canonical_apk_name: DeviceDiagnostics.apk
+    expected_path: priv-app/DeviceDiagnostics
+    package_name: com.android.devicediagnostics
+    source_line: DeviceDiagnostics
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_DocumentsUIGoogle
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: DocumentsUIGoogle
+    canonical_apk_name: null
+    expected_path: priv-app/DocumentsUIGoogle
+    package_name: com.google.android.documentsui
+    multi_apk: true
+    apk_names:
+      - DocumentsUIGoogle-xhdpi.apk
+      - DocumentsUIGoogle-xxhdpi.apk
+      - DocumentsUIGoogle-xxxhdpi.apk
+    source_line: DocumentsUIGoogle
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: split APK - rename folder only, APK rename skipped
+
+  - id: system_priv_app_DownloadProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: DownloadProvider
+    canonical_apk_name: DownloadProvider.apk
+    expected_path: priv-app/DownloadProvider
+    package_name: com.android.providers.downloads
+    source_line: DownloadProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_DynamicSystemInstallationService
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: DynamicSystemInstallationService
+    canonical_apk_name: DynamicSystemInstallationService.apk
+    expected_path: priv-app/DynamicSystemInstallationService
+    package_name: com.android.dynsystem
+    source_line: DynamicSystemInstallationService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_E2eeContactKeysProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: E2eeContactKeysProvider
+    canonical_apk_name: E2eeContactKeysProvider.apk
+    expected_path: priv-app/E2eeContactKeysProvider
+    package_name: com.android.providers.contactkeys
+    source_line: E2eeContactKeysProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_ExternalStorageProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: ExternalStorageProvider
+    canonical_apk_name: ExternalStorageProvider.apk
+    expected_path: priv-app/ExternalStorageProvider
+    package_name: com.android.externalstorage
+    source_line: ExternalStorageProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_FusedLocation
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: FusedLocation
+    canonical_apk_name: FusedLocation.apk
+    expected_path: priv-app/FusedLocation
+    package_name: com.android.location.fused
+    source_line: FusedLocation
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_HTMLViewer
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: HTMLViewer
+    canonical_apk_name: HTMLViewer.apk
+    expected_path: priv-app/HTMLViewer
+    package_name: com.android.htmlviewer
+    source_line: HTMLViewer
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_InputDevices
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: InputDevices
+    canonical_apk_name: InputDevices.apk
+    expected_path: priv-app/InputDevices
+    package_name: com.android.inputdevices
+    source_line: InputDevices
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_LiveWallpapersPicker
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: LiveWallpapersPicker
+    canonical_apk_name: LiveWallpapersPicker.apk
+    expected_path: priv-app/LiveWallpapersPicker
+    package_name: com.android.wallpaper.livepicker
+    source_line: LiveWallpapersPicker
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_LocalTransport
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: LocalTransport
+    canonical_apk_name: LocalTransport.apk
+    expected_path: priv-app/LocalTransport
+    package_name: com.android.localtransport
+    source_line: LocalTransport
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_ManagedProvisioning
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: ManagedProvisioning
+    canonical_apk_name: ManagedProvisioning.apk
+    expected_path: priv-app/ManagedProvisioning
+    package_name: com.android.managedprovisioning
+    source_line: ManagedProvisioning
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_MediaProviderLegacy
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: MediaProviderLegacy
+    canonical_apk_name: MediaProviderLegacy.apk
+    expected_path: priv-app/MediaProviderLegacy
+    package_name: com.android.providers.media
+    source_line: MediaProviderLegacy
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_MmsService
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: MmsService
+    canonical_apk_name: MmsService.apk
+    expected_path: priv-app/MmsService
+    package_name: com.android.mms.service
+    source_line: MmsService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_MtpService
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: MtpService
+    canonical_apk_name: MtpService.apk
+    expected_path: priv-app/MtpService
+    package_name: com.android.mtp
+    source_line: MtpService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_MusicFX
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: MusicFX
+    canonical_apk_name: MusicFX.apk
+    expected_path: priv-app/MusicFX
+    package_name: com.android.musicfx
+    source_line: MusicFX
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_NetworkStack
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: NetworkStack
+    canonical_apk_name: NetworkStack.apk
+    expected_path: priv-app/NetworkStack
+    package_name: com.android.networkstack
+    source_line: NetworkStack
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_ONS
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: ONS
+    canonical_apk_name: ONS.apk
+    expected_path: priv-app/ONS
+    package_name: com.android.ons
+    source_line: ONS
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_PackageInstaller
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: PackageInstaller
+    canonical_apk_name: PackageInstaller.apk
+    expected_path: priv-app/PackageInstaller
+    package_name: com.android.packageinstaller
+    source_line: PackageInstaller
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_ProxyHandler
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: ProxyHandler
+    canonical_apk_name: ProxyHandler.apk
+    expected_path: priv-app/ProxyHandler
+    package_name: com.android.proxyhandler
+    source_line: ProxyHandler
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_SettingsProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: SettingsProvider
+    canonical_apk_name: SettingsProvider.apk
+    expected_path: priv-app/SettingsProvider
+    package_name: com.android.providers.settings
+    source_line: SettingsProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_SharedStorageBackup
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: SharedStorageBackup
+    canonical_apk_name: SharedStorageBackup.apk
+    expected_path: priv-app/SharedStorageBackup
+    package_name: com.android.sharedstoragebackup
+    source_line: SharedStorageBackup
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_Shell
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: Shell
+    canonical_apk_name: Shell.apk
+    expected_path: priv-app/Shell
+    package_name: com.android.shell
+    source_line: Shell
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_Stk
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: Stk
+    canonical_apk_name: Stk.apk
+    expected_path: priv-app/Stk
+    package_name: com.android.stk
+    source_line: Stk
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_Tag
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: Tag
+    canonical_apk_name: Tag.apk
+    expected_path: priv-app/Tag
+    package_name: com.android.apps.tag
+    source_line: Tag
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_Telecom
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: Telecom
+    canonical_apk_name: Telecom.apk
+    expected_path: priv-app/Telecom
+    package_name: com.android.server.telecom
+    source_line: Telecom
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_TelephonyProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: TelephonyProvider
+    canonical_apk_name: TelephonyProvider.apk
+    expected_path: priv-app/TelephonyProvider
+    package_name: com.android.providers.telephony
+    source_line: TelephonyProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_TeleService
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: TeleService
+    canonical_apk_name: TeleService.apk
+    expected_path: priv-app/TeleService
+    package_name: com.android.phone
+    source_line: TeleService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_priv_app_UserDictionaryProvider
+    partition: system
+    app_class: priv-app
+    canonical_folder_name: UserDictionaryProvider
+    canonical_apk_name: UserDictionaryProvider.apk
+    expected_path: priv-app/UserDictionaryProvider
+    package_name: com.android.providers.userdictionary
+    source_line: UserDictionaryProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  # =========================================================
+  # product / app  (63 entries)
+  # =========================================================
+
+  - id: product_app_AiAsstVision
+    partition: product
+    app_class: app
+    canonical_folder_name: AiAsstVision
+    canonical_apk_name: AiAsstVision.apk
+    expected_path: app/AiAsstVision
+    package_name: com.xiaomi.aiasst.vision
+    source_line: AiAsstVision
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_Calculator
+    partition: product
+    app_class: app
+    canonical_folder_name: Calculator
+    canonical_apk_name: Calculator.apk
+    expected_path: app/Calculator
+    package_name: com.miui.calculator
+    source_line: Calculator
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_CameraTools
+    partition: product
+    app_class: app
+    canonical_folder_name: CameraTools
+    canonical_apk_name: CameraTools.apk
+    expected_path: app/CameraTools
+    package_name: com.xiaomi.cameratools
+    source_line: CameraTools
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_CatchLog
+    partition: product
+    app_class: app
+    canonical_folder_name: CatchLog
+    canonical_apk_name: CatchLog.apk
+    expected_path: app/CatchLog
+    package_name: com.bsp.catchlog
+    source_line: CatchLog
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_CloudService
+    partition: product
+    app_class: app
+    canonical_folder_name: CloudService
+    canonical_apk_name: CloudService.apk
+    expected_path: app/CloudService
+    package_name: com.miui.cloudservice
+    source_line: CloudService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_com_xiaomi_ugd
+    partition: product
+    app_class: app
+    canonical_folder_name: com.xiaomi.ugd
+    canonical_apk_name: com.xiaomi.ugd.apk
+    expected_path: app/com.xiaomi.ugd
+    package_name: com.xiaomi.ugd
+    source_line: com.xiaomi.ugd
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: folder name is the package name
+
+  - id: product_app_CredentialManager
+    partition: product
+    app_class: app
+    canonical_folder_name: CredentialManager
+    canonical_apk_name: CredentialManager.apk
+    expected_path: app/CredentialManager
+    package_name: com.android.credentialmanager
+    source_line: CredentialManager
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_DeskClock
+    partition: product
+    app_class: app
+    canonical_folder_name: DeskClock
+    canonical_apk_name: DeskClock.apk
+    expected_path: app/DeskClock
+    package_name: com.android.deskclock
+    source_line: DeskClock
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_DeviceInfoQR
+    partition: product
+    app_class: app
+    canonical_folder_name: DeviceInfoQR
+    canonical_apk_name: DeviceInfoQR.apk
+    expected_path: app/DeviceInfoQR
+    package_name: com.miui.qr
+    source_line: DeviceInfoQR
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_Email
+    partition: product
+    app_class: app
+    canonical_folder_name: Email
+    canonical_apk_name: Email.apk
+    expected_path: app/Email
+    package_name: com.android.email
+    source_line: Email
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_FidoAuthen
+    partition: product
+    app_class: app
+    canonical_folder_name: FidoAuthen
+    canonical_apk_name: FidoAuthen.apk
+    expected_path: app/FidoAuthen
+    package_name: com.fido.asm
+    source_line: FidoAuthen
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_FileExplorer
+    partition: product
+    app_class: app
+    canonical_folder_name: FileExplorer
+    canonical_apk_name: FileExplorer.apk
+    expected_path: app/FileExplorer
+    package_name: com.android.fileexplorer
+    source_line: FileExplorer
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_GoogleCalendarSyncAdapter
+    partition: product
+    app_class: app
+    canonical_folder_name: GoogleCalendarSyncAdapter
+    canonical_apk_name: GoogleCalendarSyncAdapter.apk
+    expected_path: app/GoogleCalendarSyncAdapter
+    package_name: com.google.android.syncadapters.calendar
+    source_line: GoogleCalendarSyncAdapter
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_GoogleContactsSyncAdapter
+    partition: product
+    app_class: app
+    canonical_folder_name: GoogleContactsSyncAdapter
+    canonical_apk_name: GoogleContactsSyncAdapter.apk
+    expected_path: app/GoogleContactsSyncAdapter
+    package_name: com.google.android.syncadapters.contacts
+    source_line: GoogleContactsSyncAdapter
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_GoogleLocationHistory
+    partition: product
+    app_class: app
+    canonical_folder_name: GoogleLocationHistory
+    canonical_apk_name: GoogleLocationHistory.apk
+    expected_path: app/GoogleLocationHistory
+    package_name: com.google.android.gms.location.history
+    source_line: GoogleLocationHistory
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_GoogleTTS
+    partition: product
+    app_class: app
+    canonical_folder_name: GoogleTTS
+    canonical_apk_name: GoogleTTS.apk
+    expected_path: app/GoogleTTS
+    package_name: com.google.android.tts
+    source_line: GoogleTTS
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_GuardProvider
+    partition: product
+    app_class: app
+    canonical_folder_name: GuardProvider
+    canonical_apk_name: GuardProvider.apk
+    expected_path: app/GuardProvider
+    package_name: com.miui.guardprovider
+    source_line: GuardProvider
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_Health
+    partition: product
+    app_class: app
+    canonical_folder_name: Health
+    canonical_apk_name: Health.apk
+    expected_path: app/Health
+    package_name: com.mi.health
+    source_line: Health
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_IFAAService
+    partition: product
+    app_class: app
+    canonical_folder_name: IFAAService
+    canonical_apk_name: IFAAService.apk
+    expected_path: app/IFAAService
+    package_name: org.ifaa.aidl.manager
+    source_line: IFAAService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_Joyose
+    partition: product
+    app_class: app
+    canonical_folder_name: Joyose
+    canonical_apk_name: Joyose.apk
+    expected_path: app/Joyose
+    package_name: com.xiaomi.joyose
+    source_line: Joyose
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_LatinImeGoogle
+    partition: product
+    app_class: app
+    canonical_folder_name: LatinImeGoogle
+    canonical_apk_name: LatinImeGoogle.apk
+    expected_path: app/LatinImeGoogle
+    package_name: com.google.android.inputmethod.latin
+    source_line: LatinImeGoogle
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_LyraSdkApp
+    partition: product
+    app_class: app
+    canonical_folder_name: LyraSdkApp
+    canonical_apk_name: LyraSdkApp.apk
+    expected_path: app/LyraSdkApp
+    package_name: com.xiaomi.continuity.sdkapp
+    source_line: LyraSdkApp
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiCloudSync
+    partition: product
+    app_class: app
+    canonical_folder_name: MiCloudSync
+    canonical_apk_name: MiCloudSync.apk
+    expected_path: app/MiCloudSync
+    package_name: com.miui.micloudsync
+    source_line: MiCloudSync
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiConnectService
+    partition: product
+    app_class: app
+    canonical_folder_name: MiConnectService
+    canonical_apk_name: MiConnectService.apk
+    expected_path: app/MiConnectService
+    package_name: com.xiaomi.mi_connect_service
+    source_line: MiConnectService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiDrive
+    partition: product
+    app_class: app
+    canonical_folder_name: MiDrive
+    canonical_apk_name: MiDrive.apk
+    expected_path: app/MiDrive
+    package_name: com.miui.newmidrive
+    source_line: MiDrive
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiGalleryLockscreen
+    partition: product
+    app_class: app
+    canonical_folder_name: MiGalleryLockscreen
+    canonical_apk_name: MiGalleryLockscreen.apk
+    expected_path: app/MiGalleryLockscreen
+    package_name: com.mfashiongallery.emag
+    source_line: MiGalleryLockscreen
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiLinkService
+    partition: product
+    app_class: app
+    canonical_folder_name: MiLinkService
+    canonical_apk_name: MiLinkService.apk
+    expected_path: app/MiLinkService
+    package_name: com.milink.service
+    source_line: MiLinkService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiMediaEditor
+    partition: product
+    app_class: app
+    canonical_folder_name: MiMediaEditor
+    canonical_apk_name: MiMediaEditor.apk
+    expected_path: app/MiMediaEditor
+    package_name: com.miui.mediaeditor
+    source_line: MiMediaEditor
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MipayService
+    partition: product
+    app_class: app
+    canonical_folder_name: MipayService
+    canonical_apk_name: MipayService.apk
+    expected_path: app/MipayService
+    package_name: org.mipay.android.manager
+    source_line: MipayService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiSound
+    partition: product
+    app_class: app
+    canonical_folder_name: MiSound
+    canonical_apk_name: MiSound.apk
+    expected_path: app/MiSound
+    package_name: com.miui.misound
+    source_line: MiSound
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiTrustService
+    partition: product
+    app_class: app
+    canonical_folder_name: MiTrustService
+    canonical_apk_name: MiTrustService.apk
+    expected_path: app/MiTrustService
+    package_name: com.xiaomi.trustservice
+    source_line: MiTrustService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiBiometric
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiBiometric
+    canonical_apk_name: MiuiBiometric.apk
+    expected_path: app/MiuiBiometric
+    package_name: com.miui.face
+    source_line: MiuiBiometric
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiBugReport
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiBugReport
+    canonical_apk_name: MiuiBugReport.apk
+    expected_path: app/MiuiBugReport
+    package_name: com.miui.bugreport
+    source_line: MiuiBugReport
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiCit
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiCit
+    canonical_apk_name: MiuiCit.apk
+    expected_path: app/MiuiCit
+    package_name: com.miui.cit
+    source_line: MiuiCit
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiCompass
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiCompass
+    canonical_apk_name: MiuiCompass.apk
+    expected_path: app/MiuiCompass
+    package_name: com.miui.compass
+    source_line: MiuiCompass
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiContentCatcher
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiContentCatcher
+    canonical_apk_name: MiuiContentCatcher.apk
+    expected_path: app/MiuiContentCatcher
+    package_name: com.miui.contentcatcher
+    source_line: MiuiContentCatcher
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiFrequentPhrase
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiFrequentPhrase
+    canonical_apk_name: MiuiFrequentPhrase.apk
+    expected_path: app/MiuiFrequentPhrase
+    package_name: com.miui.phrase
+    source_line: MiuiFrequentPhrase
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiMacro
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiMacro
+    canonical_apk_name: MiuiMacro.apk
+    expected_path: app/MiuiMacro
+    package_name: com.xiaomi.macro
+    source_line: MiuiMacro
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiPasswords
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiPasswords
+    canonical_apk_name: MiuiPasswords.apk
+    expected_path: app/MiuiPasswords
+    package_name: com.miui.passwords
+    source_line: MiuiPasswords
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiScreenRecorder
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiScreenRecorder
+    canonical_apk_name: MiuiScreenRecorder.apk
+    expected_path: app/MiuiScreenRecorder
+    package_name: com.miui.screenrecorder
+    source_line: MiuiScreenRecorder
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiScreenshot
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiScreenshot
+    canonical_apk_name: MiuiScreenshot.apk
+    expected_path: app/MiuiScreenshot
+    package_name: com.miui.screenshot
+    source_line: MiuiScreenshot
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiSystemUIPlugin
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiSystemUIPlugin
+    canonical_apk_name: MiuiSystemUIPlugin.apk
+    expected_path: app/MiuiSystemUIPlugin
+    package_name: miui.systemui.plugin
+    source_line: MiuiSystemUIPlugin
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuiWallpaper
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuiWallpaper
+    canonical_apk_name: MiuiWallpaper.apk
+    expected_path: app/MiuiWallpaper
+    package_name: com.miui.miwallpaper
+    source_line: MiuiWallpaper
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_MiuixEditor
+    partition: product
+    app_class: app
+    canonical_folder_name: MiuixEditor
+    canonical_apk_name: MiuixEditor.apk
+    expected_path: app/MiuixEditor
+    package_name: com.miuix.editor
+    source_line: MiuixEditor
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_ModuleMetadataGoogle
+    partition: product
+    app_class: app
+    canonical_folder_name: ModuleMetadataGoogle
+    canonical_apk_name: ModuleMetadataGoogle.apk
+    expected_path: app/ModuleMetadataGoogle
+    package_name: com.google.android.modulemetadata
+    source_line: ModuleMetadataGoogle
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_Notes
+    partition: product
+    app_class: app
+    canonical_folder_name: Notes
+    canonical_apk_name: Notes.apk
+    expected_path: app/Notes
+    package_name: com.miui.notes
+    source_line: Notes
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_NotificationCenter
+    partition: product
+    app_class: app
+    canonical_folder_name: NotificationCenter
+    canonical_apk_name: NotificationCenter.apk
+    expected_path: app/NotificationCenter
+    package_name: com.miui.notification
+    source_line: NotificationCenter
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_OTrPBroker
+    partition: product
+    app_class: app
+    canonical_folder_name: OTrPBroker
+    canonical_apk_name: OTrPBroker.apk
+    expected_path: app/OTrPBroker
+    package_name: com.xiaomi.otrpbroker
+    source_line: OTrPBroker
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_PaymentService
+    partition: product
+    app_class: app
+    canonical_folder_name: PaymentService
+    canonical_apk_name: PaymentService.apk
+    expected_path: app/PaymentService
+    package_name: com.xiaomi.payment
+    source_line: PaymentService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_SecurityAdd
+    partition: product
+    app_class: app
+    canonical_folder_name: SecurityAdd
+    canonical_apk_name: SecurityAdd.apk
+    expected_path: app/SecurityAdd
+    package_name: com.miui.securityadd
+    source_line: SecurityAdd
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_SecurityCoreAdd
+    partition: product
+    app_class: app
+    canonical_folder_name: SecurityCoreAdd
+    canonical_apk_name: SecurityCoreAdd.apk
+    expected_path: app/SecurityCoreAdd
+    package_name: com.miui.securitycore
+    source_line: SecurityCoreAdd
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_SoterService
+    partition: product
+    app_class: app
+    canonical_folder_name: SoterService
+    canonical_apk_name: SoterService.apk
+    expected_path: app/SoterService
+    package_name: com.tencent.soter.soterserver
+    source_line: SoterService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_talkback
+    partition: product
+    app_class: app
+    canonical_folder_name: talkback
+    canonical_apk_name: talkback.apk
+    expected_path: app/talkback
+    package_name: com.google.android.marvin.talkback
+    source_line: talkback
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: lowercase folder name
+
+  - id: product_app_ThemeManager
+    partition: product
+    app_class: app
+    canonical_folder_name: ThemeManager
+    canonical_apk_name: ThemeManager.apk
+    expected_path: app/ThemeManager
+    package_name: com.android.thememanager
+    source_line: ThemeManager
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_TouchAssistant
+    partition: product
+    app_class: app
+    canonical_folder_name: TouchAssistant
+    canonical_apk_name: TouchAssistant.apk
+    expected_path: app/TouchAssistant
+    package_name: com.miui.touchassistant
+    source_line: TouchAssistant
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_TrichromeLibrary64
+    partition: product
+    app_class: app
+    canonical_folder_name: TrichromeLibrary64
+    canonical_apk_name: TrichromeLibrary64.apk
+    expected_path: app/TrichromeLibrary64
+    package_name: com.google.android.trichromelibrary
+    source_line: TrichromeLibrary64
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_WebViewGoogle64
+    partition: product
+    app_class: app
+    canonical_folder_name: WebViewGoogle64
+    canonical_apk_name: WebViewGoogle64.apk
+    expected_path: app/WebViewGoogle64
+    package_name: com.google.android.webview
+    source_line: WebViewGoogle64
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_wps_lite
+    partition: product
+    app_class: app
+    canonical_folder_name: wps-lite
+    canonical_apk_name: wps-lite.apk
+    expected_path: app/wps-lite
+    package_name: cn.wps.moffice_eng.xiaomi.lite
+    source_line: wps-lite
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: hyphenated folder name
+
+  - id: product_app_XiaomiAccount
+    partition: product
+    app_class: app
+    canonical_folder_name: XiaomiAccount
+    canonical_apk_name: XiaomiAccount.apk
+    expected_path: app/XiaomiAccount
+    package_name: com.xiaomi.account
+    source_line: XiaomiAccount
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_XiaomiServiceFramework
+    partition: product
+    app_class: app
+    canonical_folder_name: XiaomiServiceFramework
+    canonical_apk_name: XiaomiServiceFramework.apk
+    expected_path: app/XiaomiServiceFramework
+    package_name: com.xiaomi.xmsf
+    source_line: XiaomiServiceFramework
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_XiaomiSimActivateService
+    partition: product
+    app_class: app
+    canonical_folder_name: XiaomiSimActivateService
+    canonical_apk_name: XiaomiSimActivateService.apk
+    expected_path: app/XiaomiSimActivateService
+    package_name: com.xiaomi.simactivate.service
+    source_line: XiaomiSimActivateService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_XmsCore
+    partition: product
+    app_class: app
+    canonical_folder_name: XmsCore
+    canonical_apk_name: XmsCore.apk
+    expected_path: app/XmsCore
+    package_name: com.miui.core
+    source_line: XmsCore
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_app_XmsfKeeper
+    partition: product
+    app_class: app
+    canonical_folder_name: XmsfKeeper
+    canonical_apk_name: XmsfKeeper.apk
+    expected_path: app/XmsfKeeper
+    package_name: com.xiaomi.xmsfkeeper
+    source_line: XmsfKeeper
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  # =========================================================
+  # product / priv-app  (46 entries)
+  # =========================================================
+
+  - id: product_priv_app_AIService
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: AIService
+    canonical_apk_name: AIService.apk
+    expected_path: priv-app/AIService
+    package_name: com.xiaomi.aiservice
+    source_line: AIService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_AndroidAutoStub
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: AndroidAutoStub
+    canonical_apk_name: AndroidAutoStub.apk
+    expected_path: priv-app/AndroidAutoStub
+    package_name: com.google.android.projection.gearhead
+    source_line: AndroidAutoStub
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_AppFinder
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: AppFinder
+    canonical_apk_name: AppFinder.apk
+    expected_path: priv-app/AppFinder
+    package_name: com.mi.appfinder
+    source_line: AppFinder
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_AutoRegistration
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: AutoRegistration
+    canonical_apk_name: AutoRegistration.apk
+    expected_path: priv-app/AutoRegistration
+    package_name: com.xiaomi.registration
+    source_line: AutoRegistration
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Backup
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Backup
+    canonical_apk_name: Backup.apk
+    expected_path: priv-app/Backup
+    package_name: com.miui.backup
+    source_line: Backup
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Calendar
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Calendar
+    canonical_apk_name: Calendar.apk
+    expected_path: priv-app/Calendar
+    package_name: com.android.calendar
+    source_line: Calendar
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_CleanMaster
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: CleanMaster
+    canonical_apk_name: CleanMaster.apk
+    expected_path: priv-app/CleanMaster
+    package_name: com.miui.cleaner
+    source_line: CleanMaster
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_CloudBackup
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: CloudBackup
+    canonical_apk_name: CloudBackup.apk
+    expected_path: priv-app/CloudBackup
+    package_name: com.miui.cloudbackup
+    source_line: CloudBackup
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_ConfigUpdater
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: ConfigUpdater
+    canonical_apk_name: ConfigUpdater.apk
+    expected_path: priv-app/ConfigUpdater
+    package_name: com.google.android.configupdater
+    source_line: ConfigUpdater
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Contacts
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Contacts
+    canonical_apk_name: Contacts.apk
+    expected_path: priv-app/Contacts
+    package_name: com.android.contacts
+    source_line: Contacts
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_DeviceIntegrationService
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: DeviceIntegrationService
+    canonical_apk_name: DeviceIntegrationService.apk
+    expected_path: priv-app/DeviceIntegrationService
+    package_name: com.microsoft.deviceintegrationservice
+    source_line: DeviceIntegrationService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_DownloadProviderUi
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: DownloadProviderUi
+    canonical_apk_name: DownloadProviderUi.apk
+    expected_path: priv-app/DownloadProviderUi
+    package_name: com.android.providers.downloads.ui
+    source_line: DownloadProviderUi
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_EsimLPA
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: EsimLPA
+    canonical_apk_name: EsimLPA.apk
+    expected_path: priv-app/EsimLPA
+    package_name: com.miui.euicc
+    source_line: EsimLPA
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_FamilyLinkParentalControls
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: FamilyLinkParentalControls
+    canonical_apk_name: FamilyLinkParentalControls.apk
+    expected_path: priv-app/FamilyLinkParentalControls
+    package_name: com.google.android.gms.supervision
+    source_line: FamilyLinkParentalControls
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_GmsCore
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: GmsCore
+    canonical_apk_name: GmsCore.apk
+    expected_path: priv-app/GmsCore
+    package_name: com.google.android.gms
+    source_line: GmsCore
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_GoogleOneTimeInitializer
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: GoogleOneTimeInitializer
+    canonical_apk_name: GoogleOneTimeInitializer.apk
+    expected_path: priv-app/GoogleOneTimeInitializer
+    package_name: com.google.android.onetimeinitializer
+    source_line: GoogleOneTimeInitializer
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_GooglePartnerSetup
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: GooglePartnerSetup
+    canonical_apk_name: GooglePartnerSetup.apk
+    expected_path: priv-app/GooglePartnerSetup
+    package_name: com.google.android.partnersetup
+    source_line: GooglePartnerSetup
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_GoogleRestore
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: GoogleRestore
+    canonical_apk_name: GoogleRestore.apk
+    expected_path: priv-app/GoogleRestore
+    package_name: com.google.android.apps.restore
+    source_line: GoogleRestore
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_HotwordEnrollmentXGoogleRISCV_WIDEBAND
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: HotwordEnrollmentXGoogleRISCV_WIDEBAND
+    canonical_apk_name: HotwordEnrollmentXGoogleRISCV_WIDEBAND.apk
+    expected_path: priv-app/HotwordEnrollmentXGoogleRISCV_WIDEBAND
+    package_name: com.android.hotwordenrollment.xgoogle
+    source_line: HotwordEnrollmentXGoogleRISCV_WIDEBAND
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_HotwordEnrollmentYGoogleRISCV_WIDEBAND
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: HotwordEnrollmentYGoogleRISCV_WIDEBAND
+    canonical_apk_name: HotwordEnrollmentYGoogleRISCV_WIDEBAND.apk
+    expected_path: priv-app/HotwordEnrollmentYGoogleRISCV_WIDEBAND
+    package_name: com.android.hotwordenrollment.okgoogle
+    source_line: HotwordEnrollmentYGoogleRISCV_WIDEBAND
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_ImsServiceEntitlement
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: ImsServiceEntitlement
+    canonical_apk_name: ImsServiceEntitlement.apk
+    expected_path: priv-app/ImsServiceEntitlement
+    package_name: com.android.imsserviceentitlement
+    source_line: ImsServiceEntitlement
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_InCallUI
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: InCallUI
+    canonical_apk_name: InCallUI.apk
+    expected_path: priv-app/InCallUI
+    package_name: com.android.incallui
+    source_line: InCallUI
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_LinkToWindows
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: LinkToWindows
+    canonical_apk_name: LinkToWindows.apk
+    expected_path: priv-app/LinkToWindows
+    package_name: com.microsoft.appmanager
+    source_line: LinkToWindows
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiAICR
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiAICR
+    canonical_apk_name: MiAICR.apk
+    expected_path: priv-app/MiAICR
+    package_name: com.xiaomi.aicr
+    source_line: MiAICR
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Mirror
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Mirror
+    canonical_apk_name: Mirror.apk
+    expected_path: priv-app/Mirror
+    package_name: com.xiaomi.mirror
+    source_line: Mirror
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiService
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiService
+    canonical_apk_name: MiService.apk
+    expected_path: priv-app/MiService
+    package_name: com.miui.miservice
+    source_line: MiService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiSettings
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiSettings
+    canonical_apk_name: MiSettings.apk
+    expected_path: priv-app/MiSettings
+    package_name: com.xiaomi.misettings
+    source_line: MiSettings
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiShare
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiShare
+    canonical_apk_name: MiShare.apk
+    expected_path: priv-app/MiShare
+    package_name: com.miui.mishare.connectivity
+    source_line: MiShare
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiAccessibility
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiAccessibility
+    canonical_apk_name: MiuiAccessibility.apk
+    expected_path: priv-app/MiuiAccessibility
+    package_name: com.miui.accessibility
+    source_line: MiuiAccessibility
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiAod
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiAod
+    canonical_apk_name: MiuiAod.apk
+    expected_path: priv-app/MiuiAod
+    package_name: com.miui.aod
+    source_line: MiuiAod
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiBarrage
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiBarrage
+    canonical_apk_name: MiuiBarrage.apk
+    expected_path: priv-app/MiuiBarrage
+    package_name: com.xiaomi.barrage
+    source_line: MiuiBarrage
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiCamera
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiCamera
+    canonical_apk_name: MiuiCamera.apk
+    expected_path: priv-app/MiuiCamera
+    package_name: com.android.camera
+    source_line: MiuiCamera
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiExtraPhoto
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiExtraPhoto
+    canonical_apk_name: MiuiExtraPhoto.apk
+    expected_path: priv-app/MiuiExtraPhoto
+    package_name: com.miui.extraphoto
+    source_line: MiuiExtraPhoto
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiGallery
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiGallery
+    canonical_apk_name: MiuiGallery.apk
+    expected_path: priv-app/MiuiGallery
+    package_name: com.miui.gallery
+    source_line: MiuiGallery
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiHome
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiHome
+    canonical_apk_name: MiuiHome.apk
+    expected_path: priv-app/MiuiHome
+    package_name: com.miui.home
+    source_line: MiuiHome
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiPackageInstaller
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiPackageInstaller
+    canonical_apk_name: MiuiPackageInstaller.apk
+    expected_path: priv-app/MiuiPackageInstaller
+    package_name: com.miui.packageinstaller
+    source_line: MiuiPackageInstaller
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_MiuiScanner
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: MiuiScanner
+    canonical_apk_name: MiuiScanner.apk
+    expected_path: priv-app/MiuiScanner
+    package_name: com.xiaomi.scanner
+    source_line: MiuiScanner
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Mms
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Mms
+    canonical_apk_name: Mms.apk
+    expected_path: priv-app/Mms
+    package_name: com.android.mms
+    source_line: Mms
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_PersonalAssistant
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: PersonalAssistant
+    canonical_apk_name: PersonalAssistant.apk
+    expected_path: priv-app/PersonalAssistant
+    package_name: com.miui.personalassistant
+    source_line: PersonalAssistant
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Phonesk
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Phonesk
+    canonical_apk_name: Phonesk.apk
+    expected_path: priv-app/Phonesk
+    package_name: com.android.vending
+    source_line: Phonesk
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: Play Store stub
+
+  - id: product_priv_app_SecurityCenter
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: SecurityCenter
+    canonical_apk_name: SecurityCenter.apk
+    expected_path: priv-app/SecurityCenter
+    package_name: com.miui.securitycenter
+    source_line: SecurityCenter
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_SettingsIntelligence
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: SettingsIntelligence
+    canonical_apk_name: SettingsIntelligence.apk
+    expected_path: priv-app/SettingsIntelligence
+    package_name: com.android.settings.intelligence
+    source_line: SettingsIntelligence
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_SoundRecorder
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: SoundRecorder
+    canonical_apk_name: SoundRecorder.apk
+    expected_path: priv-app/SoundRecorder
+    package_name: com.android.soundrecorder
+    source_line: SoundRecorder
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_Velvet
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Velvet
+    canonical_apk_name: Velvet.apk
+    expected_path: priv-app/Velvet
+    package_name: com.google.android.googlequicksearchbox
+    source_line: Velvet
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: Google Search / Assistant
+
+  - id: product_priv_app_Weather
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: Weather
+    canonical_apk_name: Weather.apk
+    expected_path: priv-app/Weather
+    package_name: com.miui.weather2
+    source_line: Weather
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: product_priv_app_XiaomiEUExt
+    partition: product
+    app_class: priv-app
+    canonical_folder_name: XiaomiEUExt
+    canonical_apk_name: XiaomiEUExt.apk
+    expected_path: priv-app/XiaomiEUExt
+    package_name: eu.xiaomi.ext
+    source_line: XiaomiEUExt
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  # =========================================================
+  # system_ext / app  (25 entries)
+  # =========================================================
+
+  - id: system_ext_app_AccessibilityMenu
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: AccessibilityMenu
+    canonical_apk_name: AccessibilityMenu.apk
+    expected_path: app/AccessibilityMenu
+    package_name: com.android.systemui.accessibility.accessibilitymenu
+    source_line: AccessibilityMenu
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_ATMWifiMeta
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: ATMWifiMeta
+    canonical_apk_name: ATMWifiMeta.apk
+    expected_path: app/ATMWifiMeta
+    package_name: com.mediatek.atmwifimeta
+    source_line: ATMWifiMeta
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_AutoUIExtension
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: AutoUIExtension
+    canonical_apk_name: AutoUIExtension.apk
+    expected_path: app/AutoUIExtension
+    package_name: com.miui.autoui.ext
+    source_line: AutoUIExtension
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_CameraMind
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: CameraMind
+    canonical_apk_name: CameraMind.apk
+    expected_path: app/CameraMind
+    package_name: com.xiaomi.cameramind
+    source_line: CameraMind
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_CrossDeviceServiceBroker
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: CrossDeviceServiceBroker
+    canonical_apk_name: CrossDeviceServiceBroker.apk
+    expected_path: app/CrossDeviceServiceBroker
+    package_name: com.microsoftsdk.crossdeviceservicebroker
+    source_line: CrossDeviceServiceBroker
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_DebugLoggerUI
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: DebugLoggerUI
+    canonical_apk_name: DebugLoggerUI.apk
+    expected_path: app/DebugLoggerUI
+    package_name: com.debug.loggerui
+    source_line: DebugLoggerUI
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_EngineerMode
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: EngineerMode
+    canonical_apk_name: EngineerMode.apk
+    expected_path: app/EngineerMode
+    package_name: com.mediatek.engineermode
+    source_line: EngineerMode
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_LocationEM2
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: LocationEM2
+    canonical_apk_name: LocationEM2.apk
+    expected_path: app/LocationEM2
+    package_name: com.mediatek.lbs.em2.ui
+    source_line: LocationEM2
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_MDMConfig
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MDMConfig
+    canonical_apk_name: MDMConfig.apk
+    expected_path: app/MDMConfig
+    package_name: com.mediatek.mdmconfig
+    source_line: MDMConfig
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_MDMLSample
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MDMLSample
+    canonical_apk_name: MDMLSample.apk
+    expected_path: app/MDMLSample
+    package_name: com.mediatek.mdmlsample
+    source_line: MDMLSample
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_mediatek_res
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: mediatek-res
+    canonical_apk_name: mediatek-res.apk
+    expected_path: app/mediatek-res
+    package_name: com.mediatek
+    source_line: mediatek-res
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: hyphenated folder name
+
+  - id: system_ext_app_MiraVision
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MiraVision
+    canonical_apk_name: MiraVision.apk
+    expected_path: app/MiraVision
+    package_name: com.mediatek.miravision.ui
+    source_line: MiraVision
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_MiSightService
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MiSightService
+    canonical_apk_name: MiSightService.apk
+    expected_path: app/MiSightService
+    package_name: com.miui.misightservice
+    source_line: MiSightService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_MiuiAudioMonitor
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MiuiAudioMonitor
+    canonical_apk_name: MiuiAudioMonitor.apk
+    expected_path: app/MiuiAudioMonitor
+    package_name: com.miui.audiomonitor
+    source_line: MiuiAudioMonitor
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_MiuiBluetooth
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MiuiBluetooth
+    canonical_apk_name: MiuiBluetooth.apk
+    expected_path: app/MiuiBluetooth
+    package_name: com.xiaomi.bluetooth
+    source_line: MiuiBluetooth
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_MiuiDaemon
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: MiuiDaemon
+    canonical_apk_name: MiuiDaemon.apk
+    expected_path: app/MiuiDaemon
+    package_name: com.miui.daemon
+    source_line: MiuiDaemon
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_miuisystem
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: miuisystem
+    canonical_apk_name: miuisystem.apk
+    expected_path: app/miuisystem
+    package_name: com.miui.system
+    source_line: miuisystem
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: lowercase folder name
+
+  - id: system_ext_app_miuix
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: miuix
+    canonical_apk_name: miuix.apk
+    expected_path: app/miuix
+    package_name: ""
+    source_line: miuix
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: APK name is miuix.apk; package name not available from apps.list
+
+  - id: system_ext_app_ModemTestBox
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: ModemTestBox
+    canonical_apk_name: ModemTestBox.apk
+    expected_path: app/ModemTestBox
+    package_name: com.xiaomi.mtb
+    source_line: ModemTestBox
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_NovaJarvis
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: NovaJarvis
+    canonical_apk_name: NovaJarvis.apk
+    expected_path: app/NovaJarvis
+    package_name: com.novatek.novavis
+    source_line: NovaJarvis
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_NQNfcNci
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: NQNfcNci
+    canonical_apk_name: NQNfcNci.apk
+    expected_path: app/NQNfcNci
+    package_name: com.android.nfc
+    source_line: NQNfcNci
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_PowerKeeper
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: PowerKeeper
+    canonical_apk_name: PowerKeeper.apk
+    expected_path: app/PowerKeeper
+    package_name: com.miui.powerkeeper
+    source_line: PowerKeeper
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_PrintSpooler
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: PrintSpooler
+    canonical_apk_name: PrintSpooler.apk
+    expected_path: app/PrintSpooler
+    package_name: com.android.printspooler
+    source_line: PrintSpooler
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_VsimCore
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: VsimCore
+    canonical_apk_name: VsimCore.apk
+    expected_path: app/VsimCore
+    package_name: com.miui.vsimcore
+    source_line: VsimCore
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_app_YGPS
+    partition: system_ext
+    app_class: app
+    canonical_folder_name: YGPS
+    canonical_apk_name: YGPS.apk
+    expected_path: app/YGPS
+    package_name: com.mediatek.ygps
+    source_line: YGPS
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  # =========================================================
+  # system_ext / priv-app  (38 entries)
+  # =========================================================
+
+  - id: system_ext_priv_app_AtciService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: AtciService
+    canonical_apk_name: AtciService.apk
+    expected_path: priv-app/AtciService
+    package_name: com.mediatek.atci.service
+    source_line: AtciService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_AuthManager
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: AuthManager
+    canonical_apk_name: AuthManager.apk
+    expected_path: priv-app/AuthManager
+    package_name: com.lbe.security.miui
+    source_line: AuthManager
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_AvatarPicker
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: AvatarPicker
+    canonical_apk_name: AvatarPicker.apk
+    expected_path: priv-app/AvatarPicker
+    package_name: com.android.avatarpicker
+    source_line: AvatarPicker
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_CallRecorderService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: CallRecorderService
+    canonical_apk_name: CallRecorderService.apk
+    expected_path: priv-app/CallRecorderService
+    package_name: com.mediatek.callrecorder
+    source_line: CallRecorderService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_CarrierConfig
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: CarrierConfig
+    canonical_apk_name: CarrierConfig.apk
+    expected_path: priv-app/CarrierConfig
+    package_name: com.android.carrierconfig
+    source_line: CarrierConfig
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_CellBroadcastAppPlatform
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: CellBroadcastAppPlatform
+    canonical_apk_name: CellBroadcastAppPlatform.apk
+    expected_path: priv-app/CellBroadcastAppPlatform
+    package_name: com.android.cellbroadcastreceiver
+    source_line: CellBroadcastAppPlatform
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_DataChannelService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: DataChannelService
+    canonical_apk_name: DataChannelService.apk
+    expected_path: priv-app/DataChannelService
+    package_name: com.mediatek.datachannel.service
+    source_line: DataChannelService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_DuraSpeed
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: DuraSpeed
+    canonical_apk_name: DuraSpeed.apk
+    expected_path: priv-app/DuraSpeed
+    package_name: com.mediatek.duraspeed
+    source_line: DuraSpeed
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_EmergencyInfo
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: EmergencyInfo
+    canonical_apk_name: EmergencyInfo.apk
+    expected_path: priv-app/EmergencyInfo
+    package_name: com.android.emergency
+    source_line: EmergencyInfo
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_FindDevice
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: FindDevice
+    canonical_apk_name: FindDevice.apk
+    expected_path: priv-app/FindDevice
+    package_name: com.xiaomi.finddevice
+    source_line: FindDevice
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_GeofenceService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: GeofenceService
+    canonical_apk_name: GeofenceService.apk
+    expected_path: priv-app/GeofenceService
+    package_name: com.mediatek.location.mtkgeofence
+    source_line: GeofenceService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_GoogleFeedback
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: GoogleFeedback
+    canonical_apk_name: GoogleFeedback.apk
+    expected_path: priv-app/GoogleFeedback
+    package_name: com.google.android.feedback
+    source_line: GoogleFeedback
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_GoogleServicesFramework
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: GoogleServicesFramework
+    canonical_apk_name: GoogleServicesFramework.apk
+    expected_path: priv-app/GoogleServicesFramework
+    package_name: com.google.android.gsf
+    source_line: GoogleServicesFramework
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_HyperComm
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: HyperComm
+    canonical_apk_name: HyperComm.apk
+    expected_path: priv-app/HyperComm
+    package_name: com.xiaomi.hypercomm
+    source_line: HyperComm
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_HyperPhone
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: HyperPhone
+    canonical_apk_name: HyperPhone.apk
+    expected_path: priv-app/HyperPhone
+    package_name: com.xiaomi.phone
+    source_line: HyperPhone
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_ImsService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: ImsService
+    canonical_apk_name: ImsService.apk
+    expected_path: priv-app/ImsService
+    package_name: com.mediatek.ims
+    source_line: ImsService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_IntentResolver
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: IntentResolver
+    canonical_apk_name: IntentResolver.apk
+    expected_path: priv-app/IntentResolver
+    package_name: com.android.intentresolver
+    source_line: IntentResolver
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_LPPeService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: LPPeService
+    canonical_apk_name: LPPeService.apk
+    expected_path: priv-app/LPPeService
+    package_name: com.mediatek.location.lppe.main
+    source_line: LPPeService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_MiuiSystemUI
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: MiuiSystemUI
+    canonical_apk_name: MiuiSystemUI.apk
+    expected_path: priv-app/MiuiSystemUI
+    package_name: com.android.systemui
+    source_line: MiuiSystemUI
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_MiuiWifiDialog
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: MiuiWifiDialog
+    canonical_apk_name: MiuiWifiDialog.apk
+    expected_path: priv-app/MiuiWifiDialog
+    package_name: com.android.wifi.dialog
+    source_line: MiuiWifiDialog
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_MtkCapCtrl
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: MtkCapCtrl
+    canonical_apk_name: MtkCapCtrl.apk
+    expected_path: priv-app/MtkCapCtrl
+    package_name: com.mediatek.capctrl.service
+    source_line: MtkCapCtrl
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_MtkGbaService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: MtkGbaService
+    canonical_apk_name: MtkGbaService.apk
+    expected_path: priv-app/MtkGbaService
+    package_name: com.mediatek.gbaservice
+    source_line: MtkGbaService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_MtkTelephonyAssist
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: MtkTelephonyAssist
+    canonical_apk_name: MtkTelephonyAssist.apk
+    expected_path: priv-app/MtkTelephonyAssist
+    package_name: com.mediatek.telephony
+    source_line: MtkTelephonyAssist
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_Polaris
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: Polaris
+    canonical_apk_name: Polaris.apk
+    expected_path: priv-app/Polaris
+    package_name: com.xiaomi.gnss.polaris
+    source_line: Polaris
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_PowerInsight
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: PowerInsight
+    canonical_apk_name: PowerInsight.apk
+    expected_path: priv-app/PowerInsight
+    package_name: com.miui.powerinsight
+    source_line: PowerInsight
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_Provision
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: Provision
+    canonical_apk_name: Provision.apk
+    expected_path: priv-app/Provision
+    package_name: com.android.provision
+    source_line: Provision
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_RtMiCloudSDK
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: RtMiCloudSDK
+    canonical_apk_name: RtMiCloudSDK.apk
+    expected_path: priv-app/RtMiCloudSDK
+    package_name: com.xiaomi.micloud.sdk
+    source_line: RtMiCloudSDK
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_Settings
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: Settings
+    canonical_apk_name: Settings.apk
+    expected_path: priv-app/Settings
+    package_name: com.android.settings
+    source_line: Settings
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_SetupWizard
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: SetupWizard
+    canonical_apk_name: SetupWizard.apk
+    expected_path: priv-app/SetupWizard
+    package_name: com.google.android.setupwizard
+    source_line: SetupWizard
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_SmartRatSwitch
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: SmartRatSwitch
+    canonical_apk_name: SmartRatSwitch.apk
+    expected_path: priv-app/SmartRatSwitch
+    package_name: com.mediatek.smartratswitch.service
+    source_line: SmartRatSwitch
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_StatementService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: StatementService
+    canonical_apk_name: StatementService.apk
+    expected_path: priv-app/StatementService
+    package_name: com.android.statementservice
+    source_line: StatementService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_StorageManager
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: StorageManager
+    canonical_apk_name: StorageManager.apk
+    expected_path: priv-app/StorageManager
+    package_name: com.android.storagemanager
+    source_line: StorageManager
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_TouchService
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: TouchService
+    canonical_apk_name: TouchService.apk
+    expected_path: priv-app/TouchService
+    package_name: com.xiaomi.touchservice
+    source_line: TouchService
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_VoiceCommand
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: VoiceCommand
+    canonical_apk_name: VoiceCommand.apk
+    expected_path: priv-app/VoiceCommand
+    package_name: com.mediatek.voicecommand
+    source_line: VoiceCommand
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_VoiceUnlock
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: VoiceUnlock
+    canonical_apk_name: VoiceUnlock.apk
+    expected_path: priv-app/VoiceUnlock
+    package_name: com.mediatek.voiceunlock
+    source_line: VoiceUnlock
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_VpnDialogs
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: VpnDialogs
+    canonical_apk_name: VpnDialogs.apk
+    expected_path: priv-app/VpnDialogs
+    package_name: com.android.vpndialogs
+    source_line: VpnDialogs
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_WallpaperCropper
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: WallpaperCropper
+    canonical_apk_name: WallpaperCropper.apk
+    expected_path: priv-app/WallpaperCropper
+    package_name: com.android.wallpapercropper
+    source_line: WallpaperCropper
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+  - id: system_ext_priv_app_WapiCertManager
+    partition: system_ext
+    app_class: priv-app
+    canonical_folder_name: WapiCertManager
+    canonical_apk_name: WapiCertManager.apk
+    expected_path: priv-app/WapiCertManager
+    package_name: com.wapi.wapicertmanager
+    source_line: WapiCertManager
+    source: ListMezo/free/apps.list
+    action_policy: keep
+    notes: ""
+
+# =========================================================
+# Deferred build.prop rules (not applied in this stage)
+# =========================================================
+deferred_build_prop_rules:
+  - partition: system
+    file: build.prop
+    action: replace
+    key: ro.build.host
+    value: xiaomi.deadzone
+    source_line: "ro.build.host=xiaomi.deadzone"
+
+  - partition: system
+    file: build.prop
+    action: replace
+    key: ro.product.locale
+    value: en-GB
+    source_line: "ro.product.locale=en-GB"
+
+  - partition: system
+    file: build.prop
+    action: remove
+    key: ro.miui.has_security_keyboard
+    value: "1"
+    source_line: "ro.miui.has_security_keyboard=1"
+
+  - partition: system
+    file: build.prop
+    action: remove
+    key: ro.miui.support_miui_ime_bottom
+    value: "1"
+    source_line: "ro.miui.support_miui_ime_bottom=1"
