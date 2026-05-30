@@ -330,6 +330,43 @@ def test_telegram_failed_message_omits_malformed_hint(tmp_path):
     assert "Suggested check: C" not in text
 
 
+def test_telegram_unsafe_matching_failure_message_is_clear(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.failed_stage = "stable_app_policy"
+    tg._classified_error = {
+        "error_type": "STABLE_APP_MATCHING_UNSAFE",
+        "cause": "Matching unsafe: kept=1, missing=217, delete_candidates=175",
+        "suggested_fix": "Fix package extraction/matching before deleting apps",
+        "suggested_check": "stable_package_scan_report.json and stable_app_policy_report.json",
+    }
+
+    text = tg._format("FAILED")
+
+    assert "Failed stage: Applying Stable App Policy" in text
+    assert "Error type: STABLE_APP_MATCHING_UNSAFE" in text
+    assert "Cause: Matching unsafe: kept=1, missing=217, delete_candidates=175" in text
+
+
+def test_telegram_rebuilt_image_too_large_failure_message_is_clear(tmp_path):
+    ws = _make_ws(tmp_path)
+    tg = _make_tg(ws)
+    tg.failed_stage = "pre_super_image_validation"
+    tg._classified_error = {
+        "error_type": "REBUILT_IMAGE_TOO_LARGE",
+        "cause": "vendor.img grew from 2137452544 to 3085180928",
+        "suggested_fix": "Rebuild EROFS with correct compression/options",
+        "suggested_check": "stable_partition_rebuild_report.json and super_profile_report.txt",
+    }
+
+    text = tg._format("FAILED")
+
+    assert "Failed stage: Validating Rebuilt Images" in text
+    assert "Error type: REBUILT_IMAGE_TOO_LARGE" in text
+    assert "LPMAKE_FAILED" not in text
+    assert "Cause: vendor.img grew from 2137452544 to 3085180928" in text
+
+
 # ---------------------------------------------------------------------------
 # test_telegram_edits_same_message_id
 # ---------------------------------------------------------------------------

@@ -28,6 +28,7 @@ from factory.core.size_reducer import LEVELS as SIZE_REDUCTION_LEVELS
 from factory.core.size_reducer import reduce_workspace_size
 from factory.core.size_policy import SUPER_SIZE_POLICIES, bytes_from_decimal_gb, default_policy, enforce_final_zip_policy, write_policy_config
 from factory.core.status import StageTracker
+from factory.core.super_builder import validate_pre_super_images
 from factory.core.super_profile import build_super_profile
 from factory.core.style_runner import apply_style, normalize_style
 from factory.core.telegram import TelegramResult, TelegramStatus
@@ -455,6 +456,7 @@ def _run_build(ctx: BuildContext) -> BuildContext:
     )
     _stage(ctx, "style", lambda: apply_style(ctx.style, ws, ctx.rom_metadata))  # type: ignore[arg-type]
     _stage(ctx, "repack", lambda: repack_partitions(ws))
+    _stage(ctx, "pre_super_image_validation", lambda: validate_pre_super_images(ws, ctx.super_profile or {}))
     _stage(ctx, "super", lambda: _build_super_after_repack(ctx, unpack_result))  # type: ignore[arg-type]
     ctx.final_zip_path = _stage(
         ctx,

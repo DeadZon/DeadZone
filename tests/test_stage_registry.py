@@ -20,6 +20,7 @@ EXPECTED_STAGE_IDS = [
     "app_policy_compare",
     "stable_app_policy",
     "stable_partition_rebuild",
+    "pre_super_image_validation",
     "legend_patches",
     "image_repack",
     "super_build",

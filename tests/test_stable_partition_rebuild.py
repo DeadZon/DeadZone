@@ -48,7 +48,13 @@ def test_erofs_rebuild_report_contains_sizes(tmp_path, monkeypatch):
     helper = tmp_path / "bin"
     helper.mkdir()
     mkfs = helper / "mkfs.erofs"
-    mkfs.write_text("#!/bin/sh\nprintf rebuilt > \"$1\"\n", encoding="utf-8")
+    mkfs.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"--help\" ]; then echo 'lz4 lz4hc'; exit 0; fi\n"
+        "if [ \"$1\" = \"-z\" ]; then out=\"$3\"; else out=\"$1\"; fi\n"
+        "printf rebuilt > \"$out\"\n",
+        encoding="utf-8",
+    )
     mkfs.chmod(0o755)
     monkeypatch.setenv("PATH", str(helper))
     result = rebuild_stable_partitions(ws, {"changed_partitions": ["product"]})
@@ -56,3 +62,69 @@ def test_erofs_rebuild_report_contains_sizes(tmp_path, monkeypatch):
     assert entry["status"] == "rebuilt"
     assert entry["size_before"] > entry["size_after"]
     assert entry["bytes_saved"] > 0
+
+
+def _write_fake_mkfs(helper: Path, payload_size: int) -> None:
+    helper.mkdir()
+    mkfs = helper / "mkfs.erofs"
+    mkfs.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"--help\" ]; then echo 'lz4 lz4hc'; exit 0; fi\n"
+        "if [ \"$1\" = \"-z\" ]; then out=\"$3\"; else out=\"$1\"; fi\n"
+        f"head -c {payload_size} /dev/zero > \"$out\"\n",
+        encoding="utf-8",
+    )
+    mkfs.chmod(0o755)
+
+
+def test_rebuilt_image_growth_more_than_tolerance_fails(tmp_path, monkeypatch):
+    ws = create_workspace(tmp_path / "workspace")
+    (ws.partitions / "vendor").mkdir(parents=True)
+    (ws.images / "vendor.img").write_bytes(b"\0" * 1024 + b"EroS" + b"\0" * 1024)
+    helper = tmp_path / "bin"
+    _write_fake_mkfs(helper, 40 * 1024 * 1024)
+    monkeypatch.setenv("PATH", f"{helper}:{os.environ.get('PATH', '')}")
+
+    with pytest.raises(StablePartitionRebuildError) as exc:
+        rebuild_stable_partitions(ws, {"changed_partitions": ["vendor"]})
+
+    assert exc.value.payload["error_type"] == "REBUILT_IMAGE_TOO_LARGE"
+    assert "vendor.img grew" in exc.value.payload["cause"]
+
+
+def test_rebuilt_image_growth_within_tolerance_passes(tmp_path, monkeypatch):
+    ws = create_workspace(tmp_path / "workspace")
+    (ws.partitions / "vendor").mkdir(parents=True)
+    (ws.images / "vendor.img").write_bytes(b"\0" * 1024 + b"EroS" + b"\0" * (2 * 1024 * 1024))
+    helper = tmp_path / "bin"
+    _write_fake_mkfs(helper, 3 * 1024 * 1024)
+    monkeypatch.setenv("PATH", f"{helper}:{os.environ.get('PATH', '')}")
+
+    result = rebuild_stable_partitions(ws, {"changed_partitions": ["vendor"]})
+
+    assert result["partitions"][0]["validation_status"] == "passed"
+    assert result["partitions"][0]["size_delta"] > 0
+
+
+def test_allow_rebuilt_image_growth_records_warning(tmp_path, monkeypatch):
+    ws = create_workspace(tmp_path / "workspace")
+    (ws.partitions / "vendor").mkdir(parents=True)
+    (ws.images / "vendor.img").write_bytes(b"\0" * 1024 + b"EroS")
+    helper = tmp_path / "bin"
+    _write_fake_mkfs(helper, 40 * 1024 * 1024)
+    monkeypatch.setenv("PATH", f"{helper}:{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("DEADZONE_ALLOW_REBUILT_IMAGE_GROWTH", "true")
+
+    result = rebuild_stable_partitions(ws, {"changed_partitions": ["vendor"]})
+
+    assert result["partitions"][0]["status"] == "rebuilt"
+    assert result["partitions"][0]["growth_allowed"] is True
+    assert result["partitions"][0]["warnings"]
+
+
+def test_vendor_growth_real_failure_numbers(tmp_path, monkeypatch):
+    ok, reason = __import__("factory.core.stable_partition_rebuild", fromlist=["_validate_growth"])._validate_growth(
+        "vendor", 2137452544, 3085180928
+    )
+    assert not ok
+    assert "tolerance" in reason

@@ -580,3 +580,63 @@ def test_delete_candidate_path_missing_is_skipped_not_counted_deleted(tmp_path):
     assert result["skipped_delete_apps"]
     assert result["summary"]["deleted_extra_apps"] == 0
     del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_unsafe_matching_blocks_delete_in_execute_mode(tmp_path):
+    apps_list = _write_apps_list(
+        tmp_path,
+        "\n".join(f"App{i}\ncom.example.expected{i}" for i in range(218)),
+    )
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    _make_app_folder(partitions_root, "system", "app", "App0")
+    extras = []
+    for i in range(175):
+        _make_app_folder(partitions_root, "product", "app", f"Extra{i}")
+        extras.append(_scanned_app("product", "app", f"Extra{i}", f"com.extra.{i}", partitions_root))
+    scanned = [_scanned_app("system", "app", "App0", "com.example.expected0", partitions_root)] + extras
+
+    with pytest.raises(RuntimeError, match="STABLE_APP_MATCHING_UNSAFE"):
+        enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+
+    assert (partitions_root / "product" / "app" / "Extra0").exists()
+    report = json.loads((tmp_path / "reports" / "stable_app_policy_report.json").read_text(encoding="utf-8"))
+    assert report["safety_guard"]["status"] == "failed"
+    assert report["summary"]["kept_apps"] == 1
+    assert report["summary"]["missing_apps"] == 217
+    assert report["summary"]["delete_candidates"] == 175
+    assert report["summary"]["deleted_extra_apps"] == 0
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_unsafe_matching_warns_only_in_dry_run(tmp_path):
+    apps_list = _write_apps_list(tmp_path, "\n".join(f"App{i}\ncom.example.expected{i}" for i in range(101)))
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    extra = _make_app_folder(partitions_root, "product", "app", "Extra")
+    scanned = [_scanned_app("product", "app", "Extra", "com.extra.app", partitions_root)]
+
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable", dry_run=True)
+
+    assert result["safety_guard"]["status"] == "warning"
+    assert extra.exists()
+    assert result["skipped_delete_apps"][0]["reason"] == "report-only mode"
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_env_thresholds_override_safety_defaults(tmp_path, monkeypatch):
+    apps_list = _write_apps_list(tmp_path, "\n".join(f"App{i}\ncom.example.expected{i}" for i in range(90)))
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    monkeypatch.setenv("DEADZONE_STABLE_MIN_KEPT_APPS", "0")
+    monkeypatch.setenv("DEADZONE_STABLE_MAX_MISSING_APPS", "100")
+    monkeypatch.setenv("DEADZONE_STABLE_MAX_DELETE_CANDIDATES", "200")
+    monkeypatch.setenv("DEADZONE_STABLE_MIN_MATCH_RATIO", "0")
+    partitions_root = tmp_path / "partitions"
+    extra = _make_app_folder(partitions_root, "product", "app", "Extra")
+    scanned = [_scanned_app("product", "app", "Extra", "com.extra.app", partitions_root)]
+
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+
+    assert result["safety_guard"]["status"] == "passed"
+    assert not extra.exists()
+    del os.environ["LISTMEZO_APPS_LIST"]

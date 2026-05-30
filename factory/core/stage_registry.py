@@ -69,6 +69,14 @@ STAGE_DEFINITIONS: list[dict[str, Any]] = [
         "fail_text": "Stable partition rebuild failed",
     },
     {
+        "id": "pre_super_image_validation",
+        "title": "Validating Rebuilt Images",
+        "description": "Validate rebuilt dynamic partition images before lpmake",
+        "weight": 3,
+        "success_text": "Rebuilt images validated",
+        "fail_text": "Rebuilt image validation failed",
+    },
+    {
         "id": "legend_patches",
         "title": "Legend Patches",
         "description": "Apply style patches (Stable, Legend, Gaming, EPiC)",
@@ -141,6 +149,7 @@ BUILD_STAGE_MAP: dict[str, str] = {
     "inventory_package": "app_policy_compare",
     "stable_app_policy": "stable_app_policy",
     "stable_partition_rebuild": "stable_partition_rebuild",
+    "pre_super_image_validation": "pre_super_image_validation",
     "size_reduction": "image_mount",
     "super_profile": "super_build",
     "style": "legend_patches",

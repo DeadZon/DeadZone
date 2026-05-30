@@ -38,6 +38,11 @@ STAGE_DISPLAY: dict[str, dict[str, str]] = {
         "done_label": "Stable partitions rebuilt",
         "running_label": "Rebuilding stable partitions",
     },
+    "pre_super_image_validation": {
+        "title": "Validating Rebuilt Images",
+        "done_label": "Rebuilt images validated",
+        "running_label": "Validating rebuilt images",
+    },
     "stable_app_normalize": {
         "title": "Normalizing Stable Apps",
         "done_label": "Stable apps normalized",
@@ -101,6 +106,7 @@ _TIMELINE_STAGES = [
     "app_inventory",
     "stable_app_policy",
     "stable_partition_rebuild",
+    "pre_super_image_validation",
     "stable_app_normalize",
     "inventory_package",
     "size_reduction",

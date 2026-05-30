@@ -128,7 +128,7 @@ def classify_error(error: str, stage: str = "") -> dict[str, Any]:
         return {
             "error_type": structured.get("error_type"),
             "stage": stage or structured.get("stage") or "unknown",
-            "cause": structured.get("cause") or raw[:400],
+            "cause": structured.get("telegram_cause") or structured.get("cause") or raw[:400],
             "suggested_fix": structured.get("suggested_fix") or "Check reports and logs artifacts for the failing stage",
             "suggested_check": structured.get("suggested_check") or "",
             "raw_error": raw[:800],

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,12 @@ from factory.core.toolchain import MISSING_LPMAKE_MESSAGE, resolve_toolchain
 from factory.core.workspace import Workspace, read_json, write_json
 
 DYNAMIC_IMAGES = {f"{name}.img" for name in DYNAMIC_PARTITIONS}
+
+
+class PreSuperValidationError(RuntimeError):
+    def __init__(self, payload: dict[str, Any]):
+        self.payload = payload
+        super().__init__(str(payload.get("cause") or payload.get("error_type") or "pre-super validation failed"))
 
 
 def _metadata_path(ws: Workspace, name: str) -> Path:
@@ -80,6 +87,107 @@ def _allocation(part: str, image: Path, layout: dict[str, Any], warnings: list[s
     raise RuntimeError(
         f"{part}.img has no metadata allocation; checked safe sources: {', '.join(str(item) for item in checked or [])}"
     )
+
+
+def _allowed_partition_sizes(layout: dict[str, Any]) -> dict[str, int]:
+    result: dict[str, int] = {}
+    partitions = layout.get("partitions") if isinstance(layout.get("partitions"), dict) else {}
+    for part, entry in partitions.items():
+        if isinstance(entry, dict):
+            size = _int_value(entry.get("allocation_size"), entry.get("size"), entry.get("partition_size"))
+            if size:
+                result[str(part)] = size
+    for source_key in ("partition_sizes", "allowed_partition_sizes"):
+        source = layout.get(source_key)
+        if isinstance(source, dict):
+            for part, value in source.items():
+                size = _int_value(value)
+                if size and str(part) not in result:
+                    result[str(part)] = size
+    return result
+
+
+def _error_payload(error_type: str, cause: str) -> dict[str, str]:
+    if error_type == "SUPER_GROUP_SIZE_EXCEEDED":
+        return {
+            "error_type": error_type,
+            "cause": cause,
+            "suggested_fix": "Reduce image sizes or fix EROFS rebuild compression before lpmake",
+            "suggested_check": "Check stable_partition_rebuild_report.json and super_profile_report.txt",
+        }
+    return {
+        "error_type": "REBUILT_IMAGE_TOO_LARGE",
+        "cause": cause,
+        "suggested_fix": "Rebuild EROFS with compression/options matching original, reduce more content, or do not rebuild this partition",
+        "suggested_check": "Check stable_partition_rebuild_report.json and super_profile_report.txt",
+    }
+
+
+def validate_pre_super_images(ws: Workspace, layout: dict[str, Any] | None = None) -> dict[str, Any]:
+    profile = layout or read_json(ws.meta / "super_profile.json", {}) or read_json(ws.meta / "super_layout.json", {})
+    dynamic_images = {name: Path(path) for name, path in (profile.get("dynamic_images") or {}).items()}
+    selected = list(profile.get("selected_partitions") or dynamic_images.keys())
+    allowed = _allowed_partition_sizes(profile)
+    rebuild_report = read_json(ws.reports / "stable_partition_rebuild_report.json", {})
+    original_sizes: dict[str, int] = {}
+    for entry in rebuild_report.get("partitions") or []:
+        if isinstance(entry, dict) and entry.get("partition"):
+            original_sizes[str(entry["partition"])] = _int_value(entry.get("original_size"), entry.get("size_before"))
+    image_sizes: dict[str, int] = {}
+    errors: list[dict[str, str]] = []
+    group_usage = 0
+    for part in selected:
+        image = dynamic_images.get(part) or ws.images / f"{part}.img"
+        size = image.stat().st_size if image.is_file() else 0
+        image_sizes[str(part)] = size
+        limit = allowed.get(str(part), 0)
+        if limit:
+            group_usage += max(size, limit)
+            if size > limit:
+                before = original_sizes.get(str(part), 0)
+                if before:
+                    cause = f"{part}.img grew from {before} to {size} and exceeds allowed partition/group size"
+                else:
+                    cause = f"{part}.img size {size} exceeds allowed partition size {limit}"
+                errors.append(_error_payload("REBUILT_IMAGE_TOO_LARGE", cause))
+        else:
+            group_usage += size
+    group_limit = _int_value(profile.get("group_size"))
+    if group_limit and group_usage > group_limit:
+        errors.append(
+            _error_payload(
+                "SUPER_GROUP_SIZE_EXCEEDED",
+                f"Rebuilt dynamic partition images exceed qti_dynamic_partitions group size ({group_usage} > {group_limit})",
+            )
+        )
+    data = {
+        "stage": "pre_super_image_validation",
+        "image_sizes": image_sizes,
+        "allowed_partition_sizes": allowed,
+        "group_usage": group_usage,
+        "group_limit": group_limit,
+        "status": "failed" if errors else "ok",
+        "errors": errors,
+    }
+    write_json(ws.reports / "pre_super_image_validation_report.json", data)
+    lines = [
+        "DeadZone Pre-Super Image Validation Report",
+        "==========================================",
+        f"status: {data['status']}",
+        f"group_usage: {group_usage}",
+        f"group_limit: {group_limit}",
+        "",
+        "images:",
+    ]
+    for part, size in image_sizes.items():
+        lines.append(f"  - {part}.img: size={size} allowed={allowed.get(part, 0)}")
+    if errors:
+        lines += ["", "errors:"]
+        lines.extend(f"  - {err['error_type']}: {err['cause']}" for err in errors)
+    (ws.reports / "pre_super_image_validation_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if errors:
+        raise PreSuperValidationError(errors[0])
+    return data
 
 
 def _build_lpmake_command(
@@ -331,6 +439,30 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
         reason = "dynamic partition content requires a new super.img"
         if not final_super.is_file():
             reason = "no original super.img is available and dynamic partition images exist"
+        try:
+            validate_pre_super_images(ws, layout)
+        except PreSuperValidationError as exc:
+            payload = exc.payload
+            message = json.dumps(payload, sort_keys=True)
+            result = {
+                "status": "FAILED",
+                "action": "failed",
+                "reason": payload.get("cause"),
+                "super_img": str(final_super),
+                "super_size": final_super.stat().st_size if final_super.is_file() else None,
+                "target_super_size": layout.get("target_super_size"),
+                "group_name": layout.get("dynamic_group_name"),
+                "group_size": layout.get("group_size"),
+                "partition_list": layout.get("selected_partitions"),
+                "lpmake_command": command,
+                "validation": {"status": "FAILED", "reason": payload.get("cause"), "output": ""},
+                "warnings": warnings,
+                "errors": [payload],
+            }
+            write_json(ws.meta / "super_build_result.json", result)
+            _write_report(ws, result, layout, result["validation"])
+            _write_error_summary(ws, "pre_super_image_validation", message, layout)
+            raise RuntimeError(message) from exc
         try:
             command = _build_lpmake_command(final_super, layout, dynamic_images, lpmake, warnings)
         except RuntimeError as exc:
