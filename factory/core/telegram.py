@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""Telegram status notifications for DeadZone builds.
+
+Sends live updates to personal chat (editable messages) and broadcasts
+final status + log documents to all targets (personal chats + group).
+Supports multiple personal chat IDs via comma-separated TELEGRAM_*_CHAT_ID.
+"""
 from __future__ import annotations
 
 import json
@@ -76,7 +83,7 @@ STAGE_DISPLAY: dict[str, dict[str, str]] = {
     "super": {
         "title": "Building Super Image",
         "done_label": "Super image built",
-        "running_label": "Super image building",
+        "running_label": "Building super image",
     },
     "fastboot_validation": {
         "title": "Validating Fastboot Package",
@@ -168,6 +175,27 @@ def _credentials_for_soc(soc: str) -> tuple[str, str]:
     return (_env_first("TELEGRAM_BOT_TOKEN"), _env_first("TELEGRAM_CHAT_ID"))
 
 
+def _group_credentials_for_soc(soc: str) -> tuple[str, str]:
+    """Return (bot_token, group_chat_id) for the given SoC group chat."""
+    key = soc.strip().lower()
+    if key == "mtk":
+        return (
+            _env_first("TELEGRAM_MTK_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
+            _env_first("TELEGRAM_MTK_GROUP_ID"),
+        )
+    if key == "snapdragon":
+        return (
+            _env_first("TELEGRAM_SNAPDRAGON_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
+            _env_first("TELEGRAM_SNAPDRAGON_GROUP_ID"),
+        )
+    return ("", "")
+
+
+def _parse_chat_ids(raw: str) -> list[str]:
+    """Parse comma-separated chat IDs into a list of non-empty strings."""
+    return [cid.strip() for cid in raw.split(",") if cid.strip()]
+
+
 def _display_source(value: str) -> str:
     raw = str(value or "").strip()
     parsed = urlparse(raw)
@@ -229,6 +257,8 @@ class TelegramStatus:
         self.workspace = workspace
         self.token, self.chat_id = _credentials_for_soc(soc)
         self.thread_id = _env_first("TELEGRAM_THREAD_ID", "TELEGRAM_MESSAGE_THREAD_ID")
+        # Group chat credentials (for broadcasting final status + documents)
+        self._group_token, self._group_chat_id = _group_credentials_for_soc(soc)
         self.started_at = time.monotonic()
         self._classified_error: dict = {}
         self.events: list[dict[str, str]] = []
@@ -241,6 +271,17 @@ class TelegramStatus:
         self._last_edit_at: float = 0.0
         self._last_stage: str = ""
         self._update_interval_seconds = _default_update_interval()
+
+    def _all_personal_chat_ids(self) -> list[str]:
+        """Return all personal chat IDs (supports comma-separated IDs for multiple devs)."""
+        return _parse_chat_ids(self.chat_id)
+
+    def _all_broadcast_targets(self) -> list[str]:
+        """Return all chat IDs that should receive broadcasts: personal chats + group."""
+        targets = list(self._all_personal_chat_ids())
+        if self._group_chat_id and self._group_chat_id not in targets:
+            targets.append(self._group_chat_id)
+        return targets
 
     def start(self) -> TelegramResult:
         if not self.requested:
@@ -344,40 +385,76 @@ class TelegramStatus:
                 self.message_id = int(response["result"]["message_id"])
             self._save_message_id()
             print(f"[TELEGRAM] Status: {self.status}")
-            return self.result(self.status)
-        self.errors.append(str(response.get("error") or "Telegram final update failed"))
-        self.status = "failed"
-        print("[TELEGRAM] Status: final update failed")
-        return self.result("failed")
+        else:
+            self.errors.append(str(response.get("error") or "Telegram final update failed"))
+            self.status = "failed"
+            print("[TELEGRAM] Status: final update failed")
 
-    def write_report(self) -> TelegramResult:
-        result = self.result(self.status)
-        self.workspace.reports.mkdir(parents=True, exist_ok=True)
-        path = self.workspace.reports / "telegram_report.txt"
-        lines = [
-            "MEZO / DeadZone Telegram Report",
-            "===============================",
-            f"requested: {result.requested}",
-            f"enabled: {result.enabled}",
-            f"attempted: {result.attempted}",
-            f"status: {result.status}",
-            f"message id: {result.message_id or '(none)'}",
-            f"failure reason: {result.failure_reason or '(none)'}",
-            "",
-            "events:",
+        # Broadcast final status to all targets (personal chats + group)
+        self._broadcast_final(text, final_status)
+
+        # On failure: send log files as documents to all targets
+        if final_status.upper() not in {"OK", "DONE"}:
+            self._send_failure_documents()
+
+        return self.result(self.status)
+
+    def _broadcast_final(self, text: str, final_status: str) -> None:
+        """Send the final status message to all broadcast targets (personal + group)."""
+        targets = self._all_broadcast_targets()
+        if len(targets) <= 1:
+            return  # Only one target, already handled by _edit
+        for chat_id in targets:
+            if chat_id == self.chat_id:
+                continue  # Already sent via _edit to primary personal chat
+            payload = {
+                "chat_id": chat_id,
+                "text": str(text)[:MAX_TEXT_LEN],
+                "disable_web_page_preview": True,
+            }
+            if self.thread_id:
+                try:
+                    payload["message_thread_id"] = int(self.thread_id)
+                except ValueError:
+                    pass
+            self._post("sendMessage", payload)
+
+    def _send_failure_documents(self) -> None:
+        """Send log files as documents to all targets on build failure."""
+        reports_dir = self.workspace.reports
+        log_files = [
+            reports_dir / "stable_matching_debug_report.txt",
+            reports_dir / "stable_package_scan_report.json",
         ]
-        lines.extend(
-            f"- {event.get('status', 'UNKNOWN')}: {event.get('name', '')}"
-            + (f" ({event.get('detail')})" if event.get("detail") else "")
-            for event in self.events
-        )
-        if not self.events:
-            lines.append("- (none)")
-        lines.extend(["", "warnings:", *(self.warnings or ["(none)"])])
-        lines.extend(["", "errors:", *(self.errors or ["(none)"])])
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        result.report_path = str(path)
-        return result
+        # Also check for build.log from the bash wrapper
+        build_log = Path("/mnt/dz_data/build.log")
+        if build_log.is_file():
+            log_files.append(build_log)
+
+        targets = self._all_broadcast_targets()
+        for log_path in log_files:
+            if not log_path.is_file():
+                continue
+            size = log_path.stat().st_size
+            if size > MAX_DOCUMENT_BYTES:
+                self.warnings.append(f"Log file too large to send: {log_path.name} ({size} bytes)")
+                continue
+            caption = f"Build failure log: {log_path.name}"
+            for chat_id in targets:
+                self._send_document_to(chat_id, log_path, caption)
+
+    def _send_document_to(self, chat_id: str, path: Path, caption: str) -> dict[str, Any]:
+        """Send a document to a specific chat ID."""
+        fields: dict[str, Any] = {
+            "chat_id": chat_id,
+            "caption": _ascii(caption)[:1024],
+        }
+        if self.thread_id:
+            try:
+                fields["message_thread_id"] = int(self.thread_id)
+            except ValueError:
+                pass
+        return self._post_multipart("sendDocument", fields, "document", path)
 
     def send_app_inventory_document(
         self,
@@ -428,15 +505,13 @@ class TelegramStatus:
                 f"removed_bytes={_ascii(norm.get('removed_bytes', 0))}"
             )
         caption = "\n".join(caption_parts)
-        response = self._send_document(inventory_zip, caption)
+        # Send to all broadcast targets
+        targets = self._all_broadcast_targets()
+        for chat_id in targets:
+            self._send_document_to(chat_id, inventory_zip, caption)
         self.attempted = True
-        if response.get("ok"):
-            self.events.append({"name": "app inventory document", "status": "OK", "detail": inventory_zip.name})
-            self.status = "updated"
-            return self.result(self.status)
-        error = str(response.get("error") or "Telegram App Inventory document upload failed")
-        self.warnings.append(error)
-        self.events.append({"name": "app inventory document", "status": "FAIL", "detail": error})
+        self.events.append({"name": "app inventory document", "status": "OK", "detail": inventory_zip.name})
+        self.status = "updated"
         return self.result(self.status)
 
     def result(self, status: str | None = None) -> TelegramResult:

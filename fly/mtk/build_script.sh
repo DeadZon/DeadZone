@@ -23,6 +23,22 @@ send_group() {
       -d disable_web_page_preview=true > /dev/null 2>&1 || true
 }
 
+# ── Send file to Telegram ────────────────────────────────────────────────────
+send_file() {
+    local chat_id="$1"
+    local file_path="$2"
+    local caption="$3"
+    if [ -z "${TELEGRAM_MTK_BOT_TOKEN}" ] || [ -z "$chat_id" ] || [ ! -f "$file_path" ]; then
+        return 0
+    fi
+    curl -s --fail \
+      -X POST "https://api.telegram.org/bot${TELEGRAM_MTK_BOT_TOKEN}/sendDocument" \
+      -F chat_id="$chat_id" \
+      -F document=@"$file_path" \
+      -F caption="$caption" \
+      -F parse_mode="Markdown" > /dev/null 2>&1 || true
+}
+
 # ── Swap file (48GB) ─────────────────────────────────────────────────────────
 echo "[SETUP] Creating 48GB swap file..."
 cd /mnt/dz_data
@@ -68,7 +84,6 @@ echo "[SETUP] Installing Python dependencies..."
 pip3 install -r requirements.txt 2>/dev/null || true
 
 # ── Build DeadZone ───────────────────────────────────────────────────────────
-# Python TelegramStatus sends live updates (personal chat + group via TELEGRAM_GROUP_ID)
 echo "[BUILD] Starting DeadZone build..."
 echo ""
 
@@ -107,8 +122,10 @@ if [ "$ALLOW_OVERSIZED" = "true" ]; then
     ARGS+=(--allow-oversized-final)
 fi
 
-python3 -m factory.deadzone "${ARGS[@]}"
-EXIT_CODE=$?
+# Capture full build output to log file
+BUILD_LOG="/mnt/dz_data/build.log"
+python3 -m factory.deadzone "${ARGS[@]}" 2>&1 | tee "$BUILD_LOG"
+EXIT_CODE=${PIPESTATUS[0]}
 
 BUILD_END=$(date +%s)
 BUILD_DIFF=$((BUILD_END - BUILD_START))
@@ -134,13 +151,48 @@ else
     echo "  BUILD FAILED"
     echo "  Time: $(($BUILD_DIFF / 60))m $(($BUILD_DIFF % 60))s"
 
+    # ── Send failure notification to group ───────────────────────────────────
+    LOG_TAIL=$(tail -50 "$BUILD_LOG" 2>/dev/null || echo "No log available")
     send_group "❌ *DeadZone MTK Build Failed!*
 ⏱️ Time: $(($BUILD_DIFF / 60))m $(($BUILD_DIFF % 60))s
 
 📱 **Device:** \`${DEVICE_CODENAME}\`
 🎨 **Style:** \`${STYLE}\`
 
-Check personal chat for detailed logs."
+📋 *Last logs:*
+\`\`\`
+${LOG_TAIL}
+\`\`\`"
+
+    # ── Send log files as documents to all targets ───────────────────────────
+    # Targets: personal chat(s) + group
+    CHAT_TARGETS="${TELEGRAM_MTK_CHAT_ID}"
+    if [ -n "${TELEGRAM_MTK_GROUP_ID}" ]; then
+        CHAT_TARGETS="${CHAT_TARGETS},${TELEGRAM_MTK_GROUP_ID}"
+    fi
+
+    # Send build.log
+    if [ -f "$BUILD_LOG" ]; then
+        for target in $(echo "$CHAT_TARGETS" | tr ',' '\n'); do
+            send_file "$target" "$BUILD_LOG" "📋 MTK Build Log - ${DEVICE_CODENAME} - ${STYLE}"
+        done
+    fi
+
+    # Find and send stable_matching_debug_report.txt
+    STABLE_MATCH_REPORT=$(find . -name "stable_matching_debug_report.txt" -type f 2>/dev/null | head -1)
+    if [ -n "$STABLE_MATCH_REPORT" ] && [ -f "$STABLE_MATCH_REPORT" ]; then
+        for target in $(echo "$CHAT_TARGETS" | tr ',' '\n'); do
+            send_file "$target" "$STABLE_MATCH_REPORT" "📋 Stable Matching Debug Report - ${DEVICE_CODENAME}"
+        done
+    fi
+
+    # Find and send stable_package_scan_report.json
+    STABLE_SCAN_REPORT=$(find . -name "stable_package_scan_report.json" -type f 2>/dev/null | head -1)
+    if [ -n "$STABLE_SCAN_REPORT" ] && [ -f "$STABLE_SCAN_REPORT" ]; then
+        for target in $(echo "$CHAT_TARGETS" | tr ',' '\n'); do
+            send_file "$target" "$STABLE_SCAN_REPORT" "📋 Stable Package Scan Report - ${DEVICE_CODENAME}"
+        done
+    fi
 fi
 echo "=========================================="
 
