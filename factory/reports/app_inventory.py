@@ -41,6 +41,11 @@ _REJECT_PACKAGE_PREFIXES: tuple[str, ...] = (
     "android.speech.",
     "android.text.",
     "android.util.",
+    # System UID/GID namespaces — never real app packages
+    "android.uid.",
+    "android.gid.",
+    # Notification service class names mistaken for packages
+    "service.notification.",
     "androidx.",
     "Manifest.",
     "MediaStore.",
@@ -50,6 +55,11 @@ _REJECT_PACKAGE_PREFIXES: tuple[str, ...] = (
     "SystemClock.",
     "android.Manifest.",
 )
+
+# Package names that equal one of these are also rejected.
+_REJECT_PACKAGE_EQUALS: frozenset[str] = frozenset({
+    "schemas.android.com",
+})
 
 _ALLCAPS_SEGMENT_RE = re.compile(r"^[A-Z][A-Z0-9_]{3,}$")
 _VERSION_STRING_RE = re.compile(r"^[Vv]\d+[\.\d]")
@@ -62,6 +72,9 @@ def _is_rejected_package(s: str) -> bool:
     # Version strings like V7.8.6.CN
     if _VERSION_STRING_RE.match(s):
         return True
+    # Exact-match rejections (e.g. "schemas.android.com")
+    if s in _REJECT_PACKAGE_EQUALS:
+        return True
     # Reject known non-package namespaces
     for prefix in _REJECT_PACKAGE_PREFIXES:
         if s.startswith(prefix):
@@ -69,6 +82,15 @@ def _is_rejected_package(s: str) -> bool:
     # Reject if any dot-separated segment is ALL_CAPS (action/constant names)
     for seg in s.split("."):
         if seg and _ALLCAPS_SEGMENT_RE.match(seg):
+            return True
+    # Reject packages whose last dot-separated segment ends with a known Android
+    # component-class suffix, e.g. com.example.SomeActivity or com.foo.BgService.
+    last_seg = s.split(".")[-1] if "." in s else s
+    for comp_suffix in (
+        "Service", "Activity", "Provider", "Receiver",
+        "BroadcastReceiver", "ContentProvider", "Fragment",
+    ):
+        if last_seg.endswith(comp_suffix) and last_seg != comp_suffix:
             return True
     return False
 

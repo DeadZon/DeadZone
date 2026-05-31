@@ -20,19 +20,21 @@ if TYPE_CHECKING:
 from factory.reports.app_inventory import _find_apps_list, _is_package_name, _is_rejected_package
 
 
-_ALLOWED_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
+# Partitions and app-type pairs that Stable App Policy is allowed to operate on
+# (scan, delete, rename, move).  vendor and mi_ext are intentionally excluded —
+# the policy must never touch those partitions.
+_POLICY_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
     ("system", "app"),
     ("system", "priv-app"),
     ("product", "app"),
     ("product", "priv-app"),
     ("system_ext", "app"),
     ("system_ext", "priv-app"),
-    ("vendor", "app"),
-    ("vendor", "priv-app"),
-    ("mi_ext", "app"),
-    ("mi_ext", "priv-app"),
 )
-_ALLOWED_PARTITIONS = {p for p, _t in _ALLOWED_LOCATION_PAIRS}
+_POLICY_PARTITIONS: frozenset[str] = frozenset(p for p, _ in _POLICY_LOCATION_PAIRS)
+# Broader set kept only for path-string parsing (_normalize_expected_path,
+# _resolve_app_path).  It is NOT used for any operational decision.
+_ALLOWED_PARTITIONS: frozenset[str] = _POLICY_PARTITIONS | {"vendor", "mi_ext", "odm"}
 _UNKNOWN = "UNKNOWN"
 
 # Maps lowercased OS3/CN variant folder name → lowercased canonical (apps.list) folder name.
@@ -97,7 +99,15 @@ def _env_float(name: str, default: float) -> float:
 
 
 def _build_allowed_dirs(partitions_root: Path) -> list[Path]:
-    return [partitions_root / partition / app_type for partition, app_type in _ALLOWED_LOCATION_PAIRS]
+    return [partitions_root / partition / app_type for partition, app_type in _POLICY_LOCATION_PAIRS]
+
+
+def _is_suspicious_package(pkg: str) -> bool:
+    """Return True if *pkg* looks like an Android component class or system UID,
+    not a real installable-app package root.  These must never drive deletions."""
+    if not pkg or pkg.upper() == _UNKNOWN:
+        return False
+    return _is_rejected_package(pkg)
 
 
 def _safe_relative(path: Path, root: Path) -> str:
@@ -359,7 +369,8 @@ def _resolve_app_path(value: str | Path, partitions_root: Path) -> Path | None:
 def _scan_allowed_apps(partitions_root: Path, scanned_apps: list[dict[str, Any]]) -> list[dict[str, Any]]:
     inventory = _inventory_index(scanned_apps, partitions_root)
     apps: list[dict[str, Any]] = []
-    for partition, app_type in _ALLOWED_LOCATION_PAIRS:
+    # Only scan policy partitions — vendor/mi_ext/odm are never touched.
+    for partition, app_type in _POLICY_LOCATION_PAIRS:
         base = partitions_root / partition / app_type
         if not base.is_dir():
             continue
@@ -389,9 +400,12 @@ def _scan_allowed_apps(partitions_root: Path, scanned_apps: list[dict[str, Any]]
                     "size": size,
                 }
             )
-    allowed = _build_allowed_dirs(partitions_root)
     seen = {a["absolute_path"] for a in apps}
     for inv in scanned_apps:
+        # Skip non-policy partitions from inventory (vendor, mi_ext, odm, …).
+        inv_partition = str(inv.get("partition") or "")
+        if inv_partition and inv_partition not in _POLICY_PARTITIONS:
+            continue
         resolved = _resolve_app_path(inv.get("absolute_path") or inv.get("found_at") or inv.get("path") or "", partitions_root)
         if not resolved or str(resolved) in seen:
             continue
@@ -459,13 +473,18 @@ def _write_matching_debug_report(
         "=====================================",
         "",
         "match stats:",
-        f"  matched_by_package               : {ms.get('matched_by_package', 0)}",
-        f"  matched_by_folder                : {ms.get('matched_by_folder', 0)}",
-        f"  matched_by_alias                 : {ms.get('matched_by_alias', 0)}",
-        f"  matched_by_path                  : {ms.get('matched_by_path', 0)}",
-        f"  package_unknown_but_folder_matched: {ms.get('package_unknown_but_folder_matched', 0)}",
-        f"  real_missing                     : {ms.get('real_missing', 0)}",
-        f"  ambiguous_matches                : {ms.get('ambiguous_matches', 0)}",
+        f"  matched_by_package                : {ms.get('matched_by_package', 0)}",
+        f"  matched_by_package_moved          : {ms.get('matched_by_package_moved', 0)}",
+        f"  matched_by_folder                 : {ms.get('matched_by_folder', 0)}",
+        f"  matched_by_alias                  : {ms.get('matched_by_alias', 0)}",
+        f"  matched_by_path                   : {ms.get('matched_by_path', 0)}",
+        f"  package_unknown_but_folder_matched : {ms.get('package_unknown_but_folder_matched', 0)}",
+        f"  real_missing                      : {ms.get('real_missing', 0)}",
+        f"  ambiguous_matches                 : {ms.get('ambiguous_matches', 0)}",
+        f"  skipped_delete_vendor             : {ms.get('skipped_delete_vendor', 0)}",
+        f"  skipped_delete_unknown_package    : {ms.get('skipped_delete_unknown_package', 0)}",
+        f"  skipped_delete_ambiguous          : {ms.get('skipped_delete_ambiguous', 0)}",
+        f"  skipped_delete_outside_allowed    : {ms.get('skipped_delete_outside_allowed', 0)}",
     ]
 
     if alias_matches:
@@ -583,9 +602,10 @@ def _normalize_expected(entry: dict[str, str]) -> dict[str, str]:
 def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]], allowed: list[Path]) -> dict[str, list]:
     by_pkg = _expected_by_package(expected)
 
-    # Build package index (known packages only) and location index (all apps).
+    # Build package index (trusted known packages only) and location index.
+    # Only index apps from policy partitions — vendor apps must never drive any
+    # matching or deletion decision.
     scanned_by_pkg: dict[str, list[dict[str, Any]]] = {}
-    # (partition, app_type, folder_name_lower) → app — covers all scanned apps incl. unknown-package.
     scanned_by_location: dict[tuple[str, str, str], dict[str, Any]] = {}
 
     for app in scanned_apps:
@@ -596,6 +616,10 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
         if "absolute_path" not in app:
             app["absolute_path"] = str(app.get("found_at") or "")
 
+        # Vendor (and other non-policy) apps are excluded from all indices.
+        if app.get("partition", "") not in _POLICY_PARTITIONS:
+            continue
+
         pkg = str(app.get("package_name") or "").strip()
         loc_key: tuple[str, str, str] = (
             app.get("partition", ""),
@@ -604,23 +628,30 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
         )
         scanned_by_location[loc_key] = app
 
-        if pkg and pkg.upper() != _UNKNOWN and pkg.lower() != "unknown":
+        # Only index packages that are real app package names (not suspicious/unknown).
+        if pkg and pkg.upper() != _UNKNOWN and pkg.lower() != "unknown" and not _is_suspicious_package(pkg):
             scanned_by_pkg.setdefault(pkg.lower(), []).append(app)
 
     kept: list[dict[str, Any]] = []
     to_rename: list[dict[str, Any]] = []
-    wrong_location: list[dict[str, Any]] = []
+    to_move: list[dict[str, Any]] = []   # wrong allowed partition → will be moved
     missing: list[dict[str, Any]] = []
     matched_paths: set[str] = set()
+    ambiguous_packages: set[str] = set()
 
     match_stats: dict[str, int] = {
         "matched_by_package": 0,
         "matched_by_folder": 0,
         "matched_by_alias": 0,
         "matched_by_path": 0,
+        "matched_by_package_moved": 0,
         "package_unknown_but_folder_matched": 0,
         "real_missing": 0,
         "ambiguous_matches": 0,
+        "skipped_delete_vendor": 0,
+        "skipped_delete_unknown_package": 0,
+        "skipped_delete_ambiguous": 0,
+        "skipped_delete_outside_allowed": 0,
     }
     alias_matches: list[dict[str, str]] = []
 
@@ -644,12 +675,26 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
             match_stats["matched_by_package"] += 1
             to_rename.append({**same_place, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": same_place["folder_name"], "found_at": same_place["absolute_path"], "in_allowed": _is_in_allowed(same_place["absolute_path"], allowed), "match_method": "package"})
         elif actuals:
+            # Package found in wrong allowed partition/path → MOVE to expected location.
+            match_stats["matched_by_package"] += 1
+            match_stats["matched_by_package_moved"] += 1
+            if len(actuals) > 1:
+                ambiguous_packages.add(pkg_key)
+                match_stats["ambiguous_matches"] += 1
             for actual in actuals:
                 matched_paths.add(actual["absolute_path"])
-                wrong_location.append({**actual, "status": "FOUND_WRONG_LOCATION", "action": "REPORT_ONLY", "expected": entry, "package": entry["package"], "found_at": actual["absolute_path"], "match_method": "package"})
-            match_stats["matched_by_package"] += 1
+            # Take the first actual as the move target; mark all as matched.
+            to_move.append({
+                **actuals[0],
+                "status": "FOUND_WRONG_LOCATION",
+                "action": "MOVE_TO_EXPECTED",
+                "expected": entry,
+                "package": entry["package"],
+                "found_at": actuals[0]["absolute_path"],
+                "match_method": "package_moved",
+            })
         else:
-            # No package match: try folder-name and alias matching against ALL scanned apps.
+            # No package match — try folder-name and alias matching.
             partition = entry["partition"]
             app_type = entry["app_type"]
             expected_folder_lower = entry["name"].lower()
@@ -665,7 +710,7 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
                 folder_match = candidate
                 match_method = "folder"
 
-            # Step 2: alias match — any scanned folder whose canonical equals the expected canonical.
+            # Step 2: alias match — scanned folder whose canonical equals the expected canonical.
             if folder_match is None:
                 for loc_k, app in scanned_by_location.items():
                     if loc_k[0] != partition or loc_k[1] != app_type:
@@ -714,33 +759,73 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
                     "expected_partition": entry["partition"],
                     "expected_app_type": entry["app_type"],
                     "expected_path": entry["expected_path"],
+                    "reason": "not found in system/system_ext/product",
                 })
 
     extras: list[dict[str, Any]] = []
     outside: list[dict[str, Any]] = []
     unknown: list[dict[str, Any]] = []
+    skipped_vendor: list[dict[str, Any]] = []
 
     for app in scanned_apps:
         abs_path = app["absolute_path"]
         if abs_path in matched_paths:
             continue
         pkg = str(app.get("package_name") or "").strip()
+        partition = str(app.get("partition") or "")
+
+        # VENDOR PROTECTION: never include vendor apps as delete candidates.
+        if partition == "vendor":
+            skipped_vendor.append({**app, "status": "SKIPPED_VENDOR", "action": "SKIP",
+                                    "reason": "vendor partition is forbidden for Stable App Policy"})
+            match_stats["skipped_delete_vendor"] += 1
+            continue
+
+        # Other non-policy partitions (odm, mi_ext, …).
+        if partition not in _POLICY_PARTITIONS:
+            outside.append({**app, "status": "OUTSIDE_ALLOWED", "action": "SKIP"})
+            match_stats["skipped_delete_outside_allowed"] += 1
+            continue
+
+        # Unknown package → report only, never delete.
         if not pkg or pkg.upper() == _UNKNOWN or pkg.lower() == "unknown":
             unknown.append({**app, "status": "UNKNOWN_PACKAGE", "action": "REPORT_ONLY"})
             continue
+
+        # Suspicious package name (component class, UID, etc.) → treat as unknown.
+        if _is_suspicious_package(pkg):
+            unknown.append({**app, "status": "SUSPICIOUS_PACKAGE", "action": "REPORT_ONLY"})
+            match_stats["skipped_delete_unknown_package"] += 1
+            continue
+
+        # Ambiguous: package appears multiple times across scanned apps → don't delete.
+        # Check both expected-match ambiguity AND unmatched-extra duplicates.
+        is_ambiguous = pkg.lower() in ambiguous_packages
+        if not is_ambiguous and len(scanned_by_pkg.get(pkg.lower(), [])) > 1:
+            pkg_instances = scanned_by_pkg.get(pkg.lower(), [])
+            if not any(a["absolute_path"] in matched_paths for a in pkg_instances):
+                is_ambiguous = True
+        if is_ambiguous:
+            unknown.append({**app, "status": "AMBIGUOUS_PACKAGE", "action": "SKIP"})
+            match_stats["skipped_delete_ambiguous"] += 1
+            continue
+
         item = {**app, "status": "EXTRA", "action": "DELETE", "package": pkg, "found_at": abs_path}
         if pkg.lower() not in by_pkg and _is_in_allowed(abs_path, allowed):
             extras.append(item)
         elif not _is_in_allowed(abs_path, allowed):
             outside.append({**item, "status": "OUTSIDE_ALLOWED", "action": "SKIP"})
+            match_stats["skipped_delete_outside_allowed"] += 1
 
     return {
         "kept": kept,
         "to_rename": to_rename,
+        "to_move": to_move,
         "extra_in_allowed": extras,
         "skipped_outside": outside,
+        "skipped_vendor": skipped_vendor,
         "missing": missing,
-        "wrong_location": wrong_location,
+        "wrong_location": to_move,  # kept for backward compat (same list)
         "unknown": unknown,
         "match_stats": match_stats,
         "alias_matches": alias_matches,
@@ -873,6 +958,82 @@ def _apply_renames(to_rename: list[dict[str, Any]], enforce: bool) -> tuple[list
     return renamed + skipped, errors
 
 
+def _execute_moves(
+    to_move: list[dict[str, Any]],
+    partitions_root: Path,
+    enforce: bool,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], set[str]]:
+    """Move app folders from wrong allowed partition to the expected partition/path.
+
+    vendor is never a valid source or destination.
+    Returns (moved, skipped, errors, changed_partitions).
+    """
+    moved: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    errors: list[str] = []
+    changed: set[str] = set()
+
+    for item in to_move:
+        entry = _normalize_expected(
+            item.get("expected")
+            or {
+                "name": item.get("expected_name", ""),
+                "package": item.get("package", ""),
+                "partition": item.get("partition", ""),
+                "app_type": item.get("app_type", ""),
+            }
+        )
+        src = Path(item["found_at"])
+        dest_partition = entry["partition"]
+        dest_app_type = entry["app_type"]
+        dest_name = entry.get("expected_folder_name") or entry["name"]
+        target = partitions_root / dest_partition / dest_app_type / dest_name
+        src_partition = str(item.get("partition", ""))
+
+        if not enforce:
+            skipped.append({**item, "enacted": False, "reason": "report-only mode"})
+            continue
+        # VENDOR PROTECTION: refuse to move from or to vendor.
+        if src_partition == "vendor" or src_partition not in _POLICY_PARTITIONS:
+            skipped.append({**item, "enacted": False,
+                            "reason": f"source partition {src_partition!r} is not a policy partition"})
+            continue
+        if dest_partition == "vendor" or dest_partition not in _POLICY_PARTITIONS:
+            skipped.append({**item, "enacted": False,
+                            "reason": f"destination partition {dest_partition!r} is not a policy partition"})
+            continue
+        if not src.exists():
+            skipped.append({**item, "enacted": False, "reason": "source path not found"})
+            continue
+        if target.exists() and target.resolve() != src.resolve():
+            errors.append(f"CONFLICT: move target already exists: {target}")
+            continue
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.resolve() != src.resolve():
+                shutil.move(str(src), str(target))
+            # Remove now-empty old parent dir (best-effort).
+            try:
+                src.parent.rmdir()
+            except OSError:
+                pass
+            apk_change = _rename_apk(target, dest_name)
+            result = {**item, "enacted": True, "new_path": str(target),
+                      "found_at": str(target), "action": "MOVED"}
+            if apk_change:
+                result.update(apk_change)
+            moved.append(result)
+            # Mark both partitions modified — never vendor.
+            if src_partition in _POLICY_PARTITIONS:
+                changed.add(src_partition)
+            if dest_partition in _POLICY_PARTITIONS:
+                changed.add(dest_partition)
+        except Exception as exc:
+            errors.append(f"MOVE FAILED: {src} -> {target}: {exc}")
+
+    return moved, skipped, errors, changed
+
+
 def _execute_deletes(extras: list[dict[str, Any]], enforce: bool, allowed: list[Path]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str], set[str]]:
     deleted: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -919,6 +1080,7 @@ def _write_inventory_files(inventory_dir: Path, data: dict[str, Any]) -> None:
     _write_inventory(inventory_dir / "apps_remove_skipped.txt", data["skipped_delete_apps"], lambda r: f"{r.get('path', r.get('found_at'))} {r.get('package')} reason={r.get('reason','')}")
     _write_inventory(inventory_dir / "apps_renamed.txt", data["renamed_apps"], lambda r: f"{r.get('actual_name')} -> {r.get('expected_name')} {r.get('package')}")
     _write_inventory(inventory_dir / "apps_rename_skipped.txt", data["skipped_rename_apps"], lambda r: f"{r.get('actual_name')} -> {r.get('expected_name')} {r.get('package')} reason={r.get('reason','')}")
+    _write_inventory(inventory_dir / "apps_moved.txt", data.get("moved_apps") or [], lambda r: f"{r.get('found_at')} -> {r.get('new_path')} {r.get('package')}")
     _write_inventory(inventory_dir / "apps_unknown_package.txt", data["unknown_package_apps"], lambda r: f"{r.get('path')} package=UNKNOWN")
     _write_inventory(inventory_dir / "apps_wrong_location.txt", data["found_wrong_location_apps"], lambda r: f"{r.get('path')} {r.get('package')} expected={r.get('expected', {}).get('expected_path', '')}")
 
@@ -935,7 +1097,13 @@ def _write_txt_report(path: Path, data: dict[str, Any]) -> None:
         "",
         "summary:",
     ]
-    for key in ("kept_apps", "renamed_apps", "skipped_rename_apps", "missing_apps", "found_wrong_location_apps", "unknown_package_apps", "delete_candidates", "deleted_extra_apps", "skipped_delete_apps", "skipped_outside_allowed_locations", "changed_partitions"):
+    for key in (
+        "kept_apps", "renamed_apps", "moved_apps", "skipped_rename_apps", "skipped_move_apps",
+        "missing_apps", "found_wrong_location_apps", "unknown_package_apps",
+        "delete_candidates", "deleted_extra_apps", "skipped_delete_apps",
+        "skipped_delete_vendor", "skipped_delete_unknown_package", "skipped_delete_ambiguous",
+        "skipped_outside_allowed_locations", "changed_partitions",
+    ):
         lines.append(f"  {key}: {summary.get(key, 0)}")
     guard = data.get("safety_guard") if isinstance(data.get("safety_guard"), dict) else {}
     if guard:
@@ -943,17 +1111,23 @@ def _write_txt_report(path: Path, data: dict[str, Any]) -> None:
     for title, key in (
         ("KEPT APPS", "kept_apps"),
         ("RENAMED APPS", "renamed_apps"),
+        ("MOVED APPS (wrong allowed partition → expected)", "moved_apps"),
         ("SKIPPED RENAME APPS", "skipped_rename_apps"),
+        ("SKIPPED MOVE APPS", "skipped_move_apps"),
         ("MISSING APPS", "missing_apps"),
-        ("WRONG LOCATION APPS", "found_wrong_location_apps"),
         ("UNKNOWN PACKAGE APPS", "unknown_package_apps"),
         ("DELETE CANDIDATES", "delete_candidates"),
         ("DELETED EXTRA APPS", "deleted_extra_apps"),
         ("SKIPPED DELETE APPS", "skipped_delete_apps"),
+        ("SKIPPED DELETE (vendor — forbidden)", "skipped_delete_vendor_apps"),
     ):
         lines += ["", f"{title}:"]
         rows = data.get(key) or []
-        lines.extend(f"  - {r.get('path') or r.get('expected_path') or r.get('found_at')} {r.get('package') or r.get('package_name')}" for r in rows)
+        lines.extend(
+            f"  - {r.get('path') or r.get('expected_path') or r.get('found_at')} "
+            f"{r.get('package') or r.get('package_name')}"
+            for r in rows
+        )
         if not rows:
             lines.append("  (none)")
     if data.get("errors"):
@@ -1019,10 +1193,69 @@ def enforce_stable_app_policy(
         alias_matches=classification.get("alias_matches"),
         missing_apps=classification.get("missing"),
     )
+    # Collect non-policy-partition apps from inventory for reporting.
+    # These are never scanned, never deleted, never moved — just noted.
+    vendor_inventory_apps: list[dict[str, Any]] = []
+    outside_inventory_apps: list[dict[str, Any]] = []
+    for _inv_app in scanned_apps:
+        _part = str(_inv_app.get("partition", "")).lower()
+        if not _part or _part in _POLICY_PARTITIONS:
+            continue
+        if _part == "vendor":
+            vendor_inventory_apps.append({
+                **_inv_app,
+                "status": "SKIPPED_VENDOR",
+                "action": "SKIP",
+                "reason": "vendor partition is forbidden for Stable App Policy",
+            })
+        else:
+            outside_inventory_apps.append({
+                **_inv_app,
+                "status": "OUTSIDE_ALLOWED",
+                "action": "SKIP",
+                "reason": f"partition {_part!r} is not a Stable App Policy partition",
+            })
+    vendor_inventory_count = len(vendor_inventory_apps)
+
     guard = _stable_safety_guard(len(expected), classification, enforce, len(scanned), package_tools)
     _write_app_safety_report(reports_dir, guard, classification, len(expected))
+
+    ms = classification.get("match_stats") or {}
+
+    def _make_summary(data_: dict[str, Any], moved_: list, skipped_move_: list) -> dict[str, Any]:
+        return {
+            "expected_apps_count": len(expected),
+            "matched_expected_count": guard["matched_expected_count"],
+            "matched_expected_ratio": guard["matched_expected_ratio"],
+            "kept_apps": len(data_["kept_apps"]),
+            "renamed_apps": len(data_["renamed_apps"]),
+            "moved_apps": len(moved_),
+            "skipped_rename_apps": len(data_["skipped_rename_apps"]),
+            "skipped_move_apps": len(skipped_move_),
+            "missing_apps": len(data_["missing_apps"]),
+            "found_wrong_location_apps": len(data_["found_wrong_location_apps"]),
+            "unknown_package_apps": len(data_["unknown_package_apps"]),
+            "delete_candidates": len(data_["delete_candidates"]),
+            "deleted_extra_apps": len(data_["deleted_extra_apps"]),
+            "skipped_delete_apps": len(data_["skipped_delete_apps"]),
+            "skipped_delete_vendor": ms.get("skipped_delete_vendor", 0) + vendor_inventory_count,
+            "skipped_delete_unknown_package": ms.get("skipped_delete_unknown_package", 0),
+            "skipped_delete_ambiguous": ms.get("skipped_delete_ambiguous", 0),
+            "skipped_outside_allowed_locations": len(data_["skipped_outside_allowed_locations"]),
+            "changed_partitions": len(data_["changed_partitions"]),
+            # legacy short keys
+            "kept": len(data_["kept_apps"]),
+            "renamed": len(data_["renamed_apps"]),
+            "missing": len(data_["missing_apps"]),
+            "deleted_extra": len(data_["deleted_extra_apps"]),
+            "skipped_outside": len(data_["skipped_outside_allowed_locations"]),
+        }
+
     if guard["status"] == "failed":
         payload = _unsafe_payload(guard)
+        moved_guard: list[dict[str, Any]] = []
+        skipped_move_guard: list[dict[str, Any]] = classification["to_move"]
+        vendor_skipped = classification.get("skipped_vendor") or []
         data = {
             "status": "failed",
             "style": style,
@@ -1034,39 +1267,22 @@ def enforce_stable_app_policy(
             "matched_expected_ratio": guard["matched_expected_ratio"],
             "kept_apps": classification["kept"],
             "renamed_apps": [],
+            "moved_apps": moved_guard,
             "skipped_rename_apps": classification["to_rename"],
+            "skipped_move_apps": skipped_move_guard,
             "missing_apps": classification["missing"],
-            "found_wrong_location_apps": classification["wrong_location"],
+            "found_wrong_location_apps": classification["to_move"],
             "unknown_package_apps": classification["unknown"],
             "delete_candidates": classification["extra_in_allowed"],
             "deleted_extra_apps": [],
             "skipped_delete_apps": classification["extra_in_allowed"],
-            "skipped_outside_allowed_locations": classification["skipped_outside"],
+            "skipped_delete_vendor_apps": vendor_skipped,
+            "skipped_outside_allowed_locations": classification["skipped_outside"] + outside_inventory_apps,
             "changed_partitions": [],
             "safety_guard": guard,
             "errors": [payload],
         }
-        data["summary"] = {
-            "expected_apps_count": len(expected),
-            "matched_expected_count": guard["matched_expected_count"],
-            "matched_expected_ratio": guard["matched_expected_ratio"],
-            "kept_apps": len(data["kept_apps"]),
-            "renamed_apps": 0,
-            "skipped_rename_apps": len(data["skipped_rename_apps"]),
-            "missing_apps": len(data["missing_apps"]),
-            "found_wrong_location_apps": len(data["found_wrong_location_apps"]),
-            "unknown_package_apps": len(data["unknown_package_apps"]),
-            "delete_candidates": len(data["delete_candidates"]),
-            "deleted_extra_apps": 0,
-            "skipped_delete_apps": len(data["skipped_delete_apps"]),
-            "skipped_outside_allowed_locations": len(data["skipped_outside_allowed_locations"]),
-            "changed_partitions": 0,
-            "kept": len(data["kept_apps"]),
-            "renamed": 0,
-            "missing": len(data["missing_apps"]),
-            "deleted_extra": 0,
-            "skipped_outside": len(data["skipped_outside_allowed_locations"]),
-        }
+        data["summary"] = _make_summary(data, moved_guard, skipped_move_guard)
         workspace_root = reports_dir.parent
         _write_inventory_files(workspace_root / "inventory", data)
         reports_dir.mkdir(parents=True, exist_ok=True)
@@ -1074,14 +1290,26 @@ def enforce_stable_app_policy(
         (reports_dir / "stable_app_policy_report.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         raise RuntimeError(json.dumps(payload, sort_keys=True))
 
+    # Execute moves BEFORE renames/deletes so the source paths are still valid.
+    moved, skipped_move, move_errors, move_changed = _execute_moves(
+        classification["to_move"], partitions_root, enforce
+    )
     renamed, skipped_rename, rename_errors, rename_changed = _execute_renames(classification["to_rename"], enforce)
-    deleted, skipped_delete, skipped_outside_delete, delete_errors, delete_changed = _execute_deletes(classification["extra_in_allowed"], enforce, allowed)
-    all_errors = rename_errors + delete_errors
+    deleted, skipped_delete, skipped_outside_delete, delete_errors, delete_changed = _execute_deletes(
+        classification["extra_in_allowed"], enforce, allowed
+    )
+    all_errors = move_errors + rename_errors + delete_errors
 
-    changed_partitions = sorted(p for p in (rename_changed | delete_changed) if p)
+    # Ensure vendor is NEVER in changed_partitions.
+    raw_changed = move_changed | rename_changed | delete_changed
+    changed_partitions = sorted(
+        p for p in raw_changed
+        if p and p != "vendor" and p in _POLICY_PARTITIONS
+    )
     if enforce and all_errors:
         raise RuntimeError("Stable App Policy failed with errors:\n" + "\n".join(all_errors))
 
+    vendor_skipped = classification.get("skipped_vendor") or []
     data: dict[str, Any] = {
         "status": "ok",
         "style": style,
@@ -1093,39 +1321,22 @@ def enforce_stable_app_policy(
         "matched_expected_ratio": guard["matched_expected_ratio"],
         "kept_apps": classification["kept"],
         "renamed_apps": renamed,
+        "moved_apps": moved,
         "skipped_rename_apps": skipped_rename,
+        "skipped_move_apps": skipped_move,
         "missing_apps": classification["missing"],
-        "found_wrong_location_apps": classification["wrong_location"],
+        "found_wrong_location_apps": moved + skipped_move,  # backward compat
         "unknown_package_apps": classification["unknown"],
         "delete_candidates": classification["extra_in_allowed"],
         "deleted_extra_apps": deleted,
         "skipped_delete_apps": skipped_delete,
-        "skipped_outside_allowed_locations": classification["skipped_outside"] + skipped_outside_delete,
+        "skipped_delete_vendor_apps": vendor_skipped,
+        "skipped_outside_allowed_locations": classification["skipped_outside"] + skipped_outside_delete + outside_inventory_apps,
         "changed_partitions": changed_partitions,
         "safety_guard": guard,
         "errors": all_errors,
     }
-    data["summary"] = {
-        "expected_apps_count": len(expected),
-        "matched_expected_count": guard["matched_expected_count"],
-        "matched_expected_ratio": guard["matched_expected_ratio"],
-        "kept_apps": len(data["kept_apps"]),
-        "renamed_apps": len(data["renamed_apps"]),
-        "skipped_rename_apps": len(data["skipped_rename_apps"]),
-        "missing_apps": len(data["missing_apps"]),
-        "found_wrong_location_apps": len(data["found_wrong_location_apps"]),
-        "unknown_package_apps": len(data["unknown_package_apps"]),
-        "delete_candidates": len(data["delete_candidates"]),
-        "deleted_extra_apps": len(data["deleted_extra_apps"]),
-        "skipped_delete_apps": len(data["skipped_delete_apps"]),
-        "skipped_outside_allowed_locations": len(data["skipped_outside_allowed_locations"]),
-        "changed_partitions": len(changed_partitions),
-        "kept": len(data["kept_apps"]),
-        "renamed": len(data["renamed_apps"]),
-        "missing": len(data["missing_apps"]),
-        "deleted_extra": len(data["deleted_extra_apps"]),
-        "skipped_outside": len(data["skipped_outside_allowed_locations"]),
-    }
+    data["summary"] = _make_summary(data, moved, skipped_move)
 
     workspace_root = reports_dir.parent
     _write_inventory_files(workspace_root / "inventory", data)
@@ -1148,7 +1359,8 @@ def enforce_stable_app_policy(
     print(
         "[STABLE APP POLICY] "
         f"kept={len(data['kept_apps'])} renamed={len(data['renamed_apps'])} "
+        f"moved={len(data['moved_apps'])} "
         f"missing={len(data['missing_apps'])} deleted_extra={len(data['deleted_extra_apps'])} "
-        f"unknown={len(data['unknown_package_apps'])}"
+        f"unknown={len(data['unknown_package_apps'])} vendor_skipped={len(vendor_skipped)}"
     )
     return data

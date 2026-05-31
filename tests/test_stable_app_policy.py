@@ -514,16 +514,27 @@ def test_rename_outside_allowed_skipped_even_in_stable(tmp_path):
     assert done[0].get("reason") == "outside allowed location"
 
 
-def test_package_match_wrong_partition_report_only_not_deleted(tmp_path):
+def test_package_match_wrong_allowed_partition_is_moved(tmp_path):
+    """App found in wrong allowed partition (product instead of system) must be MOVED,
+    not deleted and not left in place."""
     apps_list = _write_apps_list(tmp_path)
     os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
     partitions_root = tmp_path / "partitions"
+    # BluetoothMidiService is expected in system/app but placed in product/app
     wrong = _make_app_folder(partitions_root, "product", "app", "BluetoothMidiService")
     scanned = [_scanned_app("product", "app", "BluetoothMidiService", "com.android.bluetoothmidiservice", partitions_root)]
     result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
-    assert wrong.exists()
-    assert result["found_wrong_location_apps"]
+    # App should have been MOVED from product/app to system/app
+    assert not wrong.exists(), "app must no longer be at the wrong location after move"
+    correct = partitions_root / "system" / "app" / "BluetoothMidiService"
+    assert correct.exists(), "app must exist at the expected (system/app) location after move"
+    # The move is tracked in moved_apps (enacted) and found_wrong_location_apps (backward compat)
+    assert any(m.get("enacted") for m in result["moved_apps"]), "move must be enacted"
+    assert result["found_wrong_location_apps"], "found_wrong_location_apps must be populated"
     assert result["deleted_extra_apps"] == []
+    # Neither source nor destination should be vendor
+    for part in result["changed_partitions"]:
+        assert part != "vendor"
     del os.environ["LISTMEZO_APPS_LIST"]
 
 
@@ -971,6 +982,258 @@ def test_folder_matching_improves_matched_ratio(tmp_path):
     # All 5 must be matched by folder even though packages are UNKNOWN
     assert result["match_stats"]["matched_by_folder"] == 5
     assert len(result["missing"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# Task 4 new tests — vendor safety, suspicious packages, moves, ambiguous
+# ---------------------------------------------------------------------------
+
+def test_extra_app_in_system_ext_is_deleted(tmp_path):
+    """Extra app in system_ext must be deleted in stable mode."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    folder = _make_app_folder(partitions_root, "system_ext", "app", "SystemExtExtra")
+    scanned = [_scanned_app("system_ext", "app", "SystemExtExtra", "com.extra.systemext", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert not folder.exists(), "system_ext extra must be deleted"
+    assert any(d.get("enacted") for d in result["deleted_extra_apps"])
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_extra_app_in_system_is_deleted(tmp_path):
+    """Extra app in system must be deleted in stable mode."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    folder = _make_app_folder(partitions_root, "system", "app", "SystemExtra")
+    scanned = [_scanned_app("system", "app", "SystemExtra", "com.extra.system.app", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert not folder.exists(), "system extra must be deleted"
+    assert any(d.get("enacted") for d in result["deleted_extra_apps"])
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_extra_app_in_product_is_deleted(tmp_path):
+    """Extra app in product must be deleted in stable mode."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    folder = _make_app_folder(partitions_root, "product", "app", "ProductExtra")
+    scanned = [_scanned_app("product", "app", "ProductExtra", "com.extra.product.app", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert not folder.exists(), "product extra must be deleted"
+    assert any(d.get("enacted") for d in result["deleted_extra_apps"])
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_extra_app_in_vendor_is_not_deleted(tmp_path):
+    """Extra app in vendor must NEVER be deleted regardless of policy."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    vendor_folder = _make_app_folder(partitions_root, "vendor", "app", "VendorExtra")
+    # Pass it as a scanned inventory app with vendor partition
+    scanned = [_scanned_app("vendor", "app", "VendorExtra", "com.vendor.extra.app", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert vendor_folder.exists(), "vendor app must never be deleted"
+    assert result["deleted_extra_apps"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_vendor_app_is_never_moved_or_renamed(tmp_path):
+    """An app in vendor that matches an expected package must NOT be moved or renamed."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # Place BluetoothMidiService in VENDOR — expected in system/app
+    vendor_folder = _make_app_folder(partitions_root, "vendor", "app", "BluetoothMidiService")
+    scanned = [_scanned_app("vendor", "app", "BluetoothMidiService",
+                            "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    # Vendor folder must be untouched
+    assert vendor_folder.exists(), "vendor app must not be moved or renamed"
+    # No enacted moves or renames
+    assert not any(m.get("enacted") for m in result.get("moved_apps", []))
+    assert not any(r.get("enacted") for r in result.get("renamed_apps", []))
+    # Expected app is missing from allowed partitions (not found in system/system_ext/product)
+    missing_packages = {m["package"] for m in result["missing_apps"]}
+    assert "com.android.bluetoothmidiservice" in missing_packages
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_suspicious_package_names_are_treated_as_unknown(tmp_path):
+    """Apps with suspicious/component package names must be treated as unknown and never deleted."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    suspicious_names = [
+        ("SysUid",       "android.uid.system"),
+        ("SvcNotify",    "service.notification.NotificationListenerService"),
+        ("Schemas",      "schemas.android.com"),
+        ("SomeActivity", "com.example.SomeActivity"),
+        ("SomeService",  "com.example.app.BackgroundService"),
+    ]
+    scanned = []
+    folders = []
+    for folder_name, pkg in suspicious_names:
+        f = _make_app_folder(partitions_root, "system", "app", folder_name)
+        folders.append(f)
+        scanned.append(_scanned_app("system", "app", folder_name, pkg, partitions_root))
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    for f in folders:
+        assert f.exists(), f"suspicious-package app {f.name} must not be deleted"
+    assert result["deleted_extra_apps"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_ambiguous_package_match_is_not_deleted(tmp_path):
+    """Two apps with the same package name → ambiguous → neither deleted."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # Two folders with the same package name in different locations
+    f1 = _make_app_folder(partitions_root, "system", "app", "AppDuplA")
+    f2 = _make_app_folder(partitions_root, "product", "app", "AppDuplB")
+    scanned = [
+        _scanned_app("system", "app", "AppDuplA", "com.same.package", partitions_root),
+        _scanned_app("product", "app", "AppDuplB", "com.same.package", partitions_root),
+    ]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert f1.exists() and f2.exists(), "ambiguous package apps must not be deleted"
+    assert result["deleted_extra_apps"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_only_policy_partitions_in_changed_partitions(tmp_path):
+    """changed_partitions must only contain system, system_ext, or product — never vendor."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # Create an extra app in system and also a rename candidate
+    _make_app_folder(partitions_root, "system", "app", "BTMidi")
+    _make_app_folder(partitions_root, "product", "app", "ProductExtra")
+    scanned = [
+        _scanned_app("system", "app", "BTMidi", "com.android.bluetoothmidiservice", partitions_root),
+        _scanned_app("product", "app", "ProductExtra", "com.extra.product.two", partitions_root),
+    ]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    for part in result["changed_partitions"]:
+        assert part in {"system", "system_ext", "product"}, \
+            f"changed_partitions must only contain policy partitions, got {part!r}"
+    assert "vendor" not in result["changed_partitions"]
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_vendor_is_never_marked_modified_by_stable_app_policy(tmp_path):
+    """Even if vendor apps are passed as inventory, vendor must never appear in changed_partitions."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # Vendor app with a package that matches an expected entry
+    scanned = [_scanned_app("vendor", "app", "BluetoothMidiService",
+                            "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert "vendor" not in result["changed_partitions"]
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_app_already_in_correct_expected_path_is_kept(tmp_path):
+    """App already at the correct partition/app_type/folder must be kept as-is."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    scanned = [_scanned_app("system", "app", "BluetoothMidiService",
+                            "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    kept_names = {a.get("folder_name") or a.get("name") for a in result["kept_apps"]}
+    assert "BluetoothMidiService" in kept_names
+    assert result["moved_apps"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_missing_expected_app_is_reported_missing(tmp_path):
+    """Expected app that is not found anywhere must appear in missing_apps."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    partitions_root.mkdir(parents=True, exist_ok=True)
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, [], "stable")
+    missing_names = {m["name"] for m in result["missing_apps"]}
+    assert "BluetoothMidiService" in missing_names
+    assert "Shell" in missing_names
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_app_matched_by_package_with_wrong_folder_name_is_renamed(tmp_path):
+    """Package found in correct partition but different folder → folder must be renamed."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    wrong = _make_app_folder(partitions_root, "system", "app", "WrongFolderBT")
+    scanned = [_scanned_app("system", "app", "WrongFolderBT",
+                            "com.android.bluetoothmidiservice", partitions_root)]
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+    assert not wrong.exists(), "old folder name must be gone after rename"
+    correct = partitions_root / "system" / "app" / "BluetoothMidiService"
+    assert correct.exists(), "new folder must exist with expected name"
+    enacted = [r for r in result["renamed_apps"] if r.get("enacted")]
+    assert len(enacted) == 1
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_stable_policy_report_includes_new_fields(tmp_path):
+    """stable_app_policy_report.json must include all new fields added in Task 4."""
+    import json as _json
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    partitions_root.mkdir(parents=True, exist_ok=True)
+    enforce_stable_app_policy(tmp_path / "reports", partitions_root, [], "stable")
+    report_path = tmp_path / "reports" / "stable_app_policy_report.json"
+    data = _json.loads(report_path.read_text(encoding="utf-8"))
+    # New fields required by Task 4
+    assert "moved_apps" in data
+    assert "skipped_move_apps" in data
+    assert "skipped_delete_vendor_apps" in data
+    summary = data["summary"]
+    assert "moved_apps" in summary
+    assert "skipped_delete_vendor" in summary
+    assert "skipped_delete_unknown_package" in summary
+    assert "skipped_delete_ambiguous" in summary
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_stable_is_suspicious_package_rejects_component_names(tmp_path):
+    """_is_suspicious_package must recognise android.uid, .Service, .Activity endings, etc."""
+    from factory.core.stable_app_policy import _is_suspicious_package
+    assert _is_suspicious_package("android.uid.system")
+    assert _is_suspicious_package("android.gid.system")
+    assert _is_suspicious_package("service.notification.NotificationListenerService")
+    assert _is_suspicious_package("schemas.android.com")
+    assert _is_suspicious_package("com.example.SomeActivity")
+    assert _is_suspicious_package("com.example.BackgroundService")
+    assert _is_suspicious_package("com.example.SomeProvider")
+    # Real package names must NOT be flagged
+    assert not _is_suspicious_package("com.android.shell")
+    assert not _is_suspicious_package("com.miui.calculator")
+    assert not _is_suspicious_package("com.google.android.gms")
+
+
+def test_stable_app_policy_debug_report_includes_new_stats(tmp_path):
+    """stable_matching_debug_report.txt must include the new match stat keys."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    partitions_root.mkdir(parents=True, exist_ok=True)
+    enforce_stable_app_policy(tmp_path / "reports", partitions_root, [], "stable")
+    debug = (tmp_path / "reports" / "stable_matching_debug_report.txt").read_text(encoding="utf-8")
+    assert "matched_by_package_moved" in debug
+    assert "skipped_delete_vendor" in debug
+    assert "skipped_delete_unknown_package" in debug
+    assert "skipped_delete_ambiguous" in debug
+    del os.environ["LISTMEZO_APPS_LIST"]
 
 
 def test_stable_does_not_raise_unsafe_when_folder_matches_cover_expected(tmp_path):
