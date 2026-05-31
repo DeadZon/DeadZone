@@ -127,3 +127,21 @@ def test_classify_from_context_empty():
 
     result = classify_from_context(EmptyCtx())
     assert "error_type" in result
+
+
+def test_vbmeta_patch_failed_preserves_low_level_error():
+    low_level = "required vbmeta image missing: /output/workspace/images/vbmeta.img"
+    result = classify_error(low_level, "final_zip")
+    assert result["error_type"] == "VBMETA_PATCH_FAILED"
+    # The actual error path must appear in cause so Telegram does not hide it.
+    assert "/output/workspace/images/vbmeta.img" in result["cause"], (
+        "cause must include the low-level error; got: " + result["cause"]
+    )
+    assert low_level in result["raw_error"]
+
+
+def test_vbmeta_patch_failed_cause_includes_patch_error():
+    low_level = "vbmeta patch failed for vbmeta.img: invalid magic: b'XXXX'"
+    result = classify_error(low_level, "final_zip")
+    assert result["error_type"] == "VBMETA_PATCH_FAILED"
+    assert "invalid magic" in result["cause"]

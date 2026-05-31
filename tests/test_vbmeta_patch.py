@@ -186,3 +186,19 @@ def test_optional_images_marked_not_required(tmp_path):
     for r in results:
         if r["image"] in ("vbmeta_system.img", "vbmeta_vendor.img"):
             assert r["required"] is False
+
+
+def test_report_written_when_vbmeta_img_missing(tmp_path):
+    img_dir = tmp_path / "images"
+    img_dir.mkdir()
+    reports_dir = tmp_path / "reports"
+    # vbmeta.img is absent — required, so patch_vbmeta_images must raise AND
+    # write the report before raising.
+    with pytest.raises(RuntimeError, match="required vbmeta image missing"):
+        patch_vbmeta_images(img_dir, reports_dir=reports_dir)
+
+    report = reports_dir / "vbmeta_patch_report.txt"
+    assert report.is_file(), "vbmeta_patch_report.txt must be written before raising"
+    content = report.read_text(encoding="utf-8")
+    assert "vbmeta.img" in content
+    assert "failed" in content

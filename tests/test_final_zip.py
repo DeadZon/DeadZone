@@ -7,7 +7,13 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 from factory.core import final_zip as fz_module
-from factory.core.final_zip import build_final_zip
+from factory.core.final_zip import (
+    CORE_IMAGES,
+    OPTIONAL_CORE_IMAGES,
+    _copy_images,
+    _validate_zip,
+    build_final_zip,
+)
 from factory.core.workspace import Workspace
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -176,3 +182,77 @@ def test_vbmeta_patch_json_written_via_full_patch_call(tmp_path):
     patch_vbmeta_images(ws.images, ws.reports, ws.meta)
 
     assert (ws.meta / "vbmeta_patch.json").is_file()
+
+
+# ── optional vbmeta images ────────────────────────────────────────────────────
+
+_REQUIRED_IMAGES = [img for img in CORE_IMAGES if img not in OPTIONAL_CORE_IMAGES]
+
+
+def _make_required_images(directory: Path) -> None:
+    """Write 1-byte placeholder files for every non-optional CORE_IMAGE."""
+    for name in _REQUIRED_IMAGES:
+        (directory / name).write_bytes(b"\x00")
+
+
+def test_copy_images_does_not_fail_when_optional_vbmeta_absent(tmp_path):
+    """_copy_images must not raise when vbmeta_system.img/vbmeta_vendor.img are missing."""
+    ws = _make_ws(tmp_path)
+    _make_required_images(ws.images)
+    # optional vbmeta images intentionally absent
+    assert not (ws.images / "vbmeta_system.img").exists()
+    assert not (ws.images / "vbmeta_vendor.img").exists()
+
+    stage = tmp_path / "stage"
+    (stage / "images").mkdir(parents=True)
+    included, excluded = _copy_images(ws, stage, {})
+    # required images were copied; optional ones are simply absent — no error
+    assert "vbmeta.img" in included
+
+
+def test_copy_images_includes_optional_vbmeta_when_present(tmp_path):
+    """_copy_images copies optional vbmeta images when they exist."""
+    ws = _make_ws(tmp_path)
+    _make_required_images(ws.images)
+    (ws.images / "vbmeta_system.img").write_bytes(b"\x00")
+    (ws.images / "vbmeta_vendor.img").write_bytes(b"\x00")
+
+    stage = tmp_path / "stage"
+    (stage / "images").mkdir(parents=True)
+    included, _ = _copy_images(ws, stage, {})
+    assert "vbmeta_system.img" in included
+    assert "vbmeta_vendor.img" in included
+
+
+def test_validate_zip_passes_without_optional_vbmeta(tmp_path):
+    """_validate_zip must not report missing optional vbmeta images."""
+    import zipfile
+
+    ws = _make_ws(tmp_path)
+    _make_required_images(ws.images)
+
+    # Build a minimal ZIP that contains only the required (non-optional) images.
+    stage = tmp_path / "stage"
+    (stage / "images").mkdir(parents=True)
+    for name in _REQUIRED_IMAGES:
+        (stage / "images" / name).write_bytes(b"\x00")
+
+    zip_path = tmp_path / "test.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for name in _REQUIRED_IMAGES:
+            zf.write(stage / "images" / name, f"images/{name}")
+
+    errors = _validate_zip(zip_path, _REQUIRED_IMAGES, {}, has_super=True)
+    optional_errors = [e for e in errors if "vbmeta_system" in e or "vbmeta_vendor" in e]
+    assert optional_errors == [], f"optional vbmeta images must not be required: {optional_errors}"
+
+
+def test_vbmeta_patch_report_in_ws_reports_on_patch_failure(tmp_path):
+    """When vbmeta patching fails, vbmeta_patch_report.txt exists in ws.reports."""
+    ws = _make_ws(tmp_path)
+    # vbmeta.img intentionally absent — patch will fail and write report
+    with pytest.raises(RuntimeError, match="vbmeta"):
+        from factory.core.vbmeta_patch import patch_vbmeta_images
+        patch_vbmeta_images(ws.images, ws.reports, ws.meta)
+
+    assert (ws.reports / "vbmeta_patch_report.txt").is_file()

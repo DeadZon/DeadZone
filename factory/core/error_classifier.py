@@ -52,6 +52,7 @@ _SIGNATURES: list[dict[str, Any]] = [
         "error_type": "PATCH_FAILED",
         "stage_hint": "style",
         "patterns": ["patch failed", "apply_style", "style runner", "legend patch", "gaming patch", "epic patch", "stable patch"],
+        "stage_exclusions": ["final_zip"],
         "cause": "Style patch application failed",
         "suggested_fix": "Check the style runner and the partition tree for unexpected state",
     },
@@ -180,10 +181,17 @@ def classify_error(error: str, stage: str = "") -> dict[str, Any]:
             continue
 
         if pattern_match or (stage_match and stage_hint in stage_lower):
+            # For VBMETA_PATCH_FAILED, append the low-level error so the actual
+            # failing path / patch error surfaces in Telegram and error_summary
+            # rather than being hidden behind the generic description.
+            if sig["error_type"] == "VBMETA_PATCH_FAILED" and raw:
+                cause_val = f"{sig['cause']}: {raw[:300]}"
+            else:
+                cause_val = sig["cause"]
             return {
                 "error_type": sig["error_type"],
                 "stage": stage or stage_hint,
-                "cause": sig["cause"],
+                "cause": cause_val,
                 "suggested_fix": (
                     "Reduce more apps, rebuild partitions correctly, or adjust final_zip_max_gb only if intentional"
                     if sig["error_type"] == "FASTBOOT_VALIDATION_FAILED"

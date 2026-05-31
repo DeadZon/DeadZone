@@ -292,6 +292,7 @@ jobs:
             output/workspace/reports/device_registry_report.txt
             output/workspace/reports/super_profile_report.txt
             output/workspace/reports/error_summary.txt
+            output/workspace/reports/vbmeta_patch_report.txt
           if-no-files-found: ignore
 
       - name: Upload final info

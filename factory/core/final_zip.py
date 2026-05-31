@@ -27,6 +27,9 @@ CORE_IMAGES = [
     "dtbo.img",
     "logo.img",
 ]
+# These images are patched by patch_vbmeta_images when present, but not every ROM
+# ships them.  Mark them optional so their absence does not abort packaging.
+OPTIONAL_CORE_IMAGES: frozenset[str] = frozenset({"vbmeta_system.img", "vbmeta_vendor.img"})
 WINDOWS_TOOLS = ["fastboot.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll"]
 WINDOWS_SCRIPTS = [
     "windows_install_upgrade.bat",
@@ -307,7 +310,10 @@ def _copy_images(ws: Workspace, stage: Path, profile_super: dict[str, Any]) -> t
     firmware = list(profile_super.get("firmware_images") or [])
     allowed = set(required) | set(firmware)
     has_super = (ws.images / "super.img").is_file()
-    missing = [name for name in required if not (ws.images / name).is_file()]
+    missing = [
+        name for name in required
+        if name not in OPTIONAL_CORE_IMAGES and not (ws.images / name).is_file()
+    ]
     if missing:
         raise RuntimeError(f"required final ZIP images are missing: {', '.join(missing)}")
 
@@ -373,6 +379,8 @@ def _validate_zip(
     if has_super and "images/super.img" not in entry_set:
         errors.append("ZIP is missing images/super.img")
     for image in CORE_IMAGES + list(profile_super.get("required_images") or []):
+        if image in OPTIONAL_CORE_IMAGES:
+            continue
         if f"images/{image}" not in entry_set:
             errors.append(f"ZIP is missing required image images/{image}")
     for image in profile_super.get("firmware_images") or []:
@@ -410,6 +418,8 @@ def _write_report(
     compressed_size: int,
     uncompressed_size: int,
     compression_ratio: float,
+    vbmeta_patch_results: list[dict[str, Any]] | None = None,
+    image_dir: Path | None = None,
 ) -> None:
     lines = [
         "DeadZone final ZIP report",
@@ -435,6 +445,24 @@ def _write_report(
         lines.extend(f"- FAIL: {error}" for error in validation_errors)
     else:
         lines.append("- PASS")
+    lines.append("vbmeta patch diagnostics:")
+    lines.append(f"  image_dir: {image_dir}")
+    if vbmeta_patch_results:
+        for r in vbmeta_patch_results:
+            p = Path(r["path"])
+            file_size = p.stat().st_size if p.is_file() else None
+            lines.append(f"  {r['image']}:")
+            lines.append(f"    candidate path:  {r['path']}")
+            lines.append(f"    found:           {r.get('found', '?')}")
+            lines.append(f"    file_size:       {file_size}")
+            lines.append(f"    original_flags:  {r.get('original_flags')}")
+            lines.append(f"    final_flags:     {r.get('final_flags')}")
+            lines.append(f"    action:          {r.get('action')}")
+            lines.append(f"    package source:  {r['path']}")
+            if r.get("error"):
+                lines.append(f"    error:           {r['error']}")
+    else:
+        lines.append("  (no vbmeta patch results recorded)")
     ws.reports.mkdir(parents=True, exist_ok=True)
     (ws.reports / "final_zip_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -461,7 +489,7 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
         shutil.rmtree(stage)
     (stage / "images").mkdir(parents=True)
 
-    patch_vbmeta_images(ws.images, ws.reports, ws.meta)
+    vbmeta_patch_results = patch_vbmeta_images(ws.images, ws.reports, ws.meta)
     included_images, excluded = _copy_images(ws, stage, profile_super)
     included_tools = _copy_windows_tools(stage)
     flash_images = _flash_order(included_images, profile_super)
@@ -496,6 +524,8 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
         compressed_size,
         uncompressed_size,
         compression_ratio,
+        vbmeta_patch_results=vbmeta_patch_results,
+        image_dir=ws.images,
     )
     if validation_errors:
         raise RuntimeError("final ZIP validation failed: " + "; ".join(validation_errors))
