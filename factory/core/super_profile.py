@@ -12,6 +12,7 @@ from factory.core.workspace import Workspace, read_json, write_json
 DEFAULT_SUPER_SIZE = 8_500_000_000
 LP_METADATA_OVERHEAD = 4 * 1024 * 1024
 METADATA_SIZE = 65_536
+ALLOCATION_ALIGN = 1_048_576  # 1 MiB — lpmake block device alignment for Xiaomi VAB devices
 SAFE_ALLOCATION_SOURCES = [
     "hyperur_superconfig",
     "original_super_metadata",
@@ -49,6 +50,13 @@ def _slot_mode(*values: Any) -> str:
         if normalized in {"A_ONLY", "A-ONLY"}:
             return "A-only"
     return "A-only"
+
+
+def _align_up(size: int, align: int = ALLOCATION_ALIGN) -> int:
+    """Align size up to the nearest multiple of align."""
+    if align <= 0 or size <= 0:
+        return size
+    return ((size + align - 1) // align) * align
 
 
 def _image_for_partition(ws: Workspace, part: str) -> Path | None:
@@ -489,19 +497,31 @@ def build_super_profile(
                 chosen = dict(entry)
                 break
         if chosen is None:
-            missing_metadata.append(part)
-            partitions[part] = {
-                "name": part,
-                "slot_suffix": "_a" if is_vab else "",
-                "image_path": str(image),
-                "image_size": image.stat().st_size,
-                "allocation_size": None,
-                "group_name": group_name,
-                "readonly": True,
-                "source": "unresolved",
-                "safe_sources_checked": checked,
-            }
-            continue
+            # Fallback: derive allocation from actual image file size when no metadata source
+            # provides sizes (e.g. zircon SuperConfig has all-zero partition sizes).
+            # Priority: the image_sources map already encodes rebuilt > extracted > workspace.
+            img_size = image.stat().st_size if image.is_file() else 0
+            if img_size > 0:
+                chosen = {
+                    "allocation_size": _align_up(img_size),
+                    "group_name": group_name,
+                    "readonly": True,
+                    "source": f"image_size_fallback:{image_sources.get(part, 'workspace')}",
+                }
+            else:
+                missing_metadata.append(part)
+                partitions[part] = {
+                    "name": part,
+                    "slot_suffix": "_a" if is_vab else "",
+                    "image_path": str(image),
+                    "image_size": 0,
+                    "allocation_size": None,
+                    "group_name": group_name,
+                    "readonly": True,
+                    "source": "unresolved",
+                    "safe_sources_checked": checked,
+                }
+                continue
         partitions[part] = {
             "name": part,
             "slot_suffix": "_a" if is_vab else "",
@@ -524,6 +544,13 @@ def build_super_profile(
         }
         for part in selected
     ] if is_vab else []
+
+    # Track which partitions used the image-size fallback
+    fallback_parts = [
+        part for part, entry in partitions.items()
+        if "image_size_fallback" in str(entry.get("source") or "")
+    ]
+
     resolved_sources = [
         str(entry.get("source"))
         for entry in partitions.values()
@@ -565,7 +592,8 @@ def build_super_profile(
         "dynamic_images": {name: str(path) for name, path in images.items()},
         "image_sources": image_sources,
         "payload_reextraction_skipped": True,
-        "allow_image_size_allocations": False,
+        "allow_image_size_allocations": bool(fallback_parts),
+        "image_size_fallback_partitions": fallback_parts,
         "device": {
             "codename": device_config.get("resolved_codename") or device_config.get("codename"),
             "name": device_config.get("name"),
@@ -582,6 +610,7 @@ def build_super_profile(
         profile["metadata_source"] = metadata_source or "partial"
     write_json(ws.meta / "super_profile.json", profile)
     write_super_profile_report(ws, profile)
+    write_super_allocation_report(ws, profile)
     print(f"[SUPER PROFILE] Source: {profile.get('metadata_source')}")
     if profile.get("superconfig_active"):
         print(f"[SUPER PROFILE] SuperConfig: {profile.get('superconfig_source')} codename={profile.get('superconfig_codename')}")
@@ -643,3 +672,94 @@ def write_super_profile_report(ws: Workspace, profile: dict[str, Any]) -> None:
     )
     lines.append("")
     (ws.reports / "super_profile_report.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_super_allocation_report(ws: Workspace, profile: dict[str, Any]) -> None:
+    """Write super_allocation_report.txt and super_allocation_report.json."""
+    codename = (profile.get("device") or {}).get("codename") or "unknown"
+    partitions = profile.get("partitions") if isinstance(profile.get("partitions"), dict) else {}
+    is_vab = bool(profile.get("virtual_ab"))
+    group_a_name = str(profile.get("group_a_name") or profile.get("dynamic_group_name") or "qti_dynamic_partitions_a")
+
+    alloc_total = sum(
+        _int_value(entry.get("allocation_size"))
+        for entry in partitions.values()
+        if entry.get("allocation_size") is not None
+    )
+
+    sources_used = {str(entry.get("source") or "unresolved") for entry in partitions.values()}
+    has_fallback = any("image_size_fallback" in s for s in sources_used)
+    has_superconfig = any("superconfig" in s for s in sources_used)
+    overall_source = "image_size_fallback" if has_fallback else ("superconfig" if has_superconfig else "unresolved")
+
+    part_list = []
+    lpmake_args: list[str] = []
+    for part in profile.get("selected_partitions") or []:
+        entry = partitions.get(part, {})
+        slot = "_a" if is_vab else ""
+        alloc = entry.get("allocation_size")
+        part_list.append({
+            "name": part,
+            "slot": slot,
+            "image_path": entry.get("image_path"),
+            "image_size": entry.get("image_size"),
+            "allocation_size": alloc,
+            "source": entry.get("source", "unresolved"),
+        })
+        if alloc:
+            lpmake_args.append(
+                f"--partition {part}{slot}:readonly:{alloc}:{group_a_name}"
+            )
+
+    data: dict[str, Any] = {
+        "codename": codename,
+        "super_config_source": profile.get("superconfig_source") or profile.get("metadata_source"),
+        "super_size": profile.get("super_size"),
+        "group_name": profile.get("dynamic_group_name"),
+        "slot_mode": profile.get("slot_mode"),
+        "allocation_source": overall_source,
+        "inactive_b_zero_placeholders": is_vab and bool(profile.get("vab_zero_b")),
+        "partitions": part_list,
+        "group_required_size": alloc_total,
+        "group_available_size": profile.get("group_size"),
+        "image_size_fallback_partitions": profile.get("image_size_fallback_partitions") or [],
+        "missing_partitions": profile.get("missing_metadata") or [],
+        "lpmake_partition_args": lpmake_args,
+    }
+
+    ws.reports.mkdir(parents=True, exist_ok=True)
+    write_json(ws.reports / "super_allocation_report.json", data)
+
+    lines = [
+        "DeadZone Super Allocation Report",
+        "=================================",
+        f"codename             : {codename}",
+        f"super_config_source  : {data['super_config_source']}",
+        f"super_size           : {data['super_size']}",
+        f"group_name           : {data['group_name']}",
+        f"slot_mode            : {data['slot_mode']}",
+        f"allocation_source    : {overall_source}",
+        f"inactive_b_zero_ph   : {data['inactive_b_zero_placeholders']}",
+        f"group_required_size  : {alloc_total}",
+        f"group_available_size : {data['group_available_size']}",
+        "",
+        "partition allocations (_a):",
+    ]
+    for entry in part_list:
+        lines.append(
+            f"  {entry['name']}{entry['slot']}: "
+            f"image_size={entry['image_size']} alloc={entry['allocation_size']} "
+            f"source={entry['source']}"
+        )
+    if is_vab:
+        lines += ["", "_b zero-size VAB placeholders:"]
+        for entry in profile.get("vab_zero_b_partitions") or []:
+            lines.append(f"  {entry.get('name')}: allocation=0 group={entry.get('group_name')}")
+    if data["missing_partitions"]:
+        lines += ["", "missing partitions (no image available):"]
+        for p in data["missing_partitions"]:
+            lines.append(f"  - {p}")
+    lines += ["", "lpmake partition args:"]
+    lines.extend(f"  {arg}" for arg in lpmake_args)
+    lines.append("")
+    (ws.reports / "super_allocation_report.txt").write_text("\n".join(lines), encoding="utf-8")
