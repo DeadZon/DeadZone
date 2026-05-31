@@ -487,20 +487,29 @@ def _execute_route_new_dat(
 
     try:
         from factory.adapters import new_dat as _new_dat_adapter
-        _new_dat_adapter.adapt(source, ws)
+        adapter_result = _new_dat_adapter.adapt(source, ws)
+        sub_reports: list[str] = []
+        if adapter_result.get("report_path"):
+            sub_reports.append(adapter_result["report_path"])
+        if adapter_result.get("meta_path"):
+            sub_reports.append(adapter_result["meta_path"])
         return {
             "status": "OK",
             "payload_path": None,
             "images": mezo_collect_unpacked_images(ws.images),
-            "sub_reports": [],
+            "sub_reports": sub_reports,
             "error": "",
         }
     except Exception as exc:
+        sub_reports = []
+        report_path = ws.reports / "new_dat_adapter_report.txt"
+        if report_path.is_file():
+            sub_reports.append(str(report_path))
         return {
             "status": "UNSUPPORTED",
             "payload_path": None,
             "images": {k: None for k in _IMAGE_PARTITIONS},
-            "sub_reports": [],
+            "sub_reports": sub_reports,
             "error": f"new_dat adapter unavailable or failed: {exc}",
         }
 
