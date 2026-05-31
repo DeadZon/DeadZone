@@ -661,6 +661,7 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
         actuals = scanned_by_pkg.get(pkg_key) or []
         exact = next((a for a in actuals if a["partition"] == entry["partition"] and a["app_type"] == entry["app_type"] and a["folder_name"] == entry["name"]), None)
         same_place = next((a for a in actuals if a["partition"] == entry["partition"] and a["app_type"] == entry["app_type"]), None)
+        target_at_expected = scanned_by_location.get((entry["partition"], entry["app_type"], entry["name"].lower()))
 
         if exact and exact.get("apk_name") and exact.get("apk_name") != entry["expected_apk_name"]:
             matched_paths.add(exact["absolute_path"])
@@ -673,7 +674,7 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
         elif same_place:
             matched_paths.add(same_place["absolute_path"])
             match_stats["matched_by_package"] += 1
-            to_rename.append({**same_place, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": same_place["folder_name"], "found_at": same_place["absolute_path"], "in_allowed": _is_in_allowed(same_place["absolute_path"], allowed), "match_method": "package"})
+            to_rename.append({**same_place, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": same_place["folder_name"], "found_at": same_place["absolute_path"], "in_allowed": _is_in_allowed(same_place["absolute_path"], allowed), "match_method": "package", "target_package_name": (target_at_expected or {}).get("package_name", "")})
         elif actuals:
             # Package found in wrong allowed partition/path → MOVE to expected location.
             match_stats["matched_by_package"] += 1
@@ -692,6 +693,7 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
                 "package": entry["package"],
                 "found_at": actuals[0]["absolute_path"],
                 "match_method": "package_moved",
+                "target_package_name": (target_at_expected or {}).get("package_name", ""),
             })
         else:
             # No package match — try folder-name and alias matching.
@@ -913,9 +915,103 @@ def _rename_apk(folder: Path, expected_name: str) -> dict[str, Any] | None:
     if apk == target:
         return None
     if target.exists():
-        raise RuntimeError(f"CONFLICT: APK rename target already exists: {target}")
+        return {
+            "old_apk_path": str(apk),
+            "new_apk_path": str(target),
+            "apk_rename_skipped": True,
+            "apk_rename_reason": "apk_rename_target_exists",
+        }
     apk.rename(target)
     return {"old_apk_path": str(apk), "new_apk_path": str(target)}
+
+
+def _trusted_package(value: Any) -> str:
+    package = _known_package(value)
+    if not package or not _is_package_name(package) or _is_suspicious_package(package):
+        return ""
+    return package
+
+
+def _folder_package(folder: Path, inventory_package: Any = "", expected_name: str = "") -> str:
+    apk = _find_apk(folder, expected_name or folder.name) if folder.exists() else None
+    package, _source, _confidence = _extract_package(apk, str(inventory_package or ""))
+    return _trusted_package(package)
+
+
+def _safe_delete_duplicate_source(src: Path, allowed: list[Path]) -> tuple[bool, str]:
+    if not src.exists():
+        return False, "source path not found"
+    if not src.is_dir():
+        return False, "source path is not an app folder"
+    if not _is_in_allowed(str(src), allowed):
+        return False, "source outside policy locations"
+    try:
+        shutil.rmtree(src)
+        try:
+            src.parent.rmdir()
+        except OSError:
+            pass
+        return True, "duplicate source deleted safely"
+    except Exception as exc:
+        return False, f"duplicate source delete failed: {exc}"
+
+
+def _resolve_target_conflict(
+    item: dict[str, Any],
+    src: Path,
+    target: Path,
+    expected: dict[str, str],
+    allowed: list[Path],
+    operation: str,
+    enforce: bool,
+) -> tuple[dict[str, Any], str | None]:
+    source_package = _trusted_package(item.get("package_name") or item.get("package"))
+    target_package = _folder_package(target, item.get("target_package_name", ""), expected["name"])
+    expected_package = _trusted_package(expected.get("package"))
+    reason = "conflict_target_unknown_package"
+    action = "KEEP_BOTH"
+    deleted = False
+    delete_reason = ""
+
+    target_satisfies_expected = bool(target_package and expected_package and target_package.lower() == expected_package.lower())
+    same_trusted_package = bool(source_package and target_package and source_package.lower() == target_package.lower())
+    source_partition = str(item.get("partition") or "")
+
+    if target_satisfies_expected or same_trusted_package:
+        reason = "duplicate_candidate"
+        action = "SKIP_MOVE_RENAME_PREFER_TARGET"
+        if enforce and source_partition in _POLICY_PARTITIONS:
+            deleted, delete_reason = _safe_delete_duplicate_source(src, allowed)
+            if deleted:
+                action = "DUPLICATE_SOURCE_DELETED"
+            else:
+                action = "KEEP_TARGET_DUPLICATE_SOURCE"
+        elif enforce:
+            delete_reason = f"source partition {source_partition!r} is not a policy partition"
+    elif target_package:
+        reason = "conflict_target_different_package"
+
+    record = {
+        **item,
+        "enacted": False,
+        "operation": operation,
+        "source_path": str(src),
+        "target_path": str(target),
+        "source_package": source_package or _UNKNOWN,
+        "target_package": target_package or _UNKNOWN,
+        "expected_package": expected_package or _UNKNOWN,
+        "packages": {
+            "source": source_package or _UNKNOWN,
+            "target": target_package or _UNKNOWN,
+            "expected": expected_package or _UNKNOWN,
+        },
+        "action": action,
+        "reason": reason,
+    }
+    if delete_reason:
+        record["delete_reason"] = delete_reason
+    changed_partition = str(item.get("partition") or expected.get("partition") or "") if deleted else None
+    return record, changed_partition
 
 
 def _execute_renames(to_rename: list[dict[str, Any]], enforce: bool) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], set[str]]:
@@ -937,7 +1033,18 @@ def _execute_renames(to_rename: list[dict[str, Any]], enforce: bool) -> tuple[li
             skipped.append({**item, "enacted": False, "reason": "source path not found"})
             continue
         if target.exists() and target != src:
-            errors.append(f"CONFLICT: rename target already exists: {target}")
+            conflict, changed_partition = _resolve_target_conflict(
+                item,
+                src,
+                target,
+                expected,
+                [src.parent],
+                "rename",
+                enforce,
+            )
+            skipped.append(conflict)
+            if changed_partition and changed_partition in _POLICY_PARTITIONS:
+                changed.add(changed_partition)
             continue
         try:
             if target != src:
@@ -1006,7 +1113,18 @@ def _execute_moves(
             skipped.append({**item, "enacted": False, "reason": "source path not found"})
             continue
         if target.exists() and target.resolve() != src.resolve():
-            errors.append(f"CONFLICT: move target already exists: {target}")
+            conflict, changed_partition = _resolve_target_conflict(
+                item,
+                src,
+                target,
+                entry,
+                _build_allowed_dirs(partitions_root),
+                "move",
+                enforce,
+            )
+            skipped.append(conflict)
+            if changed_partition and changed_partition in _POLICY_PARTITIONS:
+                changed.add(changed_partition)
             continue
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1079,10 +1197,18 @@ def _write_inventory_files(inventory_dir: Path, data: dict[str, Any]) -> None:
     _write_inventory(inventory_dir / "apps_removed.txt", data["deleted_extra_apps"], lambda r: f"{r['path']} {r['package']}")
     _write_inventory(inventory_dir / "apps_remove_skipped.txt", data["skipped_delete_apps"], lambda r: f"{r.get('path', r.get('found_at'))} {r.get('package')} reason={r.get('reason','')}")
     _write_inventory(inventory_dir / "apps_renamed.txt", data["renamed_apps"], lambda r: f"{r.get('actual_name')} -> {r.get('expected_name')} {r.get('package')}")
-    _write_inventory(inventory_dir / "apps_rename_skipped.txt", data["skipped_rename_apps"], lambda r: f"{r.get('actual_name')} -> {r.get('expected_name')} {r.get('package')} reason={r.get('reason','')}")
+    _write_inventory(inventory_dir / "apps_rename_skipped.txt", data["skipped_rename_apps"], lambda r: (
+        f"{r.get('source_path') or r.get('found_at')} -> {r.get('target_path') or r.get('expected_name')} "
+        f"source_package={r.get('source_package', r.get('package'))} "
+        f"target_package={r.get('target_package', '')} action={r.get('action', '')} reason={r.get('reason','')}"
+    ))
     _write_inventory(inventory_dir / "apps_moved.txt", data.get("moved_apps") or [], lambda r: f"{r.get('found_at')} -> {r.get('new_path')} {r.get('package')}")
     _write_inventory(inventory_dir / "apps_unknown_package.txt", data["unknown_package_apps"], lambda r: f"{r.get('path')} package=UNKNOWN")
-    _write_inventory(inventory_dir / "apps_wrong_location.txt", data["found_wrong_location_apps"], lambda r: f"{r.get('path')} {r.get('package')} expected={r.get('expected', {}).get('expected_path', '')}")
+    _write_inventory(inventory_dir / "apps_wrong_location.txt", data["found_wrong_location_apps"], lambda r: (
+        f"{r.get('source_path') or r.get('found_at') or r.get('path')} -> {r.get('target_path') or r.get('new_path') or r.get('expected', {}).get('expected_path', '')} "
+        f"source_package={r.get('source_package', r.get('package'))} "
+        f"target_package={r.get('target_package', '')} action={r.get('action', '')} reason={r.get('reason','')}"
+    ))
 
 
 def _write_txt_report(path: Path, data: dict[str, Any]) -> None:
@@ -1124,8 +1250,14 @@ def _write_txt_report(path: Path, data: dict[str, Any]) -> None:
         lines += ["", f"{title}:"]
         rows = data.get(key) or []
         lines.extend(
-            f"  - {r.get('path') or r.get('expected_path') or r.get('found_at')} "
-            f"{r.get('package') or r.get('package_name')}"
+            (
+                f"  - {r.get('source_path')} -> {r.get('target_path')} "
+                f"source_package={r.get('source_package')} target_package={r.get('target_package')} "
+                f"expected_package={r.get('expected_package')} action={r.get('action')} reason={r.get('reason')}"
+            )
+            if r.get("source_path") and r.get("target_path")
+            else f"  - {r.get('path') or r.get('expected_path') or r.get('found_at')} "
+                 f"{r.get('package') or r.get('package_name')}"
             for r in rows
         )
         if not rows:
@@ -1295,9 +1427,33 @@ def enforce_stable_app_policy(
         classification["to_move"], partitions_root, enforce
     )
     renamed, skipped_rename, rename_errors, rename_changed = _execute_renames(classification["to_rename"], enforce)
+    protected_conflict_paths = {
+        path
+        for row in skipped_move + skipped_rename
+        for path in (row.get("source_path"), row.get("target_path"))
+        if path and row.get("reason") in {
+            "duplicate_candidate",
+            "conflict_target_different_package",
+            "conflict_target_unknown_package",
+        }
+    }
+    delete_candidates = []
+    skipped_conflict_delete = []
+    for item in classification["extra_in_allowed"]:
+        item_path = str(item.get("found_at") or item.get("absolute_path") or "")
+        if item_path in protected_conflict_paths:
+            skipped_conflict_delete.append({
+                **item,
+                "enacted": False,
+                "action": "SKIP",
+                "reason": "protected_move_rename_conflict_path",
+            })
+        else:
+            delete_candidates.append(item)
     deleted, skipped_delete, skipped_outside_delete, delete_errors, delete_changed = _execute_deletes(
-        classification["extra_in_allowed"], enforce, allowed
+        delete_candidates, enforce, allowed
     )
+    skipped_delete = skipped_conflict_delete + skipped_delete
     all_errors = move_errors + rename_errors + delete_errors
 
     # Ensure vendor is NEVER in changed_partitions.

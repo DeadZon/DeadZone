@@ -229,7 +229,7 @@ def test_extra_app_outside_allowed_not_deleted(tmp_path):
 # 6. Rename target already exists → CONFLICT → stage fails
 # ---------------------------------------------------------------------------
 
-def test_rename_conflict_fails_stage(tmp_path):
+def test_rename_conflict_does_not_fail_stage(tmp_path):
     apps_list = _write_apps_list(tmp_path)
     os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
     partitions_root = tmp_path / "partitions"
@@ -243,13 +243,20 @@ def test_rename_conflict_fails_stage(tmp_path):
     ]
     reports_dir = tmp_path / "reports"
 
-    with pytest.raises(RuntimeError, match="CONFLICT"):
-        enforce_stable_app_policy(
-            reports_dir=reports_dir,
-            partitions_root=partitions_root,
-            scanned_apps=scanned,
-            style="stable",
-        )
+    result = enforce_stable_app_policy(
+        reports_dir=reports_dir,
+        partitions_root=partitions_root,
+        scanned_apps=scanned,
+        style="stable",
+    )
+
+    assert result["status"] == "ok"
+    assert result["skipped_rename_apps"]
+    assert result["skipped_rename_apps"][0]["reason"] in {
+        "duplicate_candidate",
+        "conflict_target_unknown_package",
+        "conflict_target_different_package",
+    }
     del os.environ["LISTMEZO_APPS_LIST"]
 
 
@@ -1255,3 +1262,93 @@ def test_stable_does_not_raise_unsafe_when_folder_matches_cover_expected(tmp_pat
     assert result["status"] == "ok"
     assert result["safety_guard"]["status"] in ("passed", "warning")
     del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_rename_target_conflict_different_package_keeps_both_and_reports(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    source = _make_app_folder(partitions_root, "system", "app", "WrongFolderBT")
+    target = _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    scanned = [
+        _scanned_app("system", "app", "WrongFolderBT", "com.android.bluetoothmidiservice", partitions_root),
+        _scanned_app("system", "app", "BluetoothMidiService", "com.example.other", partitions_root),
+    ]
+
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+
+    assert source.exists()
+    assert target.exists()
+    conflict = next(r for r in result["skipped_rename_apps"] if r.get("reason") == "conflict_target_different_package")
+    assert conflict["source_path"] == str(source.resolve())
+    assert conflict["target_path"] == str(target)
+    assert conflict["source_package"] == "com.android.bluetoothmidiservice"
+    assert conflict["target_package"] == "com.example.other"
+    assert conflict["action"] == "KEEP_BOTH"
+    assert result["deleted_extra_apps"] == []
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_move_target_conflict_unknown_package_keeps_both_and_reports(tmp_path):
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    source = _make_app_folder(partitions_root, "product", "app", "BTMidi")
+    target = _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    scanned = [
+        _scanned_app("product", "app", "BTMidi", "com.android.bluetoothmidiservice", partitions_root),
+    ]
+
+    result = enforce_stable_app_policy(tmp_path / "reports", partitions_root, scanned, "stable")
+
+    assert source.exists()
+    assert target.exists()
+    conflict = next(r for r in result["skipped_move_apps"] if r.get("reason") == "conflict_target_unknown_package")
+    assert conflict["source_path"] == str(source.resolve())
+    assert conflict["target_path"] == str(target)
+    assert conflict["source_package"] == "com.android.bluetoothmidiservice"
+    assert conflict["target_package"] == "UNKNOWN"
+    assert conflict["action"] == "KEEP_BOTH"
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_same_trusted_package_rename_conflict_deletes_duplicate_source_safely(tmp_path, monkeypatch):
+    partitions_root = tmp_path / "partitions"
+    source = _make_app_folder(partitions_root, "system", "app", "WrongFolderBT")
+    target = _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    monkeypatch.setattr(
+        "factory.core.stable_app_policy._folder_package",
+        lambda _folder, inventory_package="", expected_name="": "com.android.bluetoothmidiservice",
+    )
+    item = {
+        "partition": "system",
+        "app_type": "app",
+        "name": "WrongFolderBT",
+        "folder_name": "WrongFolderBT",
+        "package": "com.android.bluetoothmidiservice",
+        "package_name": "com.android.bluetoothmidiservice",
+        "found_at": str(source),
+        "absolute_path": str(source),
+        "in_allowed": True,
+        "expected": {
+            "name": "BluetoothMidiService",
+            "expected_folder_name": "BluetoothMidiService",
+            "package": "com.android.bluetoothmidiservice",
+            "expected_package": "com.android.bluetoothmidiservice",
+            "partition": "system",
+            "app_type": "app",
+            "section": "app",
+            "expected_path": "system/app/BluetoothMidiService",
+            "expected_apk_name": "BluetoothMidiService.apk",
+        },
+    }
+
+    rows, errors = _apply_renames([item], enforce=True)
+
+    assert errors == []
+    assert not source.exists()
+    assert target.exists()
+    assert rows[0]["reason"] == "duplicate_candidate"
+    assert rows[0]["action"] == "DUPLICATE_SOURCE_DELETED"
+    assert rows[0]["source_path"] == str(source)
+    assert rows[0]["target_path"] == str(target)
