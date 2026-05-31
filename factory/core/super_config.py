@@ -235,10 +235,14 @@ def resolve_super_config_for_device(
         }
 
     fs_types = _load_fs_types(codename_clean)
+    source = fs_types.pop("_profile_source", "hyperur_superconfig")
+    source_label = fs_types.pop(
+        "_profile_source_label", "HyperUR_Build_CN_V21 imported reference"
+    )
 
     return {
-        "source": "hyperur_superconfig",
-        "source_label": "HyperUR_Build_CN_V21 imported reference",
+        "source": source,
+        "source_label": source_label,
         "codename": codename_clean,
         "soc": soc,
         "slot_mode": config["slot_mode"],
@@ -265,17 +269,17 @@ def build_super_config_matrix() -> list[dict[str, Any]]:
     """Build device matrix for all known SuperConfig codenames."""
     rows: list[dict[str, Any]] = []
     for codename in list_known_codenames():
-        config = load_super_config(codename)
-        if config:
+        result = resolve_super_config_for_device(codename)
+        if result["status"] == STATUS_READY:
             rows.append({
                 "codename": codename,
                 "soc": "",
-                "super_config_source": "hyperur_superconfig",
-                "slot_mode": config.get("slot_mode", ""),
-                "dynamic_group": config.get("group_name", ""),
-                "super_size": config.get("super_size", 0),
-                "partition_count": config.get("partition_count", 0),
-                "has_vab_placeholders": config.get("has_vab_placeholders", False),
+                "super_config_source": result.get("source", "hyperur_superconfig"),
+                "slot_mode": result.get("slot_mode", ""),
+                "dynamic_group": result.get("group_name", ""),
+                "super_size": result.get("super_size", 0),
+                "partition_count": result.get("partition_count", 0),
+                "has_vab_placeholders": result.get("has_vab_placeholders", False),
                 "status": STATUS_READY,
             })
         else:
@@ -288,7 +292,7 @@ def build_super_config_matrix() -> list[dict[str, Any]]:
                 "super_size": 0,
                 "partition_count": 0,
                 "has_vab_placeholders": False,
-                "status": STATUS_BLOCKED,
+                "status": result["status"],
             })
     return rows
 
