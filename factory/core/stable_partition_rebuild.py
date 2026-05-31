@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from factory.core.image_extractor import _detect_format
+from factory.core.partition_modifications import mark_partition_modified
 from factory.core.toolchain import resolve_toolchain
 from factory.core.workspace import Workspace, read_json, write_json
 
@@ -182,6 +183,17 @@ def rebuild_stable_partitions(ws: Workspace, policy_report: dict[str, Any] | Non
     if not changed:
         _write_report(ws, data)
         return data
+
+    # Record the modification before rebuilding so the downstream repacker
+    # knows these partitions genuinely changed (and must be rebuilt) even if
+    # this stage's rebuilt image is later superseded.
+    for partition in changed:
+        mark_partition_modified(
+            ws,
+            partition,
+            reason="stable app policy changed partition content (rename/delete)",
+            stage="stable_partition_rebuild",
+        )
 
     for partition in changed:
         tree = ws.partitions / partition

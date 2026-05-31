@@ -340,14 +340,15 @@ def test_telegram_document_caption_uses_real_style():
     tg.token = "x"
     tg.chat_id = "y"
 
-    # Patch _send_document to capture the caption
+    # Patch _send_document_to (the per-recipient sender used by the multi-
+    # recipient code path) to capture the caption.
     captured_caption: list[str] = []
 
-    def _fake_send_document(path, caption):
+    def _fake_send_document_to(chat_id, path, caption):
         captured_caption.append(caption)
         return {"ok": True}
 
-    tg._send_document = _fake_send_document
+    tg._send_document_to = _fake_send_document_to
 
     inv_zip = MagicMock()
     inv_zip.name = "inventory.zip"

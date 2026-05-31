@@ -1,8 +1,10 @@
 """
 Tests for factory/core/repacker.py — real partition repack engine.
 
-Tool-invocation tests (EROFS/EXT4 actual rebuild) require POSIX shell
-scripts and are skipped on Windows. All other tests are platform-neutral.
+Modification is driven by ws.meta/partition_modifications.json, NOT by the mere
+presence of an extracted partition tree.  Tool-invocation tests (EROFS actual
+rebuild) use a cross-platform fake mkfs.erofs (tests/fake_bin.py) so they run on
+every platform.
 """
 from __future__ import annotations
 
@@ -11,6 +13,10 @@ from pathlib import Path
 
 import pytest
 
+from factory.core.partition_modifications import (
+    is_partition_modified,
+    mark_partition_modified,
+)
 from factory.core.repacker import (
     PartitionRepackError,
     _detect_erofs_compression,
@@ -21,6 +27,7 @@ from factory.core.repacker import (
     repack_partitions,
 )
 from factory.core.workspace import create_workspace
+from tests.fake_bin import write_fake_mkfs_erofs
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -121,6 +128,7 @@ def test_erofs_route_selected_when_image_is_erofs(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "vendor.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "vendor")
+    mark_partition_modified(ws, "vendor", "test modification")
     monkeypatch.setenv("PATH", "")  # no mkfs.erofs available
 
     with pytest.raises(PartitionRepackError) as exc:
@@ -134,6 +142,7 @@ def test_erofs_missing_tool_records_clear_reason(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "product.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "product")
+    mark_partition_modified(ws, "product", "test modification")
     monkeypatch.setenv("PATH", "")
 
     with pytest.raises(PartitionRepackError):
@@ -156,6 +165,7 @@ def test_ext4_route_selected_when_image_is_ext4(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "system_ext.img").write_bytes(_ext4_header())
     _make_tree(ws.partitions / "system_ext")
+    mark_partition_modified(ws, "system_ext", "test modification")
     monkeypatch.setattr(
         "factory.core.repacker._find_ext4_tool", lambda: None
     )
@@ -170,6 +180,7 @@ def test_ext4_missing_tool_records_clear_reason(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "system.img").write_bytes(_ext4_header())
     _make_tree(ws.partitions / "system")
+    mark_partition_modified(ws, "system", "test modification")
     monkeypatch.setattr("factory.core.repacker._find_ext4_tool", lambda: None)
 
     with pytest.raises(PartitionRepackError):
@@ -188,6 +199,7 @@ def test_failed_modified_partition_raises_partition_repack_error(tmp_path, monke
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "vendor.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "vendor")
+    mark_partition_modified(ws, "vendor", "test modification")
     monkeypatch.setenv("PATH", "")
 
     with pytest.raises(PartitionRepackError) as exc:
@@ -204,7 +216,8 @@ def test_only_failed_partition_is_in_failed_list(tmp_path, monkeypatch):
     # vendor: modified + erofs, will fail (no tool)
     (ws.images / "vendor.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "vendor")
-    # system: unmodified, will pass
+    mark_partition_modified(ws, "vendor", "test modification")
+    # system: unmodified, will pass (copied)
     (ws.images / "system.img").write_bytes(_ext4_header())
     monkeypatch.setenv("PATH", "")
 
@@ -212,6 +225,39 @@ def test_only_failed_partition_is_in_failed_list(tmp_path, monkeypatch):
         repack_partitions(ws)
 
     assert exc.value.payload["failed_partitions"] == ["vendor"]
+
+
+def test_extracted_but_unmodified_partition_is_not_rebuilt(tmp_path, monkeypatch):
+    """A populated tree with NO modification mark must NOT trigger a rebuild."""
+    ws = create_workspace(tmp_path / "workspace")
+    (ws.images / "vendor.img").write_bytes(_erofs_header())
+    _make_tree(ws.partitions / "vendor")  # extracted but not marked modified
+    monkeypatch.setenv("PATH", "")  # no mkfs.erofs — would fail IF it tried
+
+    result = repack_partitions(ws)  # must not raise
+
+    vendor = next(e for e in result["partitions"] if e["partition"] == "vendor")
+    assert vendor["modified"] is False
+    assert vendor["status"] == "copied"
+    # original image is left untouched
+    assert (ws.images / "vendor.img").read_bytes() == _erofs_header()
+
+
+def test_modified_partition_with_empty_tree_fails(tmp_path):
+    """Marked modified but nothing extracted to rebuild from → clean failure."""
+    ws = create_workspace(tmp_path / "workspace")
+    (ws.images / "vendor.img").write_bytes(_erofs_header())
+    mark_partition_modified(ws, "vendor", "marked but no tree")
+
+    with pytest.raises(PartitionRepackError) as exc:
+        repack_partitions(ws)
+
+    assert "vendor" in exc.value.payload["failed_partitions"]
+    data = __import__("json").loads(
+        (ws.meta / "partition_repack.json").read_text(encoding="utf-8")
+    )
+    entry = next(e for e in data["partitions"] if e["partition"] == "vendor")
+    assert "no extracted tree" in entry["reason"]
 
 
 # ── report files are written ──────────────────────────────────────────────────
@@ -234,6 +280,7 @@ def test_partition_repack_json_written_on_failure(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "vendor.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "vendor")
+    mark_partition_modified(ws, "vendor", "test modification")
     monkeypatch.setenv("PATH", "")
 
     with pytest.raises(PartitionRepackError):
@@ -246,6 +293,7 @@ def test_partition_repack_report_txt_written_on_failure(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "vendor.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "vendor")
+    mark_partition_modified(ws, "vendor", "test modification")
     monkeypatch.setenv("PATH", "")
 
     with pytest.raises(PartitionRepackError):
@@ -277,25 +325,16 @@ def test_partition_repack_json_contains_required_fields(tmp_path):
         assert field in entry, f"missing field: {field}"
 
 
-# ── EROFS rebuild with fake tool (POSIX only) ─────────────────────────────────
+# ── EROFS rebuild with cross-platform fake tool ───────────────────────────────
 
-@pytest.mark.skipif(os.name == "nt", reason="requires POSIX executable shell script")
 def test_erofs_rebuild_succeeds_with_fake_mkfs(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "product.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "product")
+    mark_partition_modified(ws, "product", "test modification")
 
     helper = tmp_path / "bin"
-    helper.mkdir()
-    mkfs = helper / "mkfs.erofs"
-    mkfs.write_text(
-        "#!/bin/sh\n"
-        "if [ \"$1\" = \"--help\" ]; then echo 'lz4 lz4hc'; exit 0; fi\n"
-        "if [ \"$1\" = \"-z\" ]; then out=\"$3\"; else out=\"$1\"; fi\n"
-        "printf rebuilt > \"$out\"\n",
-        encoding="utf-8",
-    )
-    mkfs.chmod(0o755)
+    write_fake_mkfs_erofs(helper, content=b"rebuilt")
     monkeypatch.setenv("PATH", str(helper))
 
     result = repack_partitions(ws)
@@ -305,46 +344,29 @@ def test_erofs_rebuild_succeeds_with_fake_mkfs(tmp_path, monkeypatch):
     assert entry["filesystem_type"] == "raw_erofs"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="requires POSIX executable shell script")
 def test_erofs_rebuilt_image_replaces_original(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     original_content = _erofs_header()
     (ws.images / "vendor.img").write_bytes(original_content)
     _make_tree(ws.partitions / "vendor")
+    mark_partition_modified(ws, "vendor", "test modification")
 
     helper = tmp_path / "bin"
-    helper.mkdir()
-    mkfs = helper / "mkfs.erofs"
-    mkfs.write_text(
-        "#!/bin/sh\n"
-        "if [ \"$1\" = \"--help\" ]; then echo 'lz4'; exit 0; fi\n"
-        "if [ \"$1\" = \"-z\" ]; then out=\"$3\"; else out=\"$1\"; fi\n"
-        "printf rebuilt_content > \"$out\"\n",
-        encoding="utf-8",
-    )
-    mkfs.chmod(0o755)
+    write_fake_mkfs_erofs(helper, content=b"rebuilt_content")
     monkeypatch.setenv("PATH", str(helper))
 
     repack_partitions(ws)
     assert (ws.images / "vendor.img").read_bytes() == b"rebuilt_content"
 
 
-@pytest.mark.skipif(os.name == "nt", reason="requires POSIX executable shell script")
 def test_erofs_failed_tool_raises(tmp_path, monkeypatch):
     ws = create_workspace(tmp_path / "workspace")
     (ws.images / "vendor.img").write_bytes(_erofs_header())
     _make_tree(ws.partitions / "vendor")
+    mark_partition_modified(ws, "vendor", "test modification")
 
     helper = tmp_path / "bin"
-    helper.mkdir()
-    mkfs = helper / "mkfs.erofs"
-    mkfs.write_text(
-        "#!/bin/sh\n"
-        "if [ \"$1\" = \"--help\" ]; then echo 'lz4'; exit 0; fi\n"
-        "exit 1\n",
-        encoding="utf-8",
-    )
-    mkfs.chmod(0o755)
+    write_fake_mkfs_erofs(helper, fail=True)
     monkeypatch.setenv("PATH", str(helper))
 
     with pytest.raises(PartitionRepackError) as exc:

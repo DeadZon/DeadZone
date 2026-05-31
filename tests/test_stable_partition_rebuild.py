@@ -7,6 +7,7 @@ import pytest
 
 from factory.core.stable_partition_rebuild import StablePartitionRebuildError, rebuild_stable_partitions
 from factory.core.workspace import create_workspace
+from tests.fake_bin import write_fake_mkfs_erofs
 
 
 def test_no_changed_partitions_writes_ok_report(tmp_path):
@@ -46,16 +47,7 @@ def test_erofs_rebuild_report_contains_sizes(tmp_path, monkeypatch):
     image = ws.images / "product.img"
     image.write_bytes(b"\0" * 1024 + b"EroS" + b"\0" * 4096)
     helper = tmp_path / "bin"
-    helper.mkdir()
-    mkfs = helper / "mkfs.erofs"
-    mkfs.write_text(
-        "#!/bin/sh\n"
-        "if [ \"$1\" = \"--help\" ]; then echo 'lz4 lz4hc'; exit 0; fi\n"
-        "if [ \"$1\" = \"-z\" ]; then out=\"$3\"; else out=\"$1\"; fi\n"
-        "printf rebuilt > \"$out\"\n",
-        encoding="utf-8",
-    )
-    mkfs.chmod(0o755)
+    write_fake_mkfs_erofs(helper, content=b"rebuilt")
     monkeypatch.setenv("PATH", str(helper))
     result = rebuild_stable_partitions(ws, {"changed_partitions": ["product"]})
     entry = result["partitions"][0]
@@ -65,16 +57,7 @@ def test_erofs_rebuild_report_contains_sizes(tmp_path, monkeypatch):
 
 
 def _write_fake_mkfs(helper: Path, payload_size: int) -> None:
-    helper.mkdir()
-    mkfs = helper / "mkfs.erofs"
-    mkfs.write_text(
-        "#!/bin/sh\n"
-        "if [ \"$1\" = \"--help\" ]; then echo 'lz4 lz4hc'; exit 0; fi\n"
-        "if [ \"$1\" = \"-z\" ]; then out=\"$3\"; else out=\"$1\"; fi\n"
-        f"head -c {payload_size} /dev/zero > \"$out\"\n",
-        encoding="utf-8",
-    )
-    mkfs.chmod(0o755)
+    write_fake_mkfs_erofs(helper, size=payload_size, content=None)
 
 
 def test_rebuilt_image_growth_more_than_tolerance_fails(tmp_path, monkeypatch):
@@ -83,7 +66,7 @@ def test_rebuilt_image_growth_more_than_tolerance_fails(tmp_path, monkeypatch):
     (ws.images / "vendor.img").write_bytes(b"\0" * 1024 + b"EroS" + b"\0" * 1024)
     helper = tmp_path / "bin"
     _write_fake_mkfs(helper, 40 * 1024 * 1024)
-    monkeypatch.setenv("PATH", f"{helper}:{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("PATH", f"{helper}{os.pathsep}{os.environ.get('PATH', '')}")
 
     with pytest.raises(StablePartitionRebuildError) as exc:
         rebuild_stable_partitions(ws, {"changed_partitions": ["vendor"]})
@@ -98,7 +81,7 @@ def test_rebuilt_image_growth_within_tolerance_passes(tmp_path, monkeypatch):
     (ws.images / "vendor.img").write_bytes(b"\0" * 1024 + b"EroS" + b"\0" * (2 * 1024 * 1024))
     helper = tmp_path / "bin"
     _write_fake_mkfs(helper, 3 * 1024 * 1024)
-    monkeypatch.setenv("PATH", f"{helper}:{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("PATH", f"{helper}{os.pathsep}{os.environ.get('PATH', '')}")
 
     result = rebuild_stable_partitions(ws, {"changed_partitions": ["vendor"]})
 
@@ -112,7 +95,7 @@ def test_allow_rebuilt_image_growth_records_warning(tmp_path, monkeypatch):
     (ws.images / "vendor.img").write_bytes(b"\0" * 1024 + b"EroS")
     helper = tmp_path / "bin"
     _write_fake_mkfs(helper, 40 * 1024 * 1024)
-    monkeypatch.setenv("PATH", f"{helper}:{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("PATH", f"{helper}{os.pathsep}{os.environ.get('PATH', '')}")
     monkeypatch.setenv("DEADZONE_ALLOW_REBUILT_IMAGE_GROWTH", "true")
 
     result = rebuild_stable_partitions(ws, {"changed_partitions": ["vendor"]})

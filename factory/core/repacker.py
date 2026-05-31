@@ -9,6 +9,10 @@ from typing import Any
 from factory.core.detector import DYNAMIC_PARTITIONS, RomInfo
 from factory.core.fs_config import mezo_regenerate_fs_metadata
 from factory.core.image_extractor import _detect_format
+from factory.core.partition_modifications import (
+    get_partition_modification,
+    is_partition_modified,
+)
 from factory.core.super_builder import build_super_image
 from factory.core.toolchain import resolve_toolchain
 from factory.core.workspace import Workspace, write_json
@@ -215,6 +219,8 @@ def _write_repack_reports(ws: Workspace, data: dict[str, Any]) -> None:
             f"    workspace_folder: {entry.get('workspace_folder')}",
             f"    filesystem_type : {entry.get('filesystem_type')}",
             f"    modified        : {entry.get('modified')}",
+            f"    modified_by     : {', '.join(entry.get('modification_stages') or []) or '(none)'}",
+            f"    modify_reasons  : {'; '.join(entry.get('modification_reasons') or []) or '(none)'}",
             f"    status          : {entry.get('status')}",
             f"    original_size   : {entry.get('original_size')}",
             f"    rebuilt_size    : {entry.get('rebuilt_size')}",
@@ -235,13 +241,19 @@ def _write_repack_reports(ws: Workspace, data: dict[str, Any]) -> None:
 # ── main entry ────────────────────────────────────────────────────────────────
 
 def repack_partitions(ws: Workspace) -> dict[str, Any]:
-    """Rebuild each extracted dynamic partition directory into a valid .img.
+    """Rebuild only the dynamic partitions that were explicitly modified.
+
+    Modification is driven by ws.meta/partition_modifications.json (written by
+    the stages that actually change files — e.g. the Stable app policy), NOT by
+    the mere presence of an extracted ws.partitions/{name}/ tree.  The pipeline
+    extracts every partition for inspection, so an extracted-but-unmodified
+    partition must keep its original image.
 
     For every dynamic partition:
-    - If ws.partitions/{name}/ exists and is non-empty → detect FS type from
-      the original image header, repair fs_config/file_contexts, then rebuild.
-    - Otherwise → the original ws.images/{name}.img is used as-is (status:
-      copied or skipped).
+    - modified → detect FS type from the original image header, repair
+      fs_config/file_contexts, then rebuild (status: rebuilt / failed).
+    - not modified → the original ws.images/{name}.img is used as-is
+      (status: copied), or skipped if neither image nor mods exist.
 
     Raises PartitionRepackError (blocking super build) if any modified
     partition cannot be rebuilt.
@@ -254,14 +266,17 @@ def repack_partitions(ws: Workspace) -> dict[str, Any]:
         tree = ws.partitions / partition
         image = _image_for_partition(ws, partition)
         original_size = image.stat().st_size if image.is_file() else 0
-        is_modified = _tree_is_non_empty(tree)
+        modified = is_partition_modified(ws, partition)
+        mod_info = get_partition_modification(ws, partition)
 
         entry: dict[str, Any] = {
             "partition": partition,
             "original_image": str(image),
             "workspace_folder": str(tree),
             "filesystem_type": "unknown",
-            "modified": is_modified,
+            "modified": modified,
+            "modification_stages": mod_info.get("stages") or [],
+            "modification_reasons": mod_info.get("reasons") or [],
             "original_size": original_size,
             "rebuilt_size": 0,
             "command": "",
@@ -270,23 +285,36 @@ def repack_partitions(ws: Workspace) -> dict[str, Any]:
         }
         entries.append(entry)
 
-        if not is_modified:
+        if not modified:
             if not image.is_file():
-                entry.update(status="skipped", reason="no image and no extracted tree")
+                entry.update(
+                    status="skipped",
+                    reason="not modified and no original image present",
+                )
             else:
                 entry.update(
                     status="copied",
                     rebuilt_size=original_size,
-                    reason="unmodified — original image used",
+                    reason="not modified — original image preserved",
                 )
-            print(f"[REPACK] {partition}: {entry['status']}")
+            print(f"[REPACK] {partition}: {entry['status']} (not modified)")
+            continue
+
+        # ── modified partition: it must have an extracted tree to rebuild from ──
+        if not _tree_is_non_empty(tree):
+            entry.update(
+                status="failed",
+                reason="partition marked modified but no extracted tree to rebuild from",
+            )
+            failed.append(partition)
+            print(f"[REPACK] {partition}: FAILED — marked modified but tree is empty")
             continue
 
         # ── modified partition: detect FS and rebuild ──────────────────────
         if not image.is_file():
             entry.update(
                 status="failed",
-                reason="extracted tree exists but original image not found — cannot detect filesystem type",
+                reason="partition marked modified but original image not found — cannot detect filesystem type",
             )
             failed.append(partition)
             print(f"[REPACK] {partition}: FAILED — original image missing")
