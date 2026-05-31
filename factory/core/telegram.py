@@ -276,6 +276,11 @@ class TelegramStatus:
         """Return all personal chat IDs (supports comma-separated IDs for multiple devs)."""
         return _parse_chat_ids(self.chat_id)
 
+    def _first_personal_chat_id(self) -> str:
+        """Return the first personal chat ID (the one used for live edits)."""
+        ids = self._all_personal_chat_ids()
+        return ids[0] if ids else self.chat_id
+
     def _all_broadcast_targets(self) -> list[str]:
         """Return all chat IDs that should receive broadcasts: personal chats + group."""
         targets = list(self._all_personal_chat_ids())
@@ -404,8 +409,9 @@ class TelegramStatus:
         targets = self._all_broadcast_targets()
         if len(targets) <= 1:
             return  # Only one target, already handled by _edit
+        primary = self._first_personal_chat_id()
         for chat_id in targets:
-            if chat_id == self.chat_id:
+            if chat_id == primary:
                 continue  # Already sent via _edit to primary personal chat
             payload = {
                 "chat_id": chat_id,
@@ -554,7 +560,7 @@ class TelegramStatus:
 
     def _base_payload(self, text: str) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "chat_id": self.chat_id,
+            "chat_id": self._first_personal_chat_id(),
             "text": str(text)[:MAX_TEXT_LEN],
             "disable_web_page_preview": True,
         }
