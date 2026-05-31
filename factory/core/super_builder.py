@@ -7,7 +7,7 @@ from typing import Any
 
 from factory.core.detector import DYNAMIC_PARTITIONS, RomInfo
 from factory.core.size_policy import SizePolicyError, apply_super_policy, collect_size_policy, load_policy, write_size_policy_report
-from factory.core.super_profile import build_super_profile
+from factory.core.super_profile import build_super_profile, resolve_image_sources
 from factory.core.toolchain import MISSING_LPMAKE_MESSAGE, resolve_toolchain
 from factory.core.workspace import Workspace, read_json, write_json
 
@@ -83,9 +83,9 @@ def _allocation(part: str, image: Path, layout: dict[str, Any], warnings: list[s
             raise RuntimeError(f"{part}.img is larger than metadata allocation")
         print(f"[SUPER] Allocation: {part}={original_size} source={entry.get('source')}")
         return original_size
-    checked = entry.get("safe_sources_checked") if isinstance(entry.get("safe_sources_checked"), list) else layout.get("metadata_priority")
     raise RuntimeError(
-        f"{part}.img has no metadata allocation; checked safe sources: {', '.join(str(item) for item in checked or [])}"
+        f"allocation metadata not found for {part}.img — "
+        "check super_image_input_report.txt and super_profile_report.txt for details"
     )
 
 
@@ -121,6 +121,85 @@ def _error_payload(error_type: str, cause: str) -> dict[str, str]:
         "suggested_fix": "Rebuild EROFS with compression/options matching original, reduce more content, or do not rebuild this partition",
         "suggested_check": "Check stable_partition_rebuild_report.json and super_profile_report.txt",
     }
+
+
+def _write_super_image_input_report(
+    ws: Workspace,
+    layout: dict[str, Any],
+    dynamic_images: dict[str, Path],
+    image_sources: dict[str, str],
+    missing_images: list[str],
+    lpmake_args: list[str],
+    payload_reextraction_skipped: bool,
+) -> None:
+    codename = (layout.get("device") or {}).get("codename") or "unknown"
+    data: dict[str, Any] = {
+        "codename": codename,
+        "super_config_source": layout.get("superconfig_source") or layout.get("metadata_source"),
+        "super_size": layout.get("target_super_size"),
+        "group_name": layout.get("dynamic_group_name"),
+        "slot_mode": layout.get("slot_mode"),
+        "partitions": [],
+        "missing_images": missing_images,
+        "lpmake_args": lpmake_args,
+        "payload_reextraction_skipped": payload_reextraction_skipped,
+        "status": "missing_images" if missing_images else "ok",
+    }
+    for part in layout.get("selected_partitions") or []:
+        img = dynamic_images.get(part)
+        data["partitions"].append({
+            "name": part,
+            "image_path": str(img) if img else None,
+            "image_source": image_sources.get(part, "missing"),
+            "size": img.stat().st_size if img and img.is_file() else 0,
+        })
+    ws.reports.mkdir(parents=True, exist_ok=True)
+    write_json(ws.reports / "super_image_input_report.json", data)
+    lines = [
+        "DeadZone Super Image Input Report",
+        "==================================",
+        f"codename               : {codename}",
+        f"super_config_source    : {data['super_config_source']}",
+        f"super_size             : {data['super_size']}",
+        f"group_name             : {data['group_name']}",
+        f"slot_mode              : {data['slot_mode']}",
+        f"payload_reextraction_skipped: {payload_reextraction_skipped}",
+        f"status                 : {data['status']}",
+        "",
+        "partition images:",
+    ]
+    for entry in data["partitions"]:
+        lines.append(
+            f"  {entry['name']}: path={entry['image_path'] or '(missing)'} "
+            f"source={entry['image_source']} size={entry['size']}"
+        )
+    if missing_images:
+        lines += ["", "missing images:"]
+        lines.extend(f"  - {name}" for name in missing_images)
+    if lpmake_args:
+        lines += ["", "lpmake command:"]
+        lines.append("  " + " ".join(str(a) for a in lpmake_args))
+    lines.append("")
+    (ws.reports / "super_image_input_report.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _check_super_image_inputs(
+    ws: Workspace,
+    layout: dict[str, Any],
+    dynamic_images: dict[str, Path],
+) -> tuple[dict[str, str], list[str]]:
+    """Check that all selected partitions have usable images. Returns (sources, missing)."""
+    image_sources = dict(layout.get("image_sources") or {})
+    if not image_sources:
+        image_sources = resolve_image_sources(ws, dynamic_images)
+    selected: list[str] = list(layout.get("selected_partitions") or dynamic_images.keys())
+    missing: list[str] = []
+    for part in selected:
+        img = dynamic_images.get(part)
+        if not img or not img.is_file() or img.stat().st_size == 0:
+            missing.append(part)
+            image_sources[part] = "missing"
+    return image_sources, missing
 
 
 def validate_pre_super_images(ws: Workspace, layout: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -372,6 +451,26 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
     print(f"[SIZE] Final ZIP max: {policy.get('final_zip_max_bytes')}")
     write_json(ws.meta / "super_profile.json", layout)
     dynamic_images = {name: Path(path) for name, path in layout.get("dynamic_images", {}).items()}
+    image_sources, missing_images = _check_super_image_inputs(ws, layout, dynamic_images)
+    payload_reextraction_skipped = bool(layout.get("payload_reextraction_skipped", True))
+    _write_super_image_input_report(
+        ws, layout, dynamic_images, image_sources,
+        missing_images=[], lpmake_args=[],
+        payload_reextraction_skipped=payload_reextraction_skipped,
+    )
+    if missing_images:
+        message = (
+            f"SUPER_IMAGE_INPUT_MISSING: partition image missing for super build: "
+            f"{', '.join(missing_images)}. "
+            f"Check super_image_input_report.txt for details."
+        )
+        _write_super_image_input_report(
+            ws, layout, dynamic_images, image_sources,
+            missing_images=missing_images, lpmake_args=[],
+            payload_reextraction_skipped=payload_reextraction_skipped,
+        )
+        _write_error_summary(ws, "super", message, layout)
+        raise RuntimeError(message)
     toolchain = resolve_toolchain(ws)
     lpmake = toolchain.path("lpmake")
     lpdump = toolchain.path("lpdump")
@@ -465,6 +564,11 @@ def build_super_image(ws: Workspace, info: RomInfo | None = None, inspection: di
             raise RuntimeError(message) from exc
         try:
             command = _build_lpmake_command(final_super, layout, dynamic_images, lpmake, warnings)
+            _write_super_image_input_report(
+                ws, layout, dynamic_images, image_sources,
+                missing_images=[], lpmake_args=command,
+                payload_reextraction_skipped=payload_reextraction_skipped,
+            )
         except RuntimeError as exc:
             message = str(exc)
             errors.append(message)

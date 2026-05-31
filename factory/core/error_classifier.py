@@ -13,8 +13,23 @@ _SIGNATURES: list[dict[str, Any]] = [
         "suggested_fix": "Verify the ROM URL is accessible and the download source is online",
     },
     {
+        "error_type": "SUPER_IMAGE_INPUT_MISSING",
+        "stage_hint": "super_img_input",
+        "patterns": ["super_image_input_missing", "partition image missing for super build"],
+        "cause": "Super image build failed: required partition image is missing",
+        "suggested_fix": "Check super_image_input_report.txt for missing partitions; ensure payload extraction and partition rebuild completed successfully",
+    },
+    {
+        "error_type": "SUPER_ALLOCATION_MISSING",
+        "stage_hint": "super_alloc",
+        "patterns": ["allocation metadata not found"],
+        "cause": "Super image build failed: partition size allocation metadata is missing",
+        "suggested_fix": "Check super_profile_report.txt and super_image_input_report.txt; SuperConfig or payload manifest must provide partition sizes",
+    },
+    {
         "error_type": "PAYLOAD_UNPACK_FAILED",
         "stage_hint": "unpack",
+        "stage_exclusions": ["super", "pre_super", "super_profile", "lpmake", "repack"],
         "patterns": ["payload.bin", "payload", "brotli", "zstandard", "unpack failed", "extraction failed", "ota package"],
         "cause": "ROM payload.bin extraction failed",
         "suggested_fix": "Check that the ROM URL points to a complete OTA zip and it is not corrupted",
@@ -147,6 +162,16 @@ def classify_error(error: str, stage: str = "") -> dict[str, Any]:
     for sig in _SIGNATURES:
         stage_hint = sig["stage_hint"]
         patterns: list[str] = sig["patterns"]
+        stage_exclusions: list[str] = sig.get("stage_exclusions") or []
+        stage_required: bool = bool(sig.get("stage_required"))
+
+        # Skip if the current stage is explicitly excluded for this signature
+        if stage_lower and any(excl in stage_lower for excl in stage_exclusions):
+            continue
+
+        # Skip if this signature requires stage context but stage doesn't match
+        if stage_required and stage_lower and stage_hint not in stage_lower:
+            continue
 
         stage_match = stage_hint in stage_lower or not stage_lower
         pattern_match = any(p in lower for p in patterns)

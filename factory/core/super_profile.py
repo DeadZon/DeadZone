@@ -93,6 +93,42 @@ def dynamic_images(ws: Workspace, partition_map: dict[str, Any]) -> dict[str, Pa
     return ordered
 
 
+def _resolve_rebuilt_partitions(ws: Workspace) -> set[str]:
+    """Return set of partition names successfully rebuilt by stable_partition_rebuild."""
+    report = read_json(ws.reports / "stable_partition_rebuild_report.json", {})
+    rebuilt: set[str] = set()
+    for entry in report.get("partitions") or []:
+        if isinstance(entry, dict) and entry.get("status") == "rebuilt":
+            name = str(entry.get("partition") or "")
+            if name:
+                rebuilt.add(name)
+    return rebuilt
+
+
+def _resolve_extracted_partitions(ws: Workspace) -> set[str]:
+    """Return set of partition names extracted from payload.bin."""
+    meta = read_json(ws.meta / "payload_extract.json", {})
+    extracted = meta.get("extracted_images") or {}
+    return set(extracted.keys()) if isinstance(extracted, dict) else set()
+
+
+def resolve_image_sources(ws: Workspace, images: dict[str, Path]) -> dict[str, str]:
+    """Map each partition to its image source: rebuilt / extracted / workspace / missing."""
+    rebuilt = _resolve_rebuilt_partitions(ws)
+    extracted = _resolve_extracted_partitions(ws)
+    sources: dict[str, str] = {}
+    for part, path in images.items():
+        if part in rebuilt:
+            sources[part] = "rebuilt"
+        elif part in extracted:
+            sources[part] = "extracted"
+        elif path.is_file():
+            sources[part] = "workspace"
+        else:
+            sources[part] = "missing"
+    return sources
+
+
 def _partition_sizes(super_layout: dict[str, Any], partition_map: dict[str, Any]) -> dict[str, int]:
     result: dict[str, int] = {}
     for source in [super_layout.get("partition_sizes"), partition_map.get("partition_sizes")]:
@@ -388,6 +424,7 @@ def build_super_profile(
     is_vab = slot_mode == "VAB"
     group_name = str(group_name_value or "qti_dynamic_partitions").removesuffix("_a").removesuffix("_b")
     images = dynamic_images(ws, partition_map)
+    image_sources = resolve_image_sources(ws, images)
     selected = [name for name in sorted(DYNAMIC_PARTITIONS) if name in images]
     metadata_source = size_source
     if detected_sizes and metadata_source == "unresolved":
@@ -526,6 +563,8 @@ def build_super_profile(
         "vab_zero_b_partitions": vab_zero_b,
         "selected_partitions": selected,
         "dynamic_images": {name: str(path) for name, path in images.items()},
+        "image_sources": image_sources,
+        "payload_reextraction_skipped": True,
         "allow_image_size_allocations": False,
         "device": {
             "codename": device_config.get("resolved_codename") or device_config.get("codename"),
