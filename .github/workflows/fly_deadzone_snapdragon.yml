@@ -152,8 +152,16 @@ jobs:
             --env MODE=${{ inputs.mode }} \
             --env UPLOAD_PIXELDRAIN=${{ inputs.upload_pixeldrain }} \
             --env ALLOW_OVERSIZED=${{ inputs.allow_oversized_final }} \
+            --env TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }} \
+            --env TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }} \
+            --env TELEGRAM_CHAT_IDS=${{ secrets.TELEGRAM_CHAT_IDS }} \
+            --env TELEGRAM_MTK_BOT_TOKEN=${{ secrets.TELEGRAM_MTK_BOT_TOKEN }} \
+            --env TELEGRAM_MTK_CHAT_ID=${{ secrets.TELEGRAM_MTK_CHAT_ID }} \
+            --env TELEGRAM_MTK_CHAT_IDS=${{ secrets.TELEGRAM_MTK_CHAT_IDS }} \
+            --env TELEGRAM_MTK_GROUP_ID=${{ secrets.TELEGRAM_MTK_GROUP_ID }} \
             --env TELEGRAM_SNAPDRAGON_BOT_TOKEN=${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }} \
             --env TELEGRAM_SNAPDRAGON_CHAT_ID=${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }} \
+            --env TELEGRAM_SNAPDRAGON_CHAT_IDS=${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_IDS }} \
             --env TELEGRAM_SNAPDRAGON_GROUP_ID=${{ secrets.TELEGRAM_SNAPDRAGON_GROUP_ID }} \
             --env GITHUB_REPOSITORY=${{ github.repository }} \
             --rm

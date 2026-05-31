@@ -261,10 +261,13 @@ jobs:
           PIXELDRAIN_API_KEY: ${{ secrets.PIXELDRAIN_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHAT_IDS: ${{ secrets.TELEGRAM_CHAT_IDS }}
           TELEGRAM_MTK_BOT_TOKEN: ${{ secrets.TELEGRAM_MTK_BOT_TOKEN }}
           TELEGRAM_MTK_CHAT_ID: ${{ secrets.TELEGRAM_MTK_CHAT_ID }}
+          TELEGRAM_MTK_CHAT_IDS: ${{ secrets.TELEGRAM_MTK_CHAT_IDS }}
           TELEGRAM_SNAPDRAGON_BOT_TOKEN: ${{ secrets.TELEGRAM_SNAPDRAGON_BOT_TOKEN }}
           TELEGRAM_SNAPDRAGON_CHAT_ID: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_ID }}
+          TELEGRAM_SNAPDRAGON_CHAT_IDS: ${{ secrets.TELEGRAM_SNAPDRAGON_CHAT_IDS }}
         run: |
           ROM_URL="${{ inputs.rom_url }}"
           STYLE="${{ inputs.style }}"

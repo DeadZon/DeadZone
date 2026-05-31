@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
 """Telegram status notifications for DeadZone builds.
 
-Sends live updates to personal chat (editable messages) and broadcasts
-final status + log documents to all targets (personal chats + group).
-Supports multiple personal chat IDs via comma-separated TELEGRAM_*_CHAT_ID.
+Sends live updates to all resolved recipients (editable messages per-chat) and
+broadcasts final status + log documents to all targets. Supports multiple chat IDs
+via TELEGRAM_*_CHAT_IDS (comma-separated) with backward compat for single-ID secrets.
+
+Recipient priority (MTK example):
+  1. TELEGRAM_MTK_CHAT_IDS   (comma-separated, preferred)
+  2. TELEGRAM_CHAT_IDS       (generic multi, fallback)
+  3. TELEGRAM_MTK_CHAT_ID    (single, backward compat)
+  4. TELEGRAM_CHAT_ID        (generic single, fallback)
+  Plus TELEGRAM_MTK_GROUP_ID appended if not already present.
 """
 from __future__ import annotations
 
@@ -130,6 +137,8 @@ _TIMELINE_STAGES = [
 
 def _stage_title(stage_id: str) -> str:
     return STAGE_DISPLAY.get(stage_id, {}).get("title", stage_id)
+
+
 MAX_DOCUMENT_BYTES = int(os.environ.get("TELEGRAM_MAX_DOCUMENT_BYTES", str(50 * 1024 * 1024)))
 _TELEGRAM_THROTTLE_SECONDS = float(os.environ.get("TELEGRAM_THROTTLE_SECONDS", "5"))
 _TELEGRAM_MIN_UPDATE_SECONDS = 8.0
@@ -160,40 +169,109 @@ def _ascii(value: object) -> str:
     return ("" if value is None else str(value)).encode("ascii", errors="replace").decode("ascii")
 
 
-def _credentials_for_soc(soc: str) -> tuple[str, str]:
-    key = soc.strip().lower()
-    if key == "mtk":
-        return (
-            _env_first("TELEGRAM_MTK_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
-            _env_first("TELEGRAM_MTK_CHAT_ID", "TELEGRAM_CHAT_ID"),
-        )
-    if key == "snapdragon":
-        return (
-            _env_first("TELEGRAM_SNAPDRAGON_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
-            _env_first("TELEGRAM_SNAPDRAGON_CHAT_ID", "TELEGRAM_CHAT_ID"),
-        )
-    return (_env_first("TELEGRAM_BOT_TOKEN"), _env_first("TELEGRAM_CHAT_ID"))
-
-
-def _group_credentials_for_soc(soc: str) -> tuple[str, str]:
-    """Return (bot_token, group_chat_id) for the given SoC group chat."""
-    key = soc.strip().lower()
-    if key == "mtk":
-        return (
-            _env_first("TELEGRAM_MTK_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
-            _env_first("TELEGRAM_MTK_GROUP_ID"),
-        )
-    if key == "snapdragon":
-        return (
-            _env_first("TELEGRAM_SNAPDRAGON_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"),
-            _env_first("TELEGRAM_SNAPDRAGON_GROUP_ID"),
-        )
-    return ("", "")
+def _mask_chat_id(chat_id: str) -> str:
+    """Return a masked version of a chat ID for safe logging (e.g. ***6789)."""
+    s = str(chat_id or "")
+    if not s:
+        return "(empty)"
+    if len(s) <= 4:
+        return "***"
+    return f"***{s[-4:]}"
 
 
 def _parse_chat_ids(raw: str) -> list[str]:
-    """Parse comma-separated chat IDs into a list of non-empty strings."""
-    return [cid.strip() for cid in raw.split(",") if cid.strip()]
+    """Parse comma-separated chat IDs — trimmed, deduplicated, non-empty."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for cid in raw.split(","):
+        cid = cid.strip()
+        if cid and cid not in seen:
+            seen.add(cid)
+            result.append(cid)
+    return result
+
+
+def _resolve_recipients_with_source(soc: str | None) -> tuple[list[str], str]:
+    """Return (chat_id_list, env_var_used) for the given SoC.
+
+    Uses priority fallback: SOC-specific CHAT_IDS → generic CHAT_IDS →
+    SOC-specific CHAT_ID → generic CHAT_ID. Group IDs (TELEGRAM_*_GROUP_ID)
+    are appended as extra targets for backward compatibility.
+    """
+    key = (soc or "").strip().lower()
+
+    if key == "mtk":
+        primary_vars = [
+            "TELEGRAM_MTK_CHAT_IDS",
+            "TELEGRAM_CHAT_IDS",
+            "TELEGRAM_MTK_CHAT_ID",
+            "TELEGRAM_CHAT_ID",
+        ]
+        extra_vars = ["TELEGRAM_MTK_GROUP_ID"]
+    elif key == "snapdragon":
+        primary_vars = [
+            "TELEGRAM_SNAPDRAGON_CHAT_IDS",
+            "TELEGRAM_CHAT_IDS",
+            "TELEGRAM_SNAPDRAGON_CHAT_ID",
+            "TELEGRAM_CHAT_ID",
+        ]
+        extra_vars = ["TELEGRAM_SNAPDRAGON_GROUP_ID"]
+    else:
+        primary_vars = [
+            "TELEGRAM_CHAT_IDS",
+            "TELEGRAM_CHAT_ID",
+        ]
+        extra_vars = []
+
+    # Use first env var that contains a non-empty value
+    primary_ids: list[str] = []
+    source_var = ""
+    for var in primary_vars:
+        raw = os.environ.get(var, "").strip()
+        if raw:
+            primary_ids = _parse_chat_ids(raw)
+            source_var = var
+            break
+
+    # Append group IDs (backward compat) if not already present
+    seen = set(primary_ids)
+    result = list(primary_ids)
+    for var in extra_vars:
+        raw = os.environ.get(var, "").strip()
+        if raw and raw not in seen:
+            seen.add(raw)
+            result.append(raw)
+
+    return result, source_var
+
+
+def resolve_telegram_recipients(soc: str | None = None) -> list[str]:
+    """Return deduplicated list of chat IDs for the given SoC, in priority order.
+
+    Supports negative group chat IDs. Trims whitespace. Deduplicates.
+    Old single-ID secrets (TELEGRAM_CHAT_ID etc.) remain fully supported.
+    Never reads or prints TELEGRAM_BOT_TOKEN.
+    """
+    recipients, _ = _resolve_recipients_with_source(soc)
+    return recipients
+
+
+def _bot_token_for_soc(soc: str) -> str:
+    """Return the bot token for the given SoC."""
+    key = soc.strip().lower()
+    if key == "mtk":
+        return _env_first("TELEGRAM_MTK_BOT_TOKEN", "TELEGRAM_BOT_TOKEN")
+    if key == "snapdragon":
+        return _env_first("TELEGRAM_SNAPDRAGON_BOT_TOKEN", "TELEGRAM_BOT_TOKEN")
+    return _env_first("TELEGRAM_BOT_TOKEN")
+
+
+def _credentials_for_soc(soc: str) -> tuple[str, str]:
+    """Return (bot_token, primary_chat_id) — kept for backward compat."""
+    token = _bot_token_for_soc(soc)
+    recipients = resolve_telegram_recipients(soc)
+    chat_id = recipients[0] if recipients else ""
+    return token, chat_id
 
 
 def _display_source(value: str) -> str:
@@ -255,10 +333,11 @@ class TelegramStatus:
         self.failed_stage = ""
         self.error_summary = ""
         self.workspace = workspace
-        self.token, self.chat_id = _credentials_for_soc(soc)
+        self.token = _bot_token_for_soc(soc)
+        self._recipients, self._recipient_source = _resolve_recipients_with_source(soc)
+        # Primary chat ID — first recipient or empty; kept for backward compat
+        self.chat_id = self._recipients[0] if self._recipients else ""
         self.thread_id = _env_first("TELEGRAM_THREAD_ID", "TELEGRAM_MESSAGE_THREAD_ID")
-        # Group chat credentials (for broadcasting final status + documents)
-        self._group_token, self._group_chat_id = _group_credentials_for_soc(soc)
         self.started_at = time.monotonic()
         self._classified_error: dict = {}
         self.events: list[dict[str, str]] = []
@@ -267,55 +346,95 @@ class TelegramStatus:
         self.status = "not requested"
         self.enabled = False
         self.attempted = False
-        self.message_id = self._existing_message_id()
+        # Per-chat message IDs: {chat_id: message_id}
+        self._message_ids: dict[str, int] = self._existing_message_ids()
         self._last_edit_at: float = 0.0
         self._last_stage: str = ""
         self._update_interval_seconds = _default_update_interval()
+        # Per-run send/edit tracking for debug report
+        self._sent_chats: list[str] = []
+        self._edited_chats: list[str] = []
+        self._failed_chats: list[tuple[str, str]] = []
+
+    # ── Recipient helpers ────────────────────────────────────────────────────
+
+    def _all_recipients(self) -> list[str]:
+        """Return all resolved chat IDs. Falls back to self.chat_id for test compat."""
+        if self._recipients:
+            return list(self._recipients)
+        # Fallback: chat_id may have been set directly (e.g. in tests)
+        return [self.chat_id] if self.chat_id else []
+
+    # ── Backward-compat message_id property ─────────────────────────────────
+
+    @property
+    def message_id(self) -> int | None:
+        """Primary chat's message ID (backward compat — use _message_ids for multi-chat)."""
+        primary = self.chat_id
+        if primary and primary in self._message_ids:
+            return self._message_ids[primary]
+        if self._message_ids:
+            return next(iter(self._message_ids.values()))
+        return None
+
+    @message_id.setter
+    def message_id(self, value: int | None) -> None:
+        primary = self.chat_id
+        if value is not None and primary:
+            self._message_ids[primary] = int(value)
+        elif value is None and primary and primary in self._message_ids:
+            del self._message_ids[primary]
+
+    # ── Backward-compat helpers (kept for any callers) ───────────────────────
 
     def _all_personal_chat_ids(self) -> list[str]:
-        """Return all personal chat IDs (supports comma-separated IDs for multiple devs)."""
-        return _parse_chat_ids(self.chat_id)
-
-    def _first_personal_chat_id(self) -> str:
-        """Return the first personal chat ID (the one used for live edits)."""
-        ids = self._all_personal_chat_ids()
-        return ids[0] if ids else self.chat_id
+        return self._all_recipients()
 
     def _all_broadcast_targets(self) -> list[str]:
-        """Return all chat IDs that should receive broadcasts: personal chats + group."""
-        targets = list(self._all_personal_chat_ids())
-        if self._group_chat_id and self._group_chat_id not in targets:
-            targets.append(self._group_chat_id)
-        return targets
+        return self._all_recipients()
+
+    # ── Lifecycle ────────────────────────────────────────────────────────────
 
     def start(self) -> TelegramResult:
         if not self.requested:
             return self.result("not requested")
-        if not self.token or not self.chat_id:
+        recipients = self._all_recipients()
+        if not self.token or not recipients:
             self.status = "skipped"
             self.warnings.append("Telegram credentials are missing; status notifications skipped")
-            print("[TELEGRAM] Status: skipped; missing TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID")
+            print("[TELEGRAM] Status: skipped; missing TELEGRAM_BOT_TOKEN / chat ID")
             return self.result("skipped")
         self.enabled = True
         self.add_event("build started", "RUN")
         self.attempted = True
-        if self.message_id is not None:
-            response = self._edit(self._format("RUNNING"))
-        else:
-            response = self._send(self._format("RUNNING"))
-        if response.get("ok"):
+        text = self._format("RUNNING")
+        any_ok = False
+        for chat_id in recipients:
+            existing = self._message_ids.get(chat_id)
+            if existing is not None:
+                response = self._edit_chat(chat_id, existing, text)
+            else:
+                response = self._send_to(chat_id, text)
+            if response.get("ok"):
+                any_ok = True
+                result_data = response.get("result") or {}
+                if isinstance(result_data, dict):
+                    msg_id = result_data.get("message_id")
+                    if msg_id is not None:
+                        self._message_ids[chat_id] = int(msg_id)
+            else:
+                err = str(response.get("error") or "initial Telegram send failed")
+                self.errors.append(f"initial send failed for {_mask_chat_id(chat_id)}: {err}")
+                self._failed_chats.append((chat_id, err))
+        if any_ok:
             self.status = "running"
-            if isinstance(response.get("result"), dict):
-                message_id = response["result"].get("message_id")
-                if message_id is not None:
-                    self.message_id = int(message_id)
             self._last_edit_at = time.monotonic()
             self._save_message_id()
-            print("[TELEGRAM] Status: running")
+            active = len(self._message_ids)
+            print(f"[TELEGRAM] Status: running (recipients={len(recipients)}, active={active})")
             return self.result("running")
         self.status = "failed"
-        self.errors.append(str(response.get("error") or "initial Telegram send failed"))
-        print("[TELEGRAM] Status: initial send failed")
+        print("[TELEGRAM] Status: initial send failed for all recipients")
         return self.result("failed")
 
     def add_event(self, name: str, status: str, detail: str = "") -> TelegramResult:
@@ -323,7 +442,7 @@ class TelegramStatus:
             return self.result("not requested")
         clean_status = status.upper()
         self.events.append({"name": name, "status": clean_status, "detail": detail})
-        if not self.enabled or self.message_id is None:
+        if not self.enabled or not self._message_ids:
             return self.result(self.status)
         now = time.monotonic()
         stage_changed = clean_status == "RUN" and name != self._last_stage
@@ -343,14 +462,32 @@ class TelegramStatus:
             print(f"[TELEGRAM] edit live message: reason=interval stage={name} elapsed={elapsed:.0f}s")
         else:
             print(f"[TELEGRAM] edit live message: reason={reason} stage={name}")
-        response = self._edit(self._format("RUNNING"))
-        if response.get("ok"):
+        text = self._format("RUNNING")
+        any_ok = False
+        for chat_id, msg_id in list(self._message_ids.items()):
+            response = self._edit_chat(chat_id, msg_id, text)
+            if response.get("ok"):
+                any_ok = True
+                self._edited_chats.append(chat_id)
+            else:
+                # Fallback: send a new message so this chat stays updated
+                fallback = self._send_to(chat_id, text)
+                if fallback.get("ok"):
+                    any_ok = True
+                    result_data = fallback.get("result") or {}
+                    if isinstance(result_data, dict) and result_data.get("message_id"):
+                        self._message_ids[chat_id] = int(result_data["message_id"])
+                    self._sent_chats.append(chat_id)
+                else:
+                    err = str(response.get("error") or "Telegram update failed")
+                    self.errors.append(f"update failed for {_mask_chat_id(chat_id)}: {err}")
+                    self._failed_chats.append((chat_id, err))
+        if any_ok:
             self._last_edit_at = time.monotonic()
             self.status = "updated"
             return self.result("updated")
-        self.errors.append(str(response.get("error") or "Telegram update failed"))
         self.status = "failed"
-        print("[TELEGRAM] Status: update failed")
+        print("[TELEGRAM] Status: update failed for all recipients")
         return self.result("failed")
 
     def finish(
@@ -379,51 +516,55 @@ class TelegramStatus:
         self.attempted = True
         reason = "final_success" if final_status.upper() == "OK" else "final_failure"
         print(f"[TELEGRAM] edit live message: reason={reason}")
-        if self.message_id is None:
-            self.errors.append("Telegram final update skipped because no live message_id exists")
+        if not self._message_ids:
+            self.errors.append("Telegram final update skipped because no live message_id map exists")
             self.status = "failed"
             return self.result("failed")
-        response = self._edit(text)
-        if response.get("ok"):
+        any_ok = False
+        for chat_id, msg_id in list(self._message_ids.items()):
+            response = self._edit_chat(chat_id, msg_id, text)
+            if response.get("ok"):
+                any_ok = True
+                result_data = response.get("result") or {}
+                if isinstance(result_data, dict) and result_data.get("message_id") is not None:
+                    self._message_ids[chat_id] = int(result_data["message_id"])
+                self._edited_chats.append(chat_id)
+            else:
+                # One chat failed to edit — fall back to sendMessage for it
+                fallback = self._send_to(chat_id, text)
+                if fallback.get("ok"):
+                    any_ok = True
+                    result_data = fallback.get("result") or {}
+                    if isinstance(result_data, dict) and result_data.get("message_id") is not None:
+                        self._message_ids[chat_id] = int(result_data["message_id"])
+                    self._sent_chats.append(chat_id)
+                else:
+                    err = str(response.get("error") or "Telegram final update failed")
+                    self.errors.append(f"final update failed for {_mask_chat_id(chat_id)}: {err}")
+                    self._failed_chats.append((chat_id, err))
+        # Send to any recipients that never got a live message (e.g. added after start)
+        for chat_id in self._all_recipients():
+            if chat_id not in self._message_ids:
+                extra = self._send_to(chat_id, text)
+                if extra.get("ok"):
+                    any_ok = True
+                    result_data = extra.get("result") or {}
+                    if isinstance(result_data, dict) and result_data.get("message_id") is not None:
+                        self._message_ids[chat_id] = int(result_data["message_id"])
+                    self._sent_chats.append(chat_id)
+        if any_ok:
             self.status = "completed" if final_status.upper() == "OK" else "failed"
-            if isinstance(response.get("result"), dict) and response["result"].get("message_id") is not None:
-                self.message_id = int(response["result"]["message_id"])
             self._save_message_id()
             print(f"[TELEGRAM] Status: {self.status}")
         else:
-            self.errors.append(str(response.get("error") or "Telegram final update failed"))
             self.status = "failed"
-            print("[TELEGRAM] Status: final update failed")
-
-        # Broadcast final status to all targets (personal chats + group)
-        self._broadcast_final(text, final_status)
+            print("[TELEGRAM] Status: final update failed for all recipients")
 
         # On failure: send log files as documents to all targets
         if final_status.upper() not in {"OK", "DONE"}:
             self._send_failure_documents()
 
         return self.result(self.status)
-
-    def _broadcast_final(self, text: str, final_status: str) -> None:
-        """Send the final status message to all broadcast targets (personal + group)."""
-        targets = self._all_broadcast_targets()
-        if len(targets) <= 1:
-            return  # Only one target, already handled by _edit
-        primary = self._first_personal_chat_id()
-        for chat_id in targets:
-            if chat_id == primary:
-                continue  # Already sent via _edit to primary personal chat
-            payload = {
-                "chat_id": chat_id,
-                "text": str(text)[:MAX_TEXT_LEN],
-                "disable_web_page_preview": True,
-            }
-            if self.thread_id:
-                try:
-                    payload["message_thread_id"] = int(self.thread_id)
-                except ValueError:
-                    pass
-            self._post("sendMessage", payload)
 
     def _send_failure_documents(self) -> None:
         """Send log files as documents to all targets on build failure."""
@@ -432,12 +573,11 @@ class TelegramStatus:
             reports_dir / "stable_matching_debug_report.txt",
             reports_dir / "stable_package_scan_report.json",
         ]
-        # Also check for build.log from the bash wrapper
         build_log = Path("/mnt/dz_data/build.log")
         if build_log.is_file():
             log_files.append(build_log)
 
-        targets = self._all_broadcast_targets()
+        targets = self._all_recipients()
         for log_path in log_files:
             if not log_path.is_file():
                 continue
@@ -511,8 +651,7 @@ class TelegramStatus:
                 f"removed_bytes={_ascii(norm.get('removed_bytes', 0))}"
             )
         caption = "\n".join(caption_parts)
-        # Send to all broadcast targets
-        targets = self._all_broadcast_targets()
+        targets = self._all_recipients()
         for chat_id in targets:
             self._send_document_to(chat_id, inventory_zip, caption)
         self.attempted = True
@@ -533,34 +672,130 @@ class TelegramStatus:
             errors=list(self.errors),
         )
 
-    def _existing_message_id(self) -> int | None:
+    def write_report(self) -> TelegramResult:
+        """Write a debug report about recipient resolution and notification activity."""
+        report_path = self.workspace.reports / "telegram_recipients_debug.txt"
+        try:
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            recipients = self._all_recipients()
+            lines = [
+                "Telegram Recipients Debug Report",
+                "================================",
+                f"soc: {_ascii(self.soc)}",
+                f"env_source: {self._recipient_source or '(none)'}",
+                f"recipient_count: {len(recipients)}",
+                f"masked_recipients: {[_mask_chat_id(c) for c in recipients]}",
+                f"notifier_mode: {'multi' if len(recipients) > 1 else 'single'}",
+                f"message_id_map_exists: {bool(self._message_ids)}",
+                f"message_id_map: { {_mask_chat_id(k): v for k, v in self._message_ids.items()} }",
+                "",
+                "Per-chat notification actions:",
+            ]
+            for chat_id in recipients:
+                masked = _mask_chat_id(chat_id)
+                if chat_id in self._message_ids:
+                    lines.append(f"  {masked}: tracked (msg_id={self._message_ids[chat_id]})")
+                else:
+                    lines.append(f"  {masked}: no message_id (not reached by start)")
+            if self._edited_chats:
+                lines.append(f"editMessageText sent to: {[_mask_chat_id(c) for c in self._edited_chats]}")
+            if self._sent_chats:
+                lines.append(f"sendMessage sent to: {[_mask_chat_id(c) for c in self._sent_chats]}")
+            if self._failed_chats:
+                lines.append("Failed recipients:")
+                for chat_id, err in self._failed_chats:
+                    lines.append(f"  {_mask_chat_id(chat_id)}: {err[:120]}")
+            lines.append("")
+            lines.append(f"final_status: {self.status}")
+            report_path.write_text("\n".join(lines), encoding="utf-8")
+        except Exception as exc:
+            self.warnings.append(f"Could not write telegram debug report: {exc}")
+        return self.result(self.status)
+
+    # ── Persistence ──────────────────────────────────────────────────────────
+
+    def _existing_message_ids(self) -> dict[str, int]:
+        """Load per-chat message ID map from disk/env, with backward compat."""
+        stored = read_json(self.workspace.meta / "telegram_status.json", {})
+
+        # New format: {"message_ids": {"chat_id": msg_id, ...}}
+        if isinstance(stored.get("message_ids"), dict):
+            result: dict[str, int] = {}
+            for cid, mid in stored["message_ids"].items():
+                try:
+                    result[str(cid)] = int(mid)
+                except (ValueError, TypeError):
+                    pass
+            if result:
+                return result
+
+        # Old format: single message_id from env or JSON
         raw = os.environ.get("DEADZONE_TELEGRAM_MESSAGE_ID", "").strip()
         if not raw:
-            stored = read_json(self.workspace.meta / "telegram_status.json", {})
             raw = str(stored.get("message_id") or "").strip()
-        if not raw:
-            return None
-        try:
-            return int(raw)
-        except ValueError:
-            self.warnings.append("DEADZONE_TELEGRAM_MESSAGE_ID is not an integer; sending a new message")
-            return None
+        if raw:
+            try:
+                msg_id = int(raw)
+                primary = self.chat_id
+                if primary:
+                    return {primary: msg_id}
+            except ValueError:
+                self.warnings.append("DEADZONE_TELEGRAM_MESSAGE_ID is not an integer; sending a new message")
+        return {}
 
     def _save_message_id(self) -> None:
-        if self.message_id is None:
+        if not self._message_ids:
             return
         write_json(
             self.workspace.meta / "telegram_status.json",
             {
-                "message_id": self.message_id,
+                "message_ids": self._message_ids,
+                "message_id": self.message_id,  # backward compat
                 "chat_id": self.chat_id,
                 "status": self.status,
             },
         )
 
+    # ── Low-level send helpers ───────────────────────────────────────────────
+
+    def _send_to(self, chat_id: str, text: str) -> dict[str, Any]:
+        """Send a new message to a specific chat."""
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": str(text)[:MAX_TEXT_LEN],
+            "disable_web_page_preview": True,
+        }
+        if self.thread_id:
+            try:
+                payload["message_thread_id"] = int(self.thread_id)
+            except ValueError:
+                if "Telegram thread id is not an integer; topic support skipped" not in self.warnings:
+                    self.warnings.append("Telegram thread id is not an integer; topic support skipped")
+        return self._post("sendMessage", payload)
+
+    def _edit_chat(self, chat_id: str, msg_id: int, text: str) -> dict[str, Any]:
+        """Edit an existing message for a specific chat. Returns response dict."""
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": msg_id,
+            "text": str(text)[:MAX_TEXT_LEN],
+            "disable_web_page_preview": True,
+        }
+        if self.thread_id:
+            try:
+                payload["message_thread_id"] = int(self.thread_id)
+            except ValueError:
+                pass
+        response = self._post("editMessageText", payload)
+        if not response.get("ok"):
+            self.warnings.append(f"Telegram edit failed for {_mask_chat_id(chat_id)}; will fallback to sendMessage")
+        return response
+
+    # ── Kept for backward compat (tests mock _post directly) ────────────────
+
     def _base_payload(self, text: str) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "chat_id": self._first_personal_chat_id(),
+            "chat_id": self.chat_id,
             "text": str(text)[:MAX_TEXT_LEN],
             "disable_web_page_preview": True,
         }
