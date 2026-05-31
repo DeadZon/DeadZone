@@ -18,6 +18,7 @@ from factory.core.stable_app_policy import (
     _build_allowed_dirs,
     _extract_package,
     _find_apk,
+    _folder_canonical,
     _is_in_allowed,
     _parse_expected_apps,
     enforce_stable_app_policy,
@@ -752,9 +753,242 @@ def test_matching_debug_report_and_guard_details_are_written_on_unsafe(tmp_path)
 
     debug = (tmp_path / "reports" / "stable_matching_debug_report.txt").read_text(encoding="utf-8")
     report = json.loads((tmp_path / "reports" / "stable_app_policy_report.json").read_text(encoding="utf-8"))
-    assert "first 50 scanned apps" in debug
+    assert "top 50 scanned apps" in debug
     assert "common packages between scanned and expected" in debug
     assert report["safety_guard"]["scanned_apps_count"] == 1
     assert "matched_expected_ratio below threshold" in report["safety_guard"]["reasons"]
     assert "package_tools_available" in report["safety_guard"]
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+# ---------------------------------------------------------------------------
+# New tests: parser prose filtering, folder/path matching, aliases
+# ---------------------------------------------------------------------------
+
+PROSE_APPS_LIST = """\
+system/system/app
+or
+fine
+remove
+oat
+
+BluetoothMidiService
+com.android.bluetoothmidiservice
+
+product / app
+
+AiAsstVision
+com.xiaomi.aiasst.vision
+"""
+
+
+def test_parser_ignores_prose_tokens(tmp_path):
+    p = tmp_path / "apps.list"
+    p.write_text(PROSE_APPS_LIST, encoding="utf-8")
+    entries = _parse_expected_apps(p)
+    names = {e["name"] for e in entries}
+    for noise in ("or", "fine", "remove", "oat"):
+        assert noise not in names, f"prose token '{noise}' must not become an app entry"
+
+
+def test_parser_extracts_correct_section_and_path(tmp_path):
+    p = tmp_path / "apps.list"
+    p.write_text(PROSE_APPS_LIST, encoding="utf-8")
+    entries = _parse_expected_apps(p)
+    by_name = {e["name"]: e for e in entries}
+    assert "BluetoothMidiService" in by_name
+    assert by_name["BluetoothMidiService"]["partition"] == "system"
+    assert by_name["BluetoothMidiService"]["app_type"] == "app"
+    assert by_name["BluetoothMidiService"]["expected_path"] == "system/app/BluetoothMidiService"
+
+
+def test_parser_extracts_product_app_aiassstvision(tmp_path):
+    p = tmp_path / "apps.list"
+    p.write_text(PROSE_APPS_LIST, encoding="utf-8")
+    entries = _parse_expected_apps(p)
+    by_name = {e["name"]: e for e in entries}
+    assert "AiAsstVision" in by_name
+    e = by_name["AiAsstVision"]
+    assert e["partition"] == "product"
+    assert e["app_type"] == "app"
+    assert e["package"] == "com.xiaomi.aiasst.vision"
+    assert e["expected_path"] == "product/app/AiAsstVision"
+
+
+def test_exact_folder_match_found_even_if_package_unknown(tmp_path):
+    """Scanned app has UNKNOWN package; exact folder match should mark it FOUND."""
+    apps_list = _write_apps_list(tmp_path)
+    partitions_root = tmp_path / "partitions"
+    _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    scanned = [_scanned_app("system", "app", "BluetoothMidiService", "UNKNOWN", partitions_root)]
+    allowed = _build_allowed_dirs(partitions_root)
+    from factory.reports.app_inventory import _parse_apps_list
+    expected = _parse_apps_list(apps_list)
+    result = _classify(scanned, expected, allowed)
+    kept_names = {a["name"] for a in result["kept"]}
+    assert "BluetoothMidiService" in kept_names
+    assert result["match_stats"]["matched_by_folder"] >= 1
+    assert result["match_stats"]["package_unknown_but_folder_matched"] >= 1
+    # Must NOT appear in missing or unknown
+    missing_names = {m["name"] for m in result["missing"]}
+    assert "BluetoothMidiService" not in missing_names
+    unknown_names = {u.get("folder_name") or u.get("name") for u in result["unknown"]}
+    assert "BluetoothMidiService" not in unknown_names
+
+
+def test_case_insensitive_folder_match_succeeds(tmp_path):
+    """Scanned folder name differs only in case from expected; must still match."""
+    apps_list = _write_apps_list(tmp_path)
+    partitions_root = tmp_path / "partitions"
+    # Folder on disk has different casing
+    _make_app_folder(partitions_root, "system", "app", "bluetoothmidiservice")
+    scanned = [_scanned_app("system", "app", "bluetoothmidiservice", "UNKNOWN", partitions_root)]
+    allowed = _build_allowed_dirs(partitions_root)
+    from factory.reports.app_inventory import _parse_apps_list
+    expected = _parse_apps_list(apps_list)
+    result = _classify(scanned, expected, allowed)
+    # Must be matched by folder (case-insensitive)
+    assert result["match_stats"]["matched_by_folder"] >= 1
+    missing_names = {m["name"] for m in result["missing"]}
+    assert "BluetoothMidiService" not in missing_names
+
+
+def test_alias_aiassstvision_case_variant(tmp_path):
+    """AiAsstVision and AiasstVision both lowercase to the same string — case-insensitive match covers this."""
+    content = "product / app\n\nAiAsstVision\ncom.xiaomi.aiasst.vision\n"
+    apps_list = tmp_path / "apps.list"
+    apps_list.write_text(content, encoding="utf-8")
+    partitions_root = tmp_path / "partitions"
+    # Device folder uses different casing
+    _make_app_folder(partitions_root, "product", "app", "AiasstVision")
+    scanned = [_scanned_app("product", "app", "AiasstVision", "UNKNOWN", partitions_root)]
+    allowed = _build_allowed_dirs(partitions_root)
+    expected = _parse_expected_apps(apps_list)
+    result = _classify(scanned, expected, allowed)
+    # AiAsstVision and AiasstVision are the same when lowercased → folder match
+    assert result["match_stats"]["matched_by_folder"] >= 1
+    missing_names = {m["name"] for m in result["missing"]}
+    assert "AiAsstVision" not in missing_names
+
+
+def test_alias_fidoauthen2_matches_fidoauthen(tmp_path):
+    """FidoAuthen2 on device must alias-match FidoAuthen in apps.list."""
+    assert _folder_canonical("FidoAuthen2") == "fidoauthen"
+    assert _folder_canonical("FidoAuthen") == "fidoauthen"
+
+    content = "product / app\n\nFidoAuthen\ncom.fido.asm\n"
+    apps_list = tmp_path / "apps.list"
+    apps_list.write_text(content, encoding="utf-8")
+    partitions_root = tmp_path / "partitions"
+    _make_app_folder(partitions_root, "product", "app", "FidoAuthen2")
+    scanned = [_scanned_app("product", "app", "FidoAuthen2", "UNKNOWN", partitions_root)]
+    allowed = _build_allowed_dirs(partitions_root)
+    expected = _parse_expected_apps(apps_list)
+    result = _classify(scanned, expected, allowed)
+    assert result["match_stats"]["matched_by_alias"] >= 1
+    missing_names = {m["name"] for m in result["missing"]}
+    assert "FidoAuthen" not in missing_names
+
+
+def test_unknown_package_with_exact_folder_kept_not_missing(tmp_path):
+    """Unknown-package app whose folder exactly matches expected must be KEPT, not MISSING."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # BluetoothMidiService in system/app — folder matches exactly
+    _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    scanned = [_scanned_app("system", "app", "BluetoothMidiService", "UNKNOWN", partitions_root)]
+    reports_dir = tmp_path / "reports"
+    result = enforce_stable_app_policy(reports_dir, partitions_root, scanned, "stable")
+    kept_names = {a.get("folder_name") or a.get("name") for a in result["kept_apps"]}
+    assert "BluetoothMidiService" in kept_names
+    missing_names = {m["name"] for m in result["missing_apps"]}
+    assert "BluetoothMidiService" not in missing_names
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_missing_counter_only_counts_truly_missing(tmp_path):
+    """missing_apps count must not include apps found by folder match."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # Provide BluetoothMidiService with unknown package (folder match), leave Shell missing
+    _make_app_folder(partitions_root, "system", "app", "BluetoothMidiService")
+    scanned = [_scanned_app("system", "app", "BluetoothMidiService", "UNKNOWN", partitions_root)]
+    reports_dir = tmp_path / "reports"
+    result = enforce_stable_app_policy(reports_dir, partitions_root, scanned, "stable")
+    missing_names = {m["name"] for m in result["missing_apps"]}
+    assert "BluetoothMidiService" not in missing_names
+    # Shell is genuinely missing (not on device at all)
+    assert "Shell" in missing_names
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_unknown_extra_apps_are_never_deleted(tmp_path):
+    """Apps with UNKNOWN package that are NOT matched by folder must go to unknown, not extras."""
+    apps_list = _write_apps_list(tmp_path)
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    mystery = _make_app_folder(partitions_root, "system", "app", "Mystery")
+    scanned = [_scanned_app("system", "app", "Mystery", "UNKNOWN", partitions_root)]
+    reports_dir = tmp_path / "reports"
+    result = enforce_stable_app_policy(reports_dir, partitions_root, scanned, "stable")
+    assert mystery.exists(), "Unknown-package app must not be deleted"
+    assert result["delete_candidates"] == []
+    unknown_names = {u.get("folder_name") or u.get("name") for u in result["unknown_package_apps"]}
+    assert "Mystery" in unknown_names
+    del os.environ["LISTMEZO_APPS_LIST"]
+
+
+def test_folder_matching_improves_matched_ratio(tmp_path):
+    """When folder-based matching is available, the matched ratio increases over package-only."""
+    # Build apps.list with 5 expected apps
+    content = (
+        "system/system/app\n\n"
+        "AppAlpha\ncom.example.alpha\n\n"
+        "AppBeta\ncom.example.beta\n\n"
+        "product / app\n\n"
+        "AppGamma\ncom.example.gamma\n\n"
+        "AppDelta\ncom.example.delta\n\n"
+        "AppEpsilon\ncom.example.epsilon\n"
+    )
+    apps_list = tmp_path / "apps.list"
+    apps_list.write_text(content, encoding="utf-8")
+    partitions_root = tmp_path / "partitions"
+    # Create all 5 on device with UNKNOWN packages (no package extraction possible)
+    for partition, name in [("system", "AppAlpha"), ("system", "AppBeta"), ("product", "AppGamma"), ("product", "AppDelta"), ("product", "AppEpsilon")]:
+        _make_app_folder(partitions_root, partition, "app", name)
+    scanned = [
+        _scanned_app("system", "app", "AppAlpha", "UNKNOWN", partitions_root),
+        _scanned_app("system", "app", "AppBeta", "UNKNOWN", partitions_root),
+        _scanned_app("product", "app", "AppGamma", "UNKNOWN", partitions_root),
+        _scanned_app("product", "app", "AppDelta", "UNKNOWN", partitions_root),
+        _scanned_app("product", "app", "AppEpsilon", "UNKNOWN", partitions_root),
+    ]
+    allowed = _build_allowed_dirs(partitions_root)
+    expected = _parse_expected_apps(apps_list)
+    result = _classify(scanned, expected, allowed)
+    # All 5 must be matched by folder even though packages are UNKNOWN
+    assert result["match_stats"]["matched_by_folder"] == 5
+    assert len(result["missing"]) == 0
+
+
+def test_stable_does_not_raise_unsafe_when_folder_matches_cover_expected(tmp_path):
+    """Stable build must NOT raise STABLE_APP_MATCHING_UNSAFE when folder matching finds all expected apps."""
+    content = "\n".join(
+        f"system/system/app\n\nApp{i}\ncom.example.expected{i}" for i in range(30)
+    )
+    apps_list = tmp_path / "apps.list"
+    apps_list.write_text(content, encoding="utf-8")
+    os.environ["LISTMEZO_APPS_LIST"] = str(apps_list)
+    partitions_root = tmp_path / "partitions"
+    # Create all expected apps on device with UNKNOWN packages
+    for i in range(30):
+        _make_app_folder(partitions_root, "system", "app", f"App{i}")
+    scanned = [_scanned_app("system", "app", f"App{i}", "UNKNOWN", partitions_root) for i in range(30)]
+    reports_dir = tmp_path / "reports"
+    # Should NOT raise
+    result = enforce_stable_app_policy(reports_dir, partitions_root, scanned, "stable")
+    assert result["status"] == "ok"
+    assert result["safety_guard"]["status"] in ("passed", "warning")
     del os.environ["LISTMEZO_APPS_LIST"]

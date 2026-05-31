@@ -35,6 +35,39 @@ _ALLOWED_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
 _ALLOWED_PARTITIONS = {p for p, _t in _ALLOWED_LOCATION_PAIRS}
 _UNKNOWN = "UNKNOWN"
 
+# Maps lowercased OS3/CN variant folder name → lowercased canonical (apps.list) folder name.
+# Bidirectional: both the variant and the canonical resolve through _folder_canonical().
+_FOLDER_ALIAS_MAP: dict[str, str] = {
+    "fidoauthen2": "fidoauthen",
+    "contentcatcheros3_1": "miuicontentcatcher",
+    "lyrawos3cn": "miconnectservice",
+    "miuicloudservice": "cloudservice",
+    "micloudservice": "cloudservice",
+    "miuifileexplorer": "fileexplorer",
+    "miuiguardprovider": "guardprovider",
+    "miuimicloudsync": "micloudsync",
+    "miuinotificationcentert": "notificationcenter",
+    "miuisecurityadd": "securityadd",
+    "miuithememanager": "thememanager",
+    "miuitouchassistant": "touchassistant",
+    "miuixiaomiaccount": "xiaomiaccount",
+    "nqnfcnci": "nfc",
+    "nqnfc": "nfc",
+}
+
+# Prose / noise words that must never become app entries.
+_PROSE_TOKENS: frozenset[str] = frozenset({
+    "or", "fine", "and", "remove", "replace", "delate", "delete",
+    "oat", "odex", "vdex", "any", "other", "waiting", "finish",
+    "lines", "headings", "separators", "build.prop",
+})
+
+
+def _folder_canonical(name: str) -> str:
+    """Return the alias-canonical lowercase form of a folder name."""
+    lower = name.lower()
+    return _FOLDER_ALIAS_MAP.get(lower, lower)
+
 
 def _known_package(value: Any) -> str:
     package = str(value or "").strip()
@@ -127,6 +160,10 @@ def _parse_expected_apps(path: Path) -> list[dict[str, str]]:
     while i < len(lines):
         line = lines[i]
         if not line:
+            i += 1
+            continue
+        # Skip known prose / noise tokens explicitly so they can never become app entries.
+        if line.lower() in _PROSE_TOKENS:
             i += 1
             continue
         path_entry = _normalize_expected_path(line)
@@ -402,45 +439,79 @@ def _write_scan_reports(reports_dir: Path, data: dict[str, Any]) -> None:
     (reports_dir / "stable_package_scan_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _write_matching_debug_report(reports_dir: Path, scanned: list[dict[str, Any]], expected: list[dict[str, str]]) -> None:
+def _write_matching_debug_report(
+    reports_dir: Path,
+    scanned: list[dict[str, Any]],
+    expected: list[dict[str, str]],
+    match_stats: dict[str, int] | None = None,
+    alias_matches: list[dict[str, str]] | None = None,
+    missing_apps: list[dict[str, Any]] | None = None,
+) -> None:
     reports_dir.mkdir(parents=True, exist_ok=True)
     expected_packages = {e["package"].lower() for e in expected if _known_package(e.get("package"))}
     scanned_packages = {str(a.get("package_name") or "").lower() for a in scanned if _known_package(a.get("package_name"))}
     duplicate_expected = sorted(pkg for pkg in expected_packages if sum(1 for e in expected if e["package"].lower() == pkg) > 1)
     duplicate_scanned = sorted(pkg for pkg in scanned_packages if sum(1 for a in scanned if str(a.get("package_name") or "").lower() == pkg) > 1)
 
+    ms = match_stats or {}
     lines = [
         "DeadZone Stable Matching Debug Report",
         "=====================================",
         "",
-        "first 50 scanned apps:",
+        "match stats:",
+        f"  matched_by_package               : {ms.get('matched_by_package', 0)}",
+        f"  matched_by_folder                : {ms.get('matched_by_folder', 0)}",
+        f"  matched_by_alias                 : {ms.get('matched_by_alias', 0)}",
+        f"  matched_by_path                  : {ms.get('matched_by_path', 0)}",
+        f"  package_unknown_but_folder_matched: {ms.get('package_unknown_but_folder_matched', 0)}",
+        f"  real_missing                     : {ms.get('real_missing', 0)}",
+        f"  ambiguous_matches                : {ms.get('ambiguous_matches', 0)}",
     ]
+
+    if alias_matches:
+        lines += ["", "alias matches:"]
+        for am in alias_matches:
+            lines.append(f"  - expected={am['expected_folder']} scanned={am['scanned_folder']} canonical={am['canonical']}")
+
+    lines += ["", "top 50 scanned apps:"]
     for app in scanned[:50]:
         lines.append(
             "  - "
+            f"partition={app.get('partition')} | "
+            f"app_type={app.get('app_type') or app.get('type')} | "
+            f"folder_name={app.get('folder_name') or app.get('name')} | "
             f"package_name={app.get('package_name')} | "
             f"package_source={app.get('package_source')} | "
             f"package_confidence={app.get('package_confidence')} | "
-            f"apk_path={app.get('apk_path') or '(none)'} | "
-            f"folder_name={app.get('folder_name') or app.get('name')} | "
-            f"partition={app.get('partition')} | "
-            f"app_type={app.get('app_type') or app.get('type')}"
+            f"apk_path={app.get('apk_path') or '(none)'}"
         )
     if not scanned:
         lines.append("  (none)")
 
-    lines += ["", "first 50 expected apps:"]
+    lines += ["", "top 50 expected apps:"]
     for entry in expected[:50]:
         lines.append(
             "  - "
-            f"expected_name={entry.get('name')} | "
-            f"expected_package={entry.get('package')} | "
-            f"expected_partition={entry.get('partition')} | "
-            f"expected_app_type={entry.get('app_type')} | "
+            f"partition={entry.get('partition')} | "
+            f"app_type={entry.get('app_type')} | "
+            f"folder={entry.get('name')} | "
+            f"package={entry.get('package')} | "
             f"expected_path={entry.get('expected_path')}"
         )
     if not expected:
         lines.append("  (none)")
+
+    if missing_apps:
+        lines += ["", "top 50 missing apps (after folder/path matching):"]
+        for m in missing_apps[:50]:
+            lines.append(
+                "  - "
+                f"partition={m.get('expected_partition')} | "
+                f"app_type={m.get('expected_app_type')} | "
+                f"folder={m.get('name')} | "
+                f"package={m.get('package')} | "
+                f"expected_path={m.get('expected_path')}"
+            )
 
     sections = (
         ("common packages between scanned and expected", sorted(expected_packages & scanned_packages)),
@@ -457,6 +528,37 @@ def _write_matching_debug_report(reports_dir: Path, scanned: list[dict[str, Any]
         if not packages:
             lines.append("  (none)")
     (reports_dir / "stable_matching_debug_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _write_app_safety_report(reports_dir: Path, guard: dict[str, Any], classification: dict[str, list], expected_count: int) -> None:
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    ms = guard
+    lines = [
+        "DeadZone Stable App Safety Report",
+        "==================================",
+        f"expected_apps_count              : {expected_count}",
+        f"scanned_apps_count               : {ms.get('scanned_apps_count', 0)}",
+        f"matched_expected_count           : {ms.get('matched_expected_count', 0)}",
+        f"matched_expected_ratio           : {ms.get('matched_expected_ratio', 0.0):.3f}",
+        f"matched_by_package               : {ms.get('matched_by_package', 0)}",
+        f"matched_by_folder                : {ms.get('matched_by_folder', 0)}",
+        f"matched_by_alias                 : {ms.get('matched_by_alias', 0)}",
+        f"matched_by_path                  : {ms.get('matched_by_path', 0)}",
+        f"package_unknown_but_folder_matched: {ms.get('package_unknown_but_folder_matched', 0)}",
+        f"real_missing                     : {ms.get('real_missing', 0)}",
+        f"kept_apps                        : {ms.get('kept_apps', 0)}",
+        f"missing_apps                     : {ms.get('missing_apps', 0)}",
+        f"delete_candidates                : {ms.get('delete_candidates', 0)}",
+        f"unknown_package_count            : {ms.get('unknown_package_count', 0)}",
+        f"safety_guard_status              : {ms.get('status', 'unknown')}",
+        f"safety_guard_reason              : {ms.get('reason') or '(none)'}",
+    ]
+    alias_list = classification.get("alias_matches") or []
+    if alias_list:
+        lines += ["", "alias matches used:"]
+        for am in alias_list:
+            lines.append(f"  - expected={am['expected_folder']} scanned={am['scanned_folder']} canonical={am['canonical']}")
+    (reports_dir / "stable_app_safety_report.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _expected_by_package(expected: list[dict[str, str]]) -> dict[str, dict[str, str]]:
@@ -480,8 +582,12 @@ def _normalize_expected(entry: dict[str, str]) -> dict[str, str]:
 
 def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]], allowed: list[Path]) -> dict[str, list]:
     by_pkg = _expected_by_package(expected)
+
+    # Build package index (known packages only) and location index (all apps).
     scanned_by_pkg: dict[str, list[dict[str, Any]]] = {}
-    unknown: list[dict[str, Any]] = []
+    # (partition, app_type, folder_name_lower) → app — covers all scanned apps incl. unknown-package.
+    scanned_by_location: dict[tuple[str, str, str], dict[str, Any]] = {}
+
     for app in scanned_apps:
         if "app_type" not in app:
             app["app_type"] = str(app.get("type") or "")
@@ -489,11 +595,17 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
             app["folder_name"] = str(app.get("name") or "")
         if "absolute_path" not in app:
             app["absolute_path"] = str(app.get("found_at") or "")
+
         pkg = str(app.get("package_name") or "").strip()
-        if not pkg or pkg.upper() == _UNKNOWN or pkg.lower() == "unknown":
-            unknown.append({**app, "status": "UNKNOWN_PACKAGE", "action": "REPORT_ONLY"})
-            continue
-        scanned_by_pkg.setdefault(pkg.lower(), []).append(app)
+        loc_key: tuple[str, str, str] = (
+            app.get("partition", ""),
+            app.get("app_type", ""),
+            app["folder_name"].lower(),
+        )
+        scanned_by_location[loc_key] = app
+
+        if pkg and pkg.upper() != _UNKNOWN and pkg.lower() != "unknown":
+            scanned_by_pkg.setdefault(pkg.lower(), []).append(app)
 
     kept: list[dict[str, Any]] = []
     to_rename: list[dict[str, Any]] = []
@@ -501,38 +613,125 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
     missing: list[dict[str, Any]] = []
     matched_paths: set[str] = set()
 
+    match_stats: dict[str, int] = {
+        "matched_by_package": 0,
+        "matched_by_folder": 0,
+        "matched_by_alias": 0,
+        "matched_by_path": 0,
+        "package_unknown_but_folder_matched": 0,
+        "real_missing": 0,
+        "ambiguous_matches": 0,
+    }
+    alias_matches: list[dict[str, str]] = []
+
     for raw_entry in expected:
         entry = _normalize_expected(raw_entry)
         pkg_key = entry["package"].lower()
         actuals = scanned_by_pkg.get(pkg_key) or []
         exact = next((a for a in actuals if a["partition"] == entry["partition"] and a["app_type"] == entry["app_type"] and a["folder_name"] == entry["name"]), None)
         same_place = next((a for a in actuals if a["partition"] == entry["partition"] and a["app_type"] == entry["app_type"]), None)
+
         if exact and exact.get("apk_name") and exact.get("apk_name") != entry["expected_apk_name"]:
             matched_paths.add(exact["absolute_path"])
-            to_rename.append({**exact, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": exact["folder_name"], "found_at": exact["absolute_path"], "in_allowed": _is_in_allowed(exact["absolute_path"], allowed)})
+            match_stats["matched_by_package"] += 1
+            to_rename.append({**exact, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": exact["folder_name"], "found_at": exact["absolute_path"], "in_allowed": _is_in_allowed(exact["absolute_path"], allowed), "match_method": "package"})
         elif exact:
             matched_paths.add(exact["absolute_path"])
-            kept.append({**exact, "status": "FOUND", "action": "KEEP", "expected": entry, "package": entry["package"], "found_at": exact["absolute_path"]})
+            match_stats["matched_by_package"] += 1
+            kept.append({**exact, "status": "FOUND", "action": "KEEP", "expected": entry, "package": entry["package"], "found_at": exact["absolute_path"], "match_method": "package"})
         elif same_place:
             matched_paths.add(same_place["absolute_path"])
-            to_rename.append({**same_place, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": same_place["folder_name"], "found_at": same_place["absolute_path"], "in_allowed": _is_in_allowed(same_place["absolute_path"], allowed)})
+            match_stats["matched_by_package"] += 1
+            to_rename.append({**same_place, "status": "FOUND_RENAMED", "action": "RENAME_TO_EXPECTED", "expected": entry, "package": entry["package"], "expected_name": entry["name"], "actual_name": same_place["folder_name"], "found_at": same_place["absolute_path"], "in_allowed": _is_in_allowed(same_place["absolute_path"], allowed), "match_method": "package"})
         elif actuals:
             for actual in actuals:
                 matched_paths.add(actual["absolute_path"])
-                wrong_location.append({**actual, "status": "FOUND_WRONG_LOCATION", "action": "REPORT_ONLY", "expected": entry, "package": entry["package"], "found_at": actual["absolute_path"]})
+                wrong_location.append({**actual, "status": "FOUND_WRONG_LOCATION", "action": "REPORT_ONLY", "expected": entry, "package": entry["package"], "found_at": actual["absolute_path"], "match_method": "package"})
+            match_stats["matched_by_package"] += 1
         else:
-            missing.append({"status": "MISSING", "action": "REPORT_ONLY", "name": entry["name"], "package": entry["package"], "expected_partition": entry["partition"], "expected_app_type": entry["app_type"], "expected_path": entry["expected_path"]})
+            # No package match: try folder-name and alias matching against ALL scanned apps.
+            partition = entry["partition"]
+            app_type = entry["app_type"]
+            expected_folder_lower = entry["name"].lower()
+            expected_canonical = _folder_canonical(entry["name"])
+
+            folder_match: dict[str, Any] | None = None
+            match_method = ""
+
+            # Step 1: exact case-insensitive partition+app_type+folder_name match.
+            loc_key = (partition, app_type, expected_folder_lower)
+            candidate = scanned_by_location.get(loc_key)
+            if candidate is not None and candidate["absolute_path"] not in matched_paths:
+                folder_match = candidate
+                match_method = "folder"
+
+            # Step 2: alias match — any scanned folder whose canonical equals the expected canonical.
+            if folder_match is None:
+                for loc_k, app in scanned_by_location.items():
+                    if loc_k[0] != partition or loc_k[1] != app_type:
+                        continue
+                    if app["absolute_path"] in matched_paths:
+                        continue
+                    if _folder_canonical(app["folder_name"]) == expected_canonical:
+                        folder_match = app
+                        match_method = "alias"
+                        alias_matches.append({
+                            "expected_folder": entry["name"],
+                            "scanned_folder": app["folder_name"],
+                            "canonical": expected_canonical,
+                        })
+                        break
+
+            if folder_match is not None:
+                abs_path = folder_match["absolute_path"]
+                matched_paths.add(abs_path)
+                scanned_pkg = str(folder_match.get("package_name") or "").strip()
+                is_unknown_pkg = not scanned_pkg or scanned_pkg.upper() == _UNKNOWN or scanned_pkg.lower() == "unknown"
+
+                if match_method == "folder":
+                    match_stats["matched_by_folder"] += 1
+                else:
+                    match_stats["matched_by_alias"] += 1
+                if is_unknown_pkg:
+                    match_stats["package_unknown_but_folder_matched"] += 1
+
+                kept.append({
+                    **folder_match,
+                    "status": "FOUND",
+                    "action": "KEEP",
+                    "expected": entry,
+                    "package": entry["package"],
+                    "found_at": abs_path,
+                    "match_method": match_method,
+                })
+            else:
+                match_stats["real_missing"] += 1
+                missing.append({
+                    "status": "MISSING",
+                    "action": "REPORT_ONLY",
+                    "name": entry["name"],
+                    "package": entry["package"],
+                    "expected_partition": entry["partition"],
+                    "expected_app_type": entry["app_type"],
+                    "expected_path": entry["expected_path"],
+                })
 
     extras: list[dict[str, Any]] = []
     outside: list[dict[str, Any]] = []
+    unknown: list[dict[str, Any]] = []
+
     for app in scanned_apps:
-        pkg = str(app.get("package_name") or "").strip()
-        if app["absolute_path"] in matched_paths or not pkg or pkg.upper() == _UNKNOWN or pkg.lower() == "unknown":
+        abs_path = app["absolute_path"]
+        if abs_path in matched_paths:
             continue
-        item = {**app, "status": "EXTRA", "action": "DELETE", "package": pkg, "found_at": app["absolute_path"]}
-        if pkg.lower() not in by_pkg and _is_in_allowed(app["absolute_path"], allowed):
+        pkg = str(app.get("package_name") or "").strip()
+        if not pkg or pkg.upper() == _UNKNOWN or pkg.lower() == "unknown":
+            unknown.append({**app, "status": "UNKNOWN_PACKAGE", "action": "REPORT_ONLY"})
+            continue
+        item = {**app, "status": "EXTRA", "action": "DELETE", "package": pkg, "found_at": abs_path}
+        if pkg.lower() not in by_pkg and _is_in_allowed(abs_path, allowed):
             extras.append(item)
-        elif not _is_in_allowed(app["absolute_path"], allowed):
+        elif not _is_in_allowed(abs_path, allowed):
             outside.append({**item, "status": "OUTSIDE_ALLOWED", "action": "SKIP"})
 
     return {
@@ -543,6 +742,8 @@ def _classify(scanned_apps: list[dict[str, Any]], expected: list[dict[str, str]]
         "missing": missing,
         "wrong_location": wrong_location,
         "unknown": unknown,
+        "match_stats": match_stats,
+        "alias_matches": alias_matches,
     }
 
 
@@ -583,6 +784,7 @@ def _stable_safety_guard(
     if expected_count > 100 and matched < 50:
         reasons.append("matched_expected_count below safe minimum")
     status = "failed" if reasons and enforce else ("warning" if reasons else "passed")
+    ms = classification.get("match_stats") or {}
     return {
         "status": status,
         "thresholds": thresholds,
@@ -598,6 +800,12 @@ def _stable_safety_guard(
         "unknown_package_count": len(classification["unknown"]),
         "package_tools_available": (package_tools or {}).get("available", []),
         "package_tools_missing": (package_tools or {}).get("missing", []),
+        "matched_by_package": ms.get("matched_by_package", 0),
+        "matched_by_folder": ms.get("matched_by_folder", 0),
+        "matched_by_alias": ms.get("matched_by_alias", 0),
+        "matched_by_path": ms.get("matched_by_path", 0),
+        "package_unknown_but_folder_matched": ms.get("package_unknown_but_folder_matched", 0),
+        "real_missing": ms.get("real_missing", 0),
     }
 
 
@@ -799,11 +1007,20 @@ def enforce_stable_app_policy(
         "unmatched_known_packages": sorted(scanned_known_packages - expected_packages),
     }
     _write_scan_reports(reports_dir, scan_data)
+    # Matching debug report is updated again after classification with match_stats (see below).
     _write_matching_debug_report(reports_dir, scanned, expected)
 
     allowed = _build_allowed_dirs(partitions_root)
     classification = _classify(scanned, expected, allowed)
+    # Re-write debug report with match_stats now that classification is done.
+    _write_matching_debug_report(
+        reports_dir, scanned, expected,
+        match_stats=classification.get("match_stats"),
+        alias_matches=classification.get("alias_matches"),
+        missing_apps=classification.get("missing"),
+    )
     guard = _stable_safety_guard(len(expected), classification, enforce, len(scanned), package_tools)
+    _write_app_safety_report(reports_dir, guard, classification, len(expected))
     if guard["status"] == "failed":
         payload = _unsafe_payload(guard)
         data = {
