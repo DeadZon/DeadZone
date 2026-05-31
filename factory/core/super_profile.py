@@ -6,12 +6,14 @@ from typing import Any
 
 from factory.core.device_registry import resolve_device
 from factory.core.detector import DYNAMIC_PARTITIONS, RomInfo
+from factory.core.super_config import resolve_super_config_for_device, STATUS_READY
 from factory.core.workspace import Workspace, read_json, write_json
 
 DEFAULT_SUPER_SIZE = 8_500_000_000
 LP_METADATA_OVERHEAD = 4 * 1024 * 1024
 METADATA_SIZE = 65_536
 SAFE_ALLOCATION_SOURCES = [
+    "hyperur_superconfig",
     "original_super_metadata",
     "payload_manifest",
     "payload_partitions",
@@ -245,6 +247,59 @@ def _first_source_value(named_sources: list[tuple[str, dict[str, Any]]], *keys: 
     return None, "unresolved"
 
 
+def _build_superconfig_source(device_config: dict[str, Any], rom_info: dict[str, Any]) -> dict[str, Any]:
+    """Build a named-source dict from imported HyperUR SuperConfig for this device."""
+    codename = str(
+        device_config.get("resolved_codename")
+        or device_config.get("codename")
+        or rom_info.get("codename")
+        or ""
+    ).strip().lower()
+    soc = str(device_config.get("soc") or rom_info.get("soc") or "").strip().lower()
+    if not codename:
+        return {}
+    sc = resolve_super_config_for_device(codename, soc=soc)
+    if sc.get("status") != STATUS_READY:
+        return {}
+
+    # Build a source dict compatible with the named_sources format
+    # SuperConfig provides reliable metadata — expose all needed keys
+    result: dict[str, Any] = {
+        "super_size": sc.get("super_size"),
+        "slot_mode": sc.get("slot_mode"),
+        "metadata_slots": sc.get("metadata_slots"),
+        "dynamic_group_name": sc.get("group_name"),
+        "group_name": sc.get("group_name"),
+        "group_size": sc.get("group_size"),
+        # partition_sizes derived from SuperConfig partition table
+        "partition_sizes": {
+            name: entry.get("size", 0)
+            for name, entry in (sc.get("partitions") or {}).items()
+            if entry.get("size")
+        },
+    }
+
+    # Build partition table in the format _partition_entries expects
+    partition_list = []
+    for name, entry in (sc.get("partitions") or {}).items():
+        size = entry.get("size", 0)
+        if size:
+            partition_list.append({
+                "name": f"{name}_a",
+                "group_name": f"{entry.get('group_name', sc.get('group_name', 'qti_dynamic_partitions'))}_a",
+                "size": size,
+                "allocation_size": size,
+            })
+    if partition_list:
+        result["partitions"] = partition_list
+        result["partition_table"] = partition_list
+
+    result["_super_config_status"] = sc.get("status")
+    result["_super_config_codename"] = codename
+    result["_super_config_source_label"] = sc.get("source_label", "HyperUR_Build_CN_V21 imported reference")
+    return result
+
+
 def build_super_profile(
     ws: Workspace,
     info: RomInfo | None = None,
@@ -270,6 +325,9 @@ def build_super_profile(
     soc_super = device_config.get("_soc_super") if isinstance(device_config.get("_soc_super"), dict) else profile_super
     device_super = device_config.get("_device_super") if isinstance(device_config.get("_device_super"), dict) else profile_super
 
+    # Load HyperUR SuperConfig — highest-priority source (overrides payload inspection)
+    superconfig_source = _build_superconfig_source(device_config, rom_info)
+
     detected_sizes = _partition_sizes(super_layout, partition_map)
     for payload_data in [payload_metadata, payload_manifest, payload_partitions]:
         if isinstance(payload_data.get("partition_sizes"), dict):
@@ -283,7 +341,10 @@ def build_super_profile(
     } else {}
     payload_source = dict(super_layout) if detected_sizes else {}
     payload_source.update(payload_metadata)
-    named_sources = [
+
+    # SuperConfig is highest priority — only payload detection can be blocked by it,
+    # not the other way around (no override unless forced by debug flag)
+    named_sources_base = [
         ("original_super_metadata", original_metadata),
         ("payload_manifest", payload_manifest or payload_source),
         ("payload_partitions", payload_partitions),
@@ -291,6 +352,11 @@ def build_super_profile(
         ("device_profile", device_super),
         ("soc_profile", soc_super),
     ]
+    named_sources = (
+        [("hyperur_superconfig", superconfig_source)] + named_sources_base
+        if superconfig_source
+        else named_sources_base
+    )
 
     size_value, size_source = _first_source_value(
         named_sources,
@@ -328,6 +394,17 @@ def build_super_profile(
         metadata_source = "payload_manifest"
 
     allocation_sources: dict[str, dict[str, dict[str, Any]]] = {}
+
+    # SuperConfig allocation entries — use partition sizes from imported reference
+    if superconfig_source:
+        sc_entries = _partition_entries(superconfig_source, "hyperur_superconfig")
+        sc_sizes = superconfig_source.get("partition_sizes") if isinstance(superconfig_source.get("partition_sizes"), dict) else {}
+        if sc_sizes:
+            sc_group = str(superconfig_source.get("group_name") or group_name)
+            sc_entries.update(_size_entries(sc_sizes, "hyperur_superconfig", sc_group))
+        if sc_entries:
+            allocation_sources["hyperur_superconfig"] = sc_entries
+
     original_entries = _partition_entries(original_metadata, "original_super_metadata")
     if original_entries:
         allocation_sources["original_super_metadata"] = original_entries
@@ -458,12 +535,17 @@ def build_super_profile(
             "device_source": device_config.get("device_source"),
         },
         "inspection_needs_rebuild": bool((inspection or {}).get("needs_super_rebuild")),
+        "superconfig_source": superconfig_source.get("_super_config_source_label") if superconfig_source else None,
+        "superconfig_codename": superconfig_source.get("_super_config_codename") if superconfig_source else None,
+        "superconfig_active": bool(superconfig_source),
     }
     if missing_metadata:
         profile["metadata_source"] = metadata_source or "partial"
     write_json(ws.meta / "super_profile.json", profile)
     write_super_profile_report(ws, profile)
     print(f"[SUPER PROFILE] Source: {profile.get('metadata_source')}")
+    if profile.get("superconfig_active"):
+        print(f"[SUPER PROFILE] SuperConfig: {profile.get('superconfig_source')} codename={profile.get('superconfig_codename')}")
     print(f"[SUPER PROFILE] Group: {profile.get('dynamic_group_name')} size={profile.get('group_size')}")
     for part, entry in partitions.items():
         print(
@@ -486,6 +568,7 @@ def write_super_profile_report(ws: Workspace, profile: dict[str, Any]) -> None:
         f"group name: {profile.get('dynamic_group_name')} ({profile.get('group_name_source')})",
         f"group size: {profile.get('group_size')} ({profile.get('group_size_source')})",
         f"slot mode: {profile.get('slot_mode')} ({profile.get('slot_mode_source')})",
+        f"superconfig active: {profile.get('superconfig_active')} source={profile.get('superconfig_source') or 'none'}",
         f"VAB zero-size _b entries: {profile.get('vab_zero_b')}",
         f"partition size source: {profile.get('partition_sizes_source')}",
         f"payload_manifest.json present: {(ws.meta / 'payload_manifest.json').is_file()}",

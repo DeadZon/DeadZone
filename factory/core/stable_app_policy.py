@@ -17,7 +17,7 @@ from typing import Any, TYPE_CHECKING
 if TYPE_CHECKING:
     from factory.state.build_state import BuildState
 
-from factory.reports.app_inventory import _find_apps_list, _is_package_name
+from factory.reports.app_inventory import _find_apps_list, _is_package_name, _is_rejected_package
 
 
 _ALLOWED_LOCATION_PAIRS: tuple[tuple[str, str], ...] = (
@@ -222,9 +222,16 @@ def _package_from_tool(apk: Path) -> tuple[str, str, str]:
         output = proc.stdout.strip()
         if not output:
             continue
+        # Parse only the manifest package attribute — do not accept raw output lines
         match = re.search(r"package: name='([^']+)'", output) or re.search(r"package=\"([^\"]+)\"", output)
-        candidate = match.group(1) if match else output.splitlines()[0].strip()
-        if _is_package_name(candidate):
+        if match:
+            candidate = match.group(1).strip()
+        elif source == "apkanalyzer":
+            # apkanalyzer application-id outputs one line: the package id
+            candidate = output.splitlines()[0].strip()
+        else:
+            continue
+        if _is_package_name(candidate) and not _is_rejected_package(candidate):
             confidence = "medium" if source == "bundletool" and not match else "high"
             return candidate, source, confidence
     return "", "unknown", "low"
@@ -242,17 +249,18 @@ def _package_from_manifest(apk: Path) -> tuple[str, str, str]:
             data.decode("utf-16le", errors="ignore"),
         )
     )
-    patterns = (
-        r'package\s*=\s*"([^"]+)"',
-        r"package\s*=\s*'([^']+)'",
-        r"\b([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+){2,})\b",
-    )
-    for pattern in patterns:
+    # Priority 1+2: explicit package= attribute from manifest root
+    for pattern in (r'package\s*=\s*"([^"]+)"', r"package\s*=\s*'([^']+)'"):
         match = re.search(pattern, text)
         if match:
             candidate = match.group(1).strip()
-            if _is_package_name(candidate):
+            if _is_package_name(candidate) and not _is_rejected_package(candidate):
                 return candidate, "manifest", "medium"
+    # Priority 3: broad search with strict validation — no fallback for manifest tokens
+    for m in re.finditer(r"\b([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+){2,})\b", text):
+        candidate = m.group(1).strip()
+        if _is_package_name(candidate) and not _is_rejected_package(candidate):
+            return candidate, "manifest", "medium"
     return "", "unknown", "low"
 
 
@@ -265,7 +273,7 @@ def _extract_package(apk: Path | None, inventory_package: str = "") -> tuple[str
         if package:
             return package, source, confidence
     fallback = _known_package(inventory_package)
-    if fallback:
+    if fallback and _is_package_name(fallback) and not _is_rejected_package(fallback):
         return fallback, "inventory", "medium"
     return _UNKNOWN, "unknown", "low"
 

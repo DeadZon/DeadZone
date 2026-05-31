@@ -19,8 +19,64 @@ _ALLOWED_PARTITIONS = {"system", "product", "system_ext", "vendor", "mi_ext"}
 # apps.list parser
 # ---------------------------------------------------------------------------
 
+_REJECT_PACKAGE_PREFIXES: tuple[str, ...] = (
+    "android.intent.",
+    "android.permission.",
+    "android.hardware.",
+    "android.app.",
+    "android.accounts.",
+    "android.bluetooth.",
+    "android.content.",
+    "android.provider.",
+    "android.telephony.",
+    "android.view.",
+    "android.widget.",
+    "android.os.",
+    "android.net.",
+    "android.media.",
+    "android.nfc.",
+    "android.appwidget.",
+    "android.database.",
+    "android.location.",
+    "android.speech.",
+    "android.text.",
+    "android.util.",
+    "androidx.",
+    "Manifest.",
+    "MediaStore.",
+    "Intent.",
+    "Settings.",
+    "Build.",
+    "SystemClock.",
+    "android.Manifest.",
+)
+
+_ALLCAPS_SEGMENT_RE = re.compile(r"^[A-Z][A-Z0-9_]{3,}$")
+_VERSION_STRING_RE = re.compile(r"^[Vv]\d+[\.\d]")
+
+
+def _is_rejected_package(s: str) -> bool:
+    """Return True if s is clearly NOT a real APK package name."""
+    if not s:
+        return True
+    # Version strings like V7.8.6.CN
+    if _VERSION_STRING_RE.match(s):
+        return True
+    # Reject known non-package namespaces
+    for prefix in _REJECT_PACKAGE_PREFIXES:
+        if s.startswith(prefix):
+            return True
+    # Reject if any dot-separated segment is ALL_CAPS (action/constant names)
+    for seg in s.split("."):
+        if seg and _ALLCAPS_SEGMENT_RE.match(seg):
+            return True
+    return False
+
+
 def _is_package_name(s: str) -> bool:
-    return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){2,}$", s))
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){2,}$", s):
+        return False
+    return not _is_rejected_package(s)
 
 
 def _normalize_expected_path(value: str) -> tuple[str, str, str] | None:

@@ -623,10 +623,19 @@ def _run_build(ctx: BuildContext) -> BuildContext:
                 "stable_partition_rebuild",
                 lambda: rebuild_stable_partitions(ws, ctx.stable_app_policy),
             )
-        if ctx.run_stable_normalize and ctx.style in ("stable",):
+        if ctx.style in ("stable",):
+            # Normalization for stable is provided by the stable_app_policy stage above
             ctx.stable_normalize = {
-                "skipped": True,
-                "reason": "Stable App Policy is the source of truth for stable app actions",
+                "skipped": False,
+                "normalize_active": ctx.run_stable_normalize,
+                "mode": "stable_app_policy",
+                "reason": "Stable normalization is handled by the stable_app_policy stage",
+                "kept": len((ctx.stable_app_policy or {}).get("kept_apps") or []),
+                "renamed": len((ctx.stable_app_policy or {}).get("renamed_apps") or []),
+                "removed_count": len((ctx.stable_app_policy or {}).get("deleted_extra_apps") or []),
+                "missing": len((ctx.stable_app_policy or {}).get("missing_apps") or []),
+                "protected_extra": len((ctx.stable_app_policy or {}).get("unknown_package_apps") or []),
+                "removed_bytes": 0,
             }
         ctx.app_inventory_zip_path = _stage(
             ctx,
@@ -840,7 +849,8 @@ def main() -> int:
         (not args.skip_app_inventory)
         and stop_after not in ("smart_unpack", "partition_workspace")
     )
-    run_normalize = bool(style_key != "stable" and not args.skip_stable_app_normalize)
+    # Stable normalization is always active for stable style (handled by stable_app_policy stage)
+    run_normalize = not args.skip_stable_app_normalize
     live_screen_enabled = _bool_arg(getattr(args, "live_screen", None), False)
 
     build_state = create_build_state(

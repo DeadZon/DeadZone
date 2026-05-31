@@ -64,21 +64,72 @@ def _printable_manifest_text(apk: Path) -> str:
     return "\n".join(chunks)
 
 
+_REJECT_PACKAGE_PREFIXES_INV: tuple[str, ...] = (
+    "android.intent.",
+    "android.permission.",
+    "android.hardware.",
+    "android.app.",
+    "android.accounts.",
+    "android.bluetooth.",
+    "android.content.",
+    "android.provider.",
+    "android.telephony.",
+    "android.view.",
+    "android.widget.",
+    "android.os.",
+    "android.net.",
+    "android.media.",
+    "android.nfc.",
+    "android.appwidget.",
+    "android.database.",
+    "android.location.",
+    "android.speech.",
+    "android.text.",
+    "android.util.",
+    "androidx.",
+    "Manifest.",
+    "MediaStore.",
+    "Intent.",
+    "Settings.",
+    "Build.",
+    "android.Manifest.",
+)
+_ALLCAPS_SEG_RE = re.compile(r"^[A-Z][A-Z0-9_]{3,}$")
+_VERSION_RE = re.compile(r"^[Vv]\d+[\.\d]")
+_PACKAGE_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z0-9_]+){2,}$")
+
+
+def _is_valid_package(s: str) -> bool:
+    """Strict package name validator — rejects manifest tokens, actions, permissions."""
+    if not s or not _PACKAGE_RE.match(s):
+        return False
+    if _VERSION_RE.match(s):
+        return False
+    for prefix in _REJECT_PACKAGE_PREFIXES_INV:
+        if s.startswith(prefix):
+            return False
+    for seg in s.split("."):
+        if seg and _ALLCAPS_SEG_RE.match(seg):
+            return False
+    return True
+
+
 def _package_name(apk: Path) -> str:
     text = _printable_manifest_text(apk)
     if not text:
         return "unknown"
-    patterns = [
-        r'package\s*=\s*"([^"]+)"',
-        r"package\s*=\s*'([^']+)'",
-        r"\b([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+){2,})\b",
-    ]
-    for pattern in patterns:
+    # Priority 1+2: explicit package= attribute (most reliable)
+    for pattern in (r'package\s*=\s*"([^"]+)"', r"package\s*=\s*'([^']+)'"):
         match = re.search(pattern, text)
         if match:
             value = match.group(1).strip()
-            if "." in value and "/" not in value:
+            if _is_valid_package(value):
                 return value
+    # Priority 3: broad token search — apply strict validation to reject non-packages
+    for match in re.finditer(r"\b([a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z0-9_]+){2,})\b", text):
+        value = match.group(1).strip()
+        if _is_valid_package(value):
+            return value
     return "unknown"
 
 
