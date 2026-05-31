@@ -13,6 +13,7 @@ from factory.core.detector import RomInfo
 from factory.core.size_policy import load_policy
 from factory.core.super_builder import DYNAMIC_IMAGES
 from factory.core.style_runner import STYLE_LABELS
+from factory.core.vbmeta_patch import patch_vbmeta_images
 from factory.core.workspace import Workspace, read_json, write_json
 
 CORE_IMAGES = [
@@ -460,6 +461,7 @@ def build_final_zip(ws: Workspace, info: RomInfo, style_key: str) -> Path:
         shutil.rmtree(stage)
     (stage / "images").mkdir(parents=True)
 
+    patch_vbmeta_images(ws.images, ws.reports, ws.meta)
     included_images, excluded = _copy_images(ws, stage, profile_super)
     included_tools = _copy_windows_tools(stage)
     flash_images = _flash_order(included_images, profile_super)
